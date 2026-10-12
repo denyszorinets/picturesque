@@ -1,0 +1,26 @@
+FROM fedora:latest
+
+ARG TARGETARCH
+ENV GO_VERSION 1.27.1
+
+RUN dnf update -y && \
+    dnf install -y \
+        zsh \
+        git \
+        curl \
+        wget \
+        neovim \
+        gh
+
+RUN curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh | bash
+RUN chsh -s $(which zsh)
+
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+
+RUN curl -fsSL https://bun.sh/install | bash
+ENV PATH="/root/.bun/bin:${PATH}"
+
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+
+RUN curl -fsSL https://claude.ai/install.sh | bash
+ENV PATH="/root/.local/bin:${PATH}"
