@@ -153,84 +153,9 @@ fn scan_dir(fs: &dyn FileSystem, dir: &Path, exclude: &[PathBuf], report: &mut S
 }
 
 #[cfg(test)]
-pub(crate) mod tests {
-    use std::collections::BTreeMap;
-
+mod tests {
     use super::*;
-    use crate::ports::fs::DirEntry;
-
-    /// In-memory directory tree. Keys are absolute paths.
-    #[derive(Default)]
-    pub struct TreeFs {
-        pub dirs: BTreeMap<PathBuf, Vec<DirEntry>>,
-        pub unreadable: Vec<PathBuf>,
-    }
-
-    impl TreeFs {
-        pub fn file(mut self, path: &str, size: u64) -> Self {
-            let path = PathBuf::from(path);
-            let (parent, name) = (
-                path.parent().unwrap().to_path_buf(),
-                path.file_name().unwrap(),
-            );
-            self.ensure_dir(&parent);
-            self.dirs.get_mut(&parent).unwrap().push(DirEntry {
-                name: name.to_string_lossy().into_owned(),
-                kind: EntryKind::File,
-                size,
-            });
-            self
-        }
-
-        pub fn dir(mut self, path: &str) -> Self {
-            self.ensure_dir(Path::new(path));
-            self
-        }
-
-        pub fn symlinked_dir(mut self, path: &str) -> Self {
-            let path = PathBuf::from(path);
-            let parent = path.parent().unwrap().to_path_buf();
-            self.ensure_dir(&parent);
-            self.dirs.get_mut(&parent).unwrap().push(DirEntry {
-                name: path.file_name().unwrap().to_string_lossy().into_owned(),
-                kind: EntryKind::Other,
-                size: 0,
-            });
-            self
-        }
-
-        fn ensure_dir(&mut self, path: &Path) {
-            if self.dirs.contains_key(path) {
-                return;
-            }
-            self.dirs.insert(path.to_path_buf(), Vec::new());
-            if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
-                self.ensure_dir(parent);
-                let name = path.file_name().unwrap().to_string_lossy().into_owned();
-                self.dirs.get_mut(parent).unwrap().push(DirEntry {
-                    name,
-                    kind: EntryKind::Dir,
-                    size: 0,
-                });
-            }
-        }
-    }
-
-    impl FileSystem for TreeFs {
-        fn probe_writable_dir(&self, _: &Path) -> Result<(), String> {
-            Ok(())
-        }
-
-        fn list_dir(&self, path: &Path) -> Result<Vec<DirEntry>, String> {
-            if self.unreadable.iter().any(|u| u == path) {
-                return Err("permission denied".into());
-            }
-            self.dirs
-                .get(path)
-                .cloned()
-                .ok_or_else(|| "it does not exist".into())
-        }
-    }
+    use crate::testing::MemFs;
 
     /// Paths compare by component, so this also holds on Windows, where
     /// `join` inserts backslashes.
@@ -244,10 +169,10 @@ pub(crate) mod tests {
 
     #[test]
     fn finds_photos_recursively_with_pairs_and_sizes() {
-        let fs = TreeFs::default()
-            .file("/src/a/IMG_1.CR3", 30)
-            .file("/src/a/IMG_1.JPG", 5)
-            .file("/src/b/c/IMG_2.HEIC", 3);
+        let fs = MemFs::new()
+            .file("/src/a/IMG_1.CR3", &[0; 30])
+            .file("/src/a/IMG_1.JPG", &[0; 5])
+            .file("/src/b/c/IMG_2.HEIC", &[0; 3]);
 
         let report = scan_sources(&fs, &[p("/src")], &[]);
 
@@ -263,13 +188,13 @@ pub(crate) mod tests {
 
     #[test]
     fn skips_hidden_system_and_nas_folders_and_hidden_files() {
-        let fs = TreeFs::default()
-            .file("/src/keep.jpg", 1)
-            .file("/src/._keep.jpg", 1)
-            .file("/src/.thumbnails/t.jpg", 1)
-            .file("/src/@eaDir/keep.jpg/SYNOPHOTO_THUMB.jpg", 1)
-            .file("/src/$RECYCLE.BIN/old.jpg", 1)
-            .file("/src/__MACOSX/x.jpg", 1);
+        let fs = MemFs::new()
+            .file("/src/keep.jpg", &[0; 1])
+            .file("/src/._keep.jpg", &[0; 1])
+            .file("/src/.thumbnails/t.jpg", &[0; 1])
+            .file("/src/@eaDir/keep.jpg/SYNOPHOTO_THUMB.jpg", &[0; 1])
+            .file("/src/$RECYCLE.BIN/old.jpg", &[0; 1])
+            .file("/src/__MACOSX/x.jpg", &[0; 1]);
 
         let report = scan_sources(&fs, &[p("/src")], &[]);
 
@@ -279,11 +204,11 @@ pub(crate) mod tests {
 
     #[test]
     fn counts_unsupported_files_and_reports_orphan_sidecars() {
-        let fs = TreeFs::default()
-            .file("/src/clip.MOV", 1)
-            .file("/src/notes.txt", 1)
-            .file("/src/lost.xmp", 1)
-            .file("/src/a.jpg", 1);
+        let fs = MemFs::new()
+            .file("/src/clip.MOV", &[0; 1])
+            .file("/src/notes.txt", &[0; 1])
+            .file("/src/lost.xmp", &[0; 1])
+            .file("/src/a.jpg", &[0; 1]);
 
         let report = scan_sources(&fs, &[p("/src")], &[]);
 
@@ -293,10 +218,10 @@ pub(crate) mod tests {
 
     #[test]
     fn reports_unreadable_folders_and_continues() {
-        let mut fs = TreeFs::default()
-            .file("/src/locked/a.jpg", 1)
-            .file("/src/open/b.jpg", 1);
-        fs.unreadable.push(p("/src/locked"));
+        let fs = MemFs::new()
+            .file("/src/locked/a.jpg", &[0; 1])
+            .file("/src/open/b.jpg", &[0; 1])
+            .unreadable("/src/locked");
 
         let report = scan_sources(&fs, &[p("/src"), p("/missing")], &[]);
 
@@ -312,9 +237,9 @@ pub(crate) mod tests {
 
     #[test]
     fn never_scans_the_excluded_library() {
-        let fs = TreeFs::default()
-            .file("/photos/old/a.jpg", 1)
-            .file("/photos/Clean/2026/b.jpg", 1);
+        let fs = MemFs::new()
+            .file("/photos/old/a.jpg", &[0; 1])
+            .file("/photos/Clean/2026/b.jpg", &[0; 1]);
 
         let report = scan_sources(&fs, &[p("/photos")], &[p("/photos/Clean")]);
 
@@ -329,9 +254,9 @@ pub(crate) mod tests {
 
     #[test]
     fn nested_and_repeated_roots_are_scanned_once() {
-        let fs = TreeFs::default()
-            .file("/src/a.jpg", 1)
-            .file("/src/sub/b.jpg", 1);
+        let fs = MemFs::new()
+            .file("/src/a.jpg", &[0; 1])
+            .file("/src/sub/b.jpg", &[0; 1]);
 
         let report = scan_sources(&fs, &[p("/src/sub"), p("/src"), p("/src")], &[]);
 
@@ -340,8 +265,8 @@ pub(crate) mod tests {
 
     #[test]
     fn does_not_follow_symlinked_folders() {
-        let fs = TreeFs::default()
-            .file("/src/a.jpg", 1)
+        let fs = MemFs::new()
+            .file("/src/a.jpg", &[0; 1])
             .symlinked_dir("/src/loop");
 
         let report = scan_sources(&fs, &[p("/src")], &[]);
@@ -352,7 +277,7 @@ pub(crate) mod tests {
 
     #[test]
     fn empty_folder_yields_empty_report() {
-        let fs = TreeFs::default().dir("/src");
+        let fs = MemFs::new().dir("/src");
 
         assert_eq!(scan_sources(&fs, &[p("/src")], &[]), ScanReport::default());
     }

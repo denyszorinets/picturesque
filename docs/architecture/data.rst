@@ -39,8 +39,9 @@ task that introduces them. The rest is in the schema today
      PHOTO ||--o| EMBEDDING : has
      PHOTO }o--o| SERIES : "member of"
      PHOTO ||--o| DECISION : has
-     IMPORT ||--|{ IMPORT_ITEM : contains
-     IMPORT_ITEM }o--o| ASSET : produced
+     IMPORT_RUN ||--|{ IMPORT_PHOTO : contains
+     IMPORT_PHOTO ||--|{ IMPORT_FILE : has
+     IMPORT_PHOTO }o--o| PHOTO : "becomes"
 
 ``photo``
    One captured image. Capture time (with UTC offset when known), camera,
@@ -70,10 +71,13 @@ task that introduces them. The rest is in the schema today
    Pick, reject or unflagged; star rating; colour label; timestamp of the
    last change and of the last sidecar write.
 
-``import`` / ``import_item`` (planned, :issue:`19`)
-   An import run and each planned source file: source path, source hash,
-   target path, status (planned, copied, verified, skipped as duplicate,
-   failed). Lets an interrupted import resume.
+``import_run`` / ``import_photo`` / ``import_file``
+   An import run (state, library folder, template, sources, problems),
+   each photo in it (capture metadata as JSON, status: planned, duplicate,
+   imported or failed, and the catalog photo once imported) and each file
+   (source path, size and modification time at planning, hash when known,
+   target path, status: planned, verified or failed). Lets plans be
+   reviewed and interrupted imports resume.
 
 .. _architecture-data-schema:
 
@@ -105,6 +109,10 @@ how many have run. Each migration runs in its own transaction.
      - ``0002_settings.sql``
      - ``setting``: JSON documents by key; the settings document lives
        under ``settings`` (:doc:`/reference/settings`)
+   * - 3
+     - ``0003_imports.sql``
+     - ``import_run``, ``import_photo``, ``import_file``
+       (:doc:`/features/import`)
 
 Conventions:
 

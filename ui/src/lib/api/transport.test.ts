@@ -79,6 +79,46 @@ describe("httpTransport", () => {
   });
 });
 
+describe("httpTransport events", () => {
+  class FakeEventSource {
+    url: string;
+    onmessage: ((m: MessageEvent<string>) => void) | null = null;
+    closed = false;
+    constructor(url: string) {
+      this.url = url;
+    }
+    close() {
+      this.closed = true;
+    }
+    send(data: string) {
+      this.onmessage?.({ data } as MessageEvent<string>);
+    }
+  }
+
+  it("delivers parsed events from /api/events and stops on unsubscribe", () => {
+    let source: FakeEventSource | undefined;
+    const transport = httpTransport(fetch, "", (url) => {
+      source = new FakeEventSource(url);
+      return source as unknown as EventSource;
+    });
+    const handler = vi.fn();
+
+    const stop = transport.subscribe(handler);
+    source!.send('{"type":"import_progress","run_id":3,"state":"copying"}');
+    source!.send("not json");
+    stop();
+
+    expect(source!.url).toBe("/api/events");
+    expect(handler).toHaveBeenCalledTimes(1);
+    expect(handler).toHaveBeenCalledWith({
+      type: "import_progress",
+      run_id: 3,
+      state: "copying",
+    });
+    expect(source!.closed).toBe(true);
+  });
+});
+
 describe("selectTransport", () => {
   it("uses Tauri IPC inside the desktop shell", () => {
     expect(selectTransport(true)).toBe(tauriTransport);

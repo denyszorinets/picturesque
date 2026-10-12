@@ -1,5 +1,6 @@
 //! SQLite implementation of the catalog ports (ADR-0004).
 
+mod imports;
 mod migrations;
 mod photos;
 mod settings;

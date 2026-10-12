@@ -3,12 +3,65 @@ Import
 
 .. note::
 
-   Import is being built in milestone M1. This page describes the parts
-   that exist so far and grows with each task.
+   The import screen arrives with :issue:`20`. Everything below already
+   works through the API (:doc:`/reference/api`).
 
 Import copies photos from your existing folders (**sources**) into the
 Clean library, organized by a path template. Sources are never modified
 (:doc:`ADR-0008 </architecture/decisions/0008-non-destructive-verified-import>`).
+
+.. _features-import-steps:
+
+How an import works
+-------------------
+
+1. **Plan.** Choose one or more source folders. Picturesque scans them,
+   reads each photo's metadata, finds duplicates and works out where every
+   file will go. This runs in the background with progress, and nothing is
+   copied yet.
+2. **Review.** The plan lists every photo with its destination, the
+   duplicates that will be skipped and any problems (unreadable folders or
+   files, sidecars without a photo).
+3. **Copy.** Start the import. Each file is copied to a temporary file
+   next to its destination, the copy is read back and compared by hash
+   with what was read from the source, and only then is it given its real
+   name. A RAW+JPEG pair and its sidecars are imported together: if any of
+   its files fails, the copies already made for that photo are removed, and
+   the photo is reported as failed while the rest of the import continues.
+4. **Done.** Imported photos are in the catalog and the library; the plan
+   now shows what was imported, skipped and failed.
+
+Duplicates
+~~~~~~~~~~
+
+A photo is skipped as a duplicate if one of its RAW or image files has
+exactly the same content as a file already in the library, or as a file
+earlier in the same import (for example the same card copied to two
+folders). When the same photo is in several of the chosen folders, the
+copy in the folder listed first is imported. Content is compared with a
+BLAKE3 hash, but only for files whose size matches another file, so
+planning does not read every file twice.
+
+Cancelling and resuming
+~~~~~~~~~~~~~~~~~~~~~~~
+
+Planning and copying can be cancelled. Copying stops between photos, so a
+photo is never left half-copied. A cancelled import, or one interrupted
+because the app was closed or crashed, can be started again: it continues
+with the photos not yet imported, and a file already copied with the same
+content is recognized instead of being copied again.
+
+Safety
+~~~~~~
+
+- Source files are only ever read.
+- An existing file in the library is never overwritten. If a file with
+  different content already sits at a destination, that photo fails rather
+  than replacing it.
+- If a source file changes after planning (or while it is being copied),
+  it is not imported; plan the import again.
+- A copy that does not match the original is retried once; if it fails
+  again, the destination disk may be failing and the photo is reported.
 
 .. _features-import-scanning:
 

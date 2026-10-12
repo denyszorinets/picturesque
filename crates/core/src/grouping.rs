@@ -109,16 +109,24 @@ pub fn group_files<S: AsRef<str>>(names: &[S]) -> Grouping {
     grouping
 }
 
-/// Base name used to match files: the name without its media extension,
-/// and for sidecars without `.xmp` and an optional media extension before it.
-fn base_key(name: &str, format: MediaFormat) -> String {
+/// The base name a supported file is grouped by, with case preserved:
+/// the name without its extension, and for sidecars also without a media
+/// extension before `.xmp` (`IMG_1.CR3.xmp` → `IMG_1`). `None` for
+/// unsupported files.
+pub fn base_name(name: &str) -> Option<&str> {
+    let format = MediaFormat::from_file_name(name)?;
     let stem = strip_ext(name);
-    let base = if format == MediaFormat::Xmp && MediaFormat::from_file_name(stem).is_some() {
-        strip_ext(stem)
-    } else {
-        stem
-    };
-    base.to_lowercase()
+    Some(
+        if format == MediaFormat::Xmp && MediaFormat::from_file_name(stem).is_some() {
+            strip_ext(stem)
+        } else {
+            stem
+        },
+    )
+}
+
+fn base_key(name: &str, _format: MediaFormat) -> String {
+    base_name(name).unwrap_or(name).to_lowercase()
 }
 
 /// For `name.ext.xmp`, the file it belongs to (`name.ext`).
@@ -219,6 +227,16 @@ mod tests {
                 group(None, Some("a.JPG"), &[]),
             ]
         );
+    }
+
+    #[test]
+    fn base_name_strips_media_and_sidecar_extensions() {
+        assert_eq!(base_name("IMG_1.CR3"), Some("IMG_1"));
+        assert_eq!(base_name("IMG_1.CR3.xmp"), Some("IMG_1"));
+        assert_eq!(base_name("IMG_1.xmp"), Some("IMG_1"));
+        assert_eq!(base_name("IMG_1 (2).JPG"), Some("IMG_1 (2)"));
+        assert_eq!(base_name("trip.day1.JPG"), Some("trip.day1"));
+        assert_eq!(base_name("notes.txt"), None);
     }
 
     #[test]

@@ -1,6 +1,9 @@
 //! File-system capabilities used by use cases.
 
 use std::path::Path;
+use std::time::SystemTime;
+
+use picturesque_core::hash::ContentHash;
 
 /// Kind of a directory entry. Symbolic links are reported as what they
 /// point to, except links to directories, which are [`EntryKind::Other`]
@@ -21,14 +24,50 @@ pub struct DirEntry {
     pub size: u64,
 }
 
+/// Size and modification time, used to notice a file changing between
+/// planning and copying.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FileStamp {
+    pub size: u64,
+    pub modified: Option<SystemTime>,
+}
+
+/// Why a no-replace rename failed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RenameError {
+    /// The destination already exists; nothing was changed.
+    Exists,
+    Other(String),
+}
+
 /// File-system checks and operations. Implemented on the real file system
-/// in `picturesque-infra`; faked in tests.
+/// in `picturesque-infra`; faked in tests. Error strings are
+/// human-readable reasons.
 pub trait FileSystem: Send + Sync {
     /// Succeeds if `path` is an existing directory that files can be
-    /// created in. The error is a human-readable reason.
+    /// created in.
     fn probe_writable_dir(&self, path: &Path) -> Result<(), String>;
 
-    /// Lists a directory. Entries whose names are not valid UTF-8 are
-    /// skipped. The error is a human-readable reason.
+    /// Lists a directory. Entries whose names are not valid UTF-8 are skipped.
     fn list_dir(&self, path: &Path) -> Result<Vec<DirEntry>, String>;
+
+    fn exists(&self, path: &Path) -> bool;
+
+    fn stamp(&self, path: &Path) -> Result<FileStamp, String>;
+
+    /// BLAKE3 hash and size of a file's contents.
+    fn hash_file(&self, path: &Path) -> Result<(ContentHash, u64), String>;
+
+    fn create_dir_all(&self, path: &Path) -> Result<(), String>;
+
+    /// Copies `src` to `dst` (replacing `dst` if present), flushes it to
+    /// disk, and returns the hash and size of the bytes read from `src`.
+    fn copy_hashing(&self, src: &Path, dst: &Path) -> Result<(ContentHash, u64), String>;
+
+    /// Renames `from` to `to`, failing with [`RenameError::Exists`] rather
+    /// than replacing an existing `to`.
+    fn rename_no_replace(&self, from: &Path, to: &Path) -> Result<(), RenameError>;
+
+    /// Removes a file; succeeds if it does not exist.
+    fn remove_file(&self, path: &Path) -> Result<(), String>;
 }

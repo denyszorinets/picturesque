@@ -1,5 +1,6 @@
 //! `PhotoCatalog` on SQLite: mapping between rows and domain types.
 
+use std::collections::HashSet;
 use std::path::{Component, Path, PathBuf};
 
 use chrono::{FixedOffset, NaiveDateTime};
@@ -123,6 +124,20 @@ impl PhotoCatalog for SqliteCatalog {
             .map_err(storage)
     }
 
+    fn media_sizes(&self) -> Result<HashSet<u64>, CatalogError> {
+        let conn = self.conn();
+        let mut stmt = conn
+            .prepare("SELECT DISTINCT size FROM asset WHERE role <> 'sidecar'")
+            .map_err(storage)?;
+        let sizes = stmt
+            .query_map([], |row| row.get::<_, i64>(0))
+            .map_err(storage)?
+            .map(|r| r.map(|n| n as u64))
+            .collect::<Result<HashSet<_>, _>>()
+            .map_err(storage)?;
+        Ok(sizes)
+    }
+
     fn photo_count(&self) -> Result<u64, CatalogError> {
         self.conn()
             .query_row("SELECT count(*) FROM photo", [], |row| row.get::<_, i64>(0))
@@ -228,7 +243,7 @@ fn conversion(column: usize, e: impl ToString) -> rusqlite::Error {
 
 /// Stores library-relative paths with `/` separators, so a library on an
 /// external drive reads the same from every operating system.
-fn to_library_path(path: &Path) -> Result<String, CatalogError> {
+pub(super) fn to_library_path(path: &Path) -> Result<String, CatalogError> {
     let mut parts = Vec::new();
     for component in path.components() {
         match component {
@@ -251,7 +266,7 @@ fn to_library_path(path: &Path) -> Result<String, CatalogError> {
     Ok(parts.join("/"))
 }
 
-fn from_library_path(stored: &str) -> PathBuf {
+pub(super) fn from_library_path(stored: &str) -> PathBuf {
     stored.split('/').collect()
 }
 

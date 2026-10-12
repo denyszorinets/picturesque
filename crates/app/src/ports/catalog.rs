@@ -1,5 +1,6 @@
 //! The photo catalog (ADR-0004).
 
+use std::collections::HashSet;
 use std::fmt;
 
 use picturesque_core::hash::ContentHash;
@@ -37,4 +38,8 @@ pub trait PhotoCatalog: Send + Sync {
     fn photo_with_media_hash(&self, hash: &ContentHash) -> Result<Option<PhotoId>, CatalogError>;
 
     fn photo_count(&self) -> Result<u64, CatalogError>;
+
+    /// Sizes of all catalogued RAW and image files. A new file can only be
+    /// a duplicate if its size is in this set, so only those are hashed.
+    fn media_sizes(&self) -> Result<HashSet<u64>, CatalogError>;
 }

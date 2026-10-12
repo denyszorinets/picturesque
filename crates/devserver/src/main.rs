@@ -10,8 +10,11 @@ use std::process::ExitCode;
 use std::sync::Arc;
 
 use picturesque_app::api::{Api, AppContext};
+use picturesque_devserver::EventBus;
 use picturesque_infra::catalog::SqliteCatalog;
 use picturesque_infra::fs::StdFileSystem;
+use picturesque_infra::geocode::GeoNamesGeocoder;
+use picturesque_infra::metadata::ExifMetadataReader;
 
 const DEFAULT_ADDR: &str = "127.0.0.1:5174";
 const DEFAULT_DATA_DIR: &str = "target/devserver-data";
@@ -44,10 +47,17 @@ async fn serve() -> Result<(), String> {
         .map_err(|e| format!("create {}: {e}", data_dir.display()))?;
     let catalog =
         Arc::new(SqliteCatalog::open(&data_dir.join("catalog.sqlite")).map_err(|e| e.to_string())?);
+    let events = EventBus::default();
     let api = Api::new(AppContext {
-        settings_store: catalog,
+        settings_store: catalog.clone(),
+        catalog: catalog.clone(),
+        imports: catalog,
         fs: Arc::new(StdFileSystem),
-    });
+        metadata: Arc::new(ExifMetadataReader),
+        geocoder: Arc::new(GeoNamesGeocoder::default()),
+        events: Arc::new(events.clone()),
+    })
+    .map_err(|e| e.message)?;
 
     let listener = tokio::net::TcpListener::bind(addr)
         .await
@@ -57,10 +67,13 @@ async fn serve() -> Result<(), String> {
         data_dir.display()
     );
 
-    axum::serve(listener, picturesque_devserver::router(Arc::new(api)))
-        .with_graceful_shutdown(async {
-            let _ = tokio::signal::ctrl_c().await;
-        })
-        .await
-        .map_err(|e| format!("server error: {e}"))
+    axum::serve(
+        listener,
+        picturesque_devserver::router(Arc::new(api), events),
+    )
+    .with_graceful_shutdown(async {
+        let _ = tokio::signal::ctrl_c().await;
+    })
+    .await
+    .map_err(|e| format!("server error: {e}"))
 }
