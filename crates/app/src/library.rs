@@ -175,6 +175,147 @@ pub struct PhotoFacets {
     pub ratings: Vec<usize>,
 }
 
+/// One file of a photo, for the info panel.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[ts(export)]
+pub struct PhotoFileView {
+    /// Relative to the library folder, `/`-separated.
+    pub path: String,
+    /// `raw`, `jpeg`, `heif`, `png`, `tiff`, `webp` or `xmp`.
+    pub format: String,
+    #[ts(type = "number")]
+    pub size: u64,
+}
+
+/// Everything known about a photo, formatted for display.
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[ts(export)]
+pub struct PhotoDetail {
+    #[ts(type = "number")]
+    pub id: i64,
+    /// Local capture time, ISO 8601 without offset.
+    pub captured_at: Option<String>,
+    /// UTC offset of the capture time, for example `+01:00`.
+    pub utc_offset: Option<String>,
+    pub camera: Option<String>,
+    pub lens: Option<String>,
+    pub iso: Option<u32>,
+    /// For example `f/2.8`.
+    pub aperture: Option<String>,
+    /// For example `1/250 s` or `2 s`.
+    pub shutter: Option<String>,
+    /// For example `35 mm`.
+    pub focal_length: Option<String>,
+    pub latitude: Option<f64>,
+    pub longitude: Option<f64>,
+    /// "City, Region, Country".
+    pub place: Option<String>,
+    /// Size as displayed (after orientation).
+    pub width: Option<u32>,
+    pub height: Option<u32>,
+    #[ts(type = "\"unflagged\" | \"pick\" | \"reject\"")]
+    pub flag: picturesque_core::decision::Flag,
+    pub rating: u8,
+    pub files: Vec<PhotoFileView>,
+}
+
+/// Arguments of commands that act on one photo.
+#[derive(Debug, Clone, Copy, Deserialize, TS)]
+#[serde(deny_unknown_fields)]
+#[ts(export)]
+pub struct PhotoArgs {
+    #[ts(type = "number")]
+    pub photo_id: i64,
+}
+
+/// Formats an exposure time: `1/250 s` for fractions of a second, `2 s`,
+/// `2.5 s` or `30 s` otherwise.
+pub fn format_shutter(numerator: u32, denominator: u32) -> String {
+    let seconds = f64::from(numerator) / f64::from(denominator.max(1));
+    if seconds < 1.0 {
+        let inverse = (1.0 / seconds).round() as u64;
+        format!("1/{inverse} s")
+    } else if (seconds - seconds.round()).abs() < 0.05 {
+        format!("{} s", seconds.round() as u64)
+    } else {
+        format!("{seconds:.1} s")
+    }
+}
+
+fn format_number(value: f32) -> String {
+    let rounded = (value * 10.0).round() / 10.0;
+    if rounded.fract() == 0.0 {
+        format!("{rounded:.0}")
+    } else {
+        format!("{rounded:.1}")
+    }
+}
+
+impl PhotoDetail {
+    pub fn new(
+        photo: &picturesque_core::photo::Photo,
+        decision: picturesque_core::decision::Decision,
+    ) -> Self {
+        let m = &photo.metadata;
+        let (width, height) = m
+            .display_dimensions()
+            .map_or((None, None), |(w, h)| (Some(w), Some(h)));
+        Self {
+            id: photo.id.0,
+            captured_at: m
+                .captured_at
+                .map(|t| t.local.format("%Y-%m-%dT%H:%M:%S").to_string()),
+            utc_offset: m.captured_at.and_then(|t| t.offset).map(|o| o.to_string()),
+            camera: m.camera.as_ref().map(|c| c.display_name()),
+            lens: m.lens.clone(),
+            iso: m.exposure.iso,
+            aperture: m
+                .exposure
+                .f_number
+                .map(|f| format!("f/{}", format_number(f))),
+            shutter: m
+                .exposure
+                .exposure_time
+                .map(|t| format_shutter(t.numerator, t.denominator)),
+            focal_length: m
+                .exposure
+                .focal_length_mm
+                .map(|f| format!("{} mm", format_number(f))),
+            latitude: m.gps.map(|g| g.latitude()),
+            longitude: m.gps.map(|g| g.longitude()),
+            place: m.place.as_ref().map(|p| {
+                [
+                    Some(p.city.as_str()),
+                    p.region.as_deref().filter(|r| *r != p.city),
+                    Some(p.country.as_str()),
+                ]
+                .into_iter()
+                .flatten()
+                .collect::<Vec<_>>()
+                .join(", ")
+            }),
+            width,
+            height,
+            flag: decision.flag,
+            rating: decision.rating.stars(),
+            files: photo
+                .assets
+                .iter()
+                .map(|a| PhotoFileView {
+                    path: a
+                        .path
+                        .iter()
+                        .map(|c| c.to_string_lossy())
+                        .collect::<Vec<_>>()
+                        .join("/"),
+                    format: a.format.as_str().to_owned(),
+                    size: a.size,
+                })
+                .collect(),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -211,5 +352,82 @@ mod tests {
         )
         .unwrap();
         assert_eq!(q.flags.unwrap(), [picturesque_core::decision::Flag::Pick]);
+    }
+
+    #[test]
+    fn formats_shutter_speeds_like_photographers() {
+        assert_eq!(format_shutter(1, 250), "1/250 s");
+        assert_eq!(format_shutter(10, 1600), "1/160 s");
+        assert_eq!(format_shutter(1, 3), "1/3 s");
+        assert_eq!(format_shutter(2, 1), "2 s");
+        assert_eq!(format_shutter(5, 2), "2.5 s");
+        assert_eq!(format_shutter(30, 1), "30 s");
+    }
+
+    #[test]
+    fn builds_details_from_a_photo() {
+        use chrono::{FixedOffset, NaiveDateTime};
+        use picturesque_core::decision::{Decision, Flag, Rating};
+        use picturesque_core::hash::ContentHash;
+        use picturesque_core::media::MediaFormat;
+        use picturesque_core::metadata::*;
+        use picturesque_core::photo::*;
+
+        let photo = Photo {
+            id: PhotoId(7),
+            metadata: CaptureMetadata {
+                captured_at: Some(CaptureTime::new(
+                    NaiveDateTime::parse_from_str("2026-10-12 14:30:05", "%Y-%m-%d %H:%M:%S")
+                        .unwrap(),
+                    FixedOffset::east_opt(3600),
+                )),
+                camera: Some(Camera::new("Canon", "Canon EOS R5")),
+                lens: Some("RF24-70mm F2.8 L IS USM".into()),
+                exposure: Exposure {
+                    iso: Some(400),
+                    f_number: Some(2.8),
+                    exposure_time: Some(ExposureTime {
+                        numerator: 1,
+                        denominator: 250,
+                    }),
+                    focal_length_mm: Some(35.0),
+                },
+                gps: GeoPoint::new(38.72, -9.14),
+                place: Some(Place {
+                    city: "Lisbon".into(),
+                    region: Some("Lisbon".into()),
+                    country: "Portugal".into(),
+                    country_code: "PT".into(),
+                }),
+                orientation: Orientation::Rotate90,
+                dimensions: Some((6000, 4000)),
+            },
+            assets: PhotoAssets::new(vec![Asset {
+                format: MediaFormat::Raw,
+                path: ["2026", "IMG_1.CR3"].iter().collect(),
+                size: 30_000_000,
+                hash: ContentHash::from_bytes([1; 32]),
+            }])
+            .unwrap(),
+        };
+
+        let d = PhotoDetail::new(
+            &photo,
+            Decision {
+                flag: Flag::Pick,
+                rating: Rating::new(4).unwrap(),
+            },
+        );
+
+        assert_eq!(d.captured_at.as_deref(), Some("2026-10-12T14:30:05"));
+        assert_eq!(d.utc_offset.as_deref(), Some("+01:00"));
+        assert_eq!(d.aperture.as_deref(), Some("f/2.8"));
+        assert_eq!(d.shutter.as_deref(), Some("1/250 s"));
+        assert_eq!(d.focal_length.as_deref(), Some("35 mm"));
+        // The region is skipped when it repeats the city.
+        assert_eq!(d.place.as_deref(), Some("Lisbon, Portugal"));
+        assert_eq!((d.width, d.height), (Some(4000), Some(6000)));
+        assert_eq!(d.files[0].path, "2026/IMG_1.CR3");
+        assert_eq!((d.flag, d.rating), (Flag::Pick, 4));
     }
 }

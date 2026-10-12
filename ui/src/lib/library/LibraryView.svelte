@@ -1,5 +1,6 @@
 <script lang="ts">
   import * as api from "../api";
+  import Loupe from "./Loupe.svelte";
   import { Selection } from "./selection.svelte";
   import { LibraryStore } from "./store.svelte";
   import Timeline from "./Timeline.svelte";
@@ -16,6 +17,22 @@
     selection = new Selection(),
   }: Props = $props();
 
+  /** Index of the photo open in the loupe. */
+  let loupe = $state<number | null>(null);
+
+  function open(index: number) {
+    selection.click(index);
+    loupe = index;
+  }
+
+  function onkeydown(e: KeyboardEvent) {
+    if (loupe !== null || e.target instanceof HTMLInputElement) return;
+    if (e.key === "Enter" && selection.focus !== null) {
+      e.preventDefault();
+      open(selection.focus);
+    }
+  }
+
   $effect(() => {
     void store.load();
     // New photos appear when an import completes.
@@ -25,6 +42,8 @@
     });
   });
 </script>
+
+<svelte:window {onkeydown} />
 
 <section class="library" aria-label="Library">
   {#if store.error}
@@ -46,8 +65,19 @@
       {/if}
     </div>
     <div class="grid">
-      <Timeline {store} {selection} />
+      <Timeline {store} {selection} onopen={open} />
     </div>
+    {#if loupe !== null}
+      <Loupe
+        {store}
+        index={loupe}
+        onnavigate={(i) => {
+          loupe = i;
+          selection.click(i);
+        }}
+        onclose={() => (loupe = null)}
+      />
+    {/if}
   {/if}
 </section>
 

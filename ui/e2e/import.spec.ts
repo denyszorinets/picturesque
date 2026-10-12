@@ -1,9 +1,8 @@
 import { readdirSync } from "node:fs";
-import { mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import { folder, jpeg } from "./fixtures";
+import { LIBRARY } from "./helpers";
 
 function filesUnder(dir: string): string[] {
   return readdirSync(dir, { recursive: true, withFileTypes: true })
@@ -12,7 +11,8 @@ function filesUnder(dir: string): string[] {
 }
 
 test("imports a folder into the library through the UI", async ({ page }) => {
-  const library = mkdtempSync(join(tmpdir(), "picturesque-e2e-lib-"));
+  const library = LIBRARY;
+  const before = filesUnder(library).length;
   const card = folder({
     "DCIM/IMG_0001.JPG": jpeg(1),
     "DCIM/IMG_0002.JPG": jpeg(2),
@@ -53,7 +53,7 @@ test("imports a folder into the library through the UI", async ({ page }) => {
   await expect(summary).toContainText("3to import");
   await expect(summary).toContainText("1duplicates skipped");
   await expect(page.getByTestId("plan-table")).toContainText("IMG_0002.JPG");
-  expect(filesUnder(library)).toHaveLength(0);
+  expect(filesUnder(library)).toHaveLength(before);
 
   // Copy.
   await page.getByTestId("start-import").click();
@@ -61,7 +61,7 @@ test("imports a folder into the library through the UI", async ({ page }) => {
     "Import finished",
   );
   await expect(summary).toContainText("3imported");
-  expect(filesUnder(library)).toHaveLength(3);
+  expect(filesUnder(library)).toHaveLength(before + 3);
 
   await page.getByTestId("new-import").click();
   await expect(page.getByTestId("plan-import")).toBeVisible();
@@ -77,7 +77,9 @@ test("explains problems from the backend", async ({ page }) => {
   await page.getByTestId("library-root").fill("/definitely/not/here");
   await page.getByTestId("save-settings").click();
 
+  // Either the folder is missing, or (once photos exist) switching
+  // libraries is refused; both are explained.
   await expect(page.getByTestId("settings-error")).toContainText(
-    "does not exist",
+    /does not exist|not supported yet/,
   );
 });

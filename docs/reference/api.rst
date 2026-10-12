@@ -52,6 +52,13 @@ Commands
    ``country``, ``flag``, ``rating``, displayed ``width``/``height``,
    ``has_raw`` and ``file_name``.
 
+``get_photo``
+   ``{ "photo_id": 7 }``. A ``PhotoDetail``: capture time and UTC offset,
+   camera, lens, ``iso``, ``aperture`` (``f/2.8``), ``shutter``
+   (``1/250 s``), ``focal_length`` (``35 mm``), GPS, ``place``, displayed
+   size, ``flag``, ``rating`` and ``files`` (path, format, size). Unknown
+   photos are ``not_found``.
+
 ``photo_facets``
    No arguments. The values present in the library with photo counts:
    ``days`` (newest first), ``cameras`` (with display labels), ``lenses``,
@@ -123,7 +130,8 @@ directly as ``<img src>``:
    * - Development server
      - ``GET /api/images/{size}/{photo_id}``
 
-``size`` is ``grid`` (longest edge 512 px) or ``preview`` (2048 px).
+``size`` is ``grid`` (longest edge 512 px), ``preview`` (2048 px) or
+``full`` (native size, for 100% zoom).
 Images are generated on first request and cached
 (:doc:`data-locations`). Responses carry an ``ETag``; a request with a
 matching ``If-None-Match`` gets ``304 Not Modified``. An unknown photo is

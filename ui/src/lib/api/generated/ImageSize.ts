@@ -3,4 +3,4 @@
 /**
  * The image sizes Picturesque caches.
  */
-export type ImageSize = "grid" | "preview";
+export type ImageSize = "grid" | "preview" | "full";

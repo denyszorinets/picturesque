@@ -1,0 +1,387 @@
+<script lang="ts">
+  import { ApiError, getPhoto, imageUrl, type PhotoDetail } from "../api";
+  import type { LibraryStore } from "./store.svelte";
+
+  interface Props {
+    store: LibraryStore;
+    /** Index of the shown photo in the timeline list. */
+    index: number;
+    onnavigate: (index: number) => void;
+    onclose: () => void;
+  }
+
+  let { store, index, onnavigate, onclose }: Props = $props();
+
+  let zoomed = $state(false);
+  let showInfo = $state(true);
+  let detail = $state<PhotoDetail | null>(null);
+  let detailError = $state<string | null>(null);
+  let fullLoaded = $state(false);
+  let scroller: HTMLDivElement | undefined = $state();
+  /** Where in the photo (0–1) to centre when zooming in. */
+  let focusPoint = { x: 0.5, y: 0.5 };
+  let drag: { x: number; y: number; left: number; top: number } | null = null;
+
+  const photo = $derived(store.photos[index]);
+
+  $effect(() => {
+    void store.ensureLoaded(Math.min(store.total - 1, index + 1));
+  });
+
+  // Details for the info panel.
+  $effect(() => {
+    const id = photo?.id;
+    detail = null;
+    detailError = null;
+    if (id === undefined) return;
+    getPhoto(id)
+      .then((d) => {
+        if (photo?.id === id) detail = d;
+      })
+      .catch((e: unknown) => (detailError = ApiError.from(e).message));
+  });
+
+  // A new photo starts fitted.
+  $effect(() => {
+    void index;
+    zoomed = false;
+    fullLoaded = false;
+  });
+
+  // Preload neighbours so moving through photos feels instant.
+  $effect(() => {
+    for (const i of [index - 1, index + 1]) {
+      const neighbour = store.photos[i];
+      if (neighbour) new Image().src = imageUrl(neighbour.id, "preview");
+    }
+  });
+
+  function go(delta: number) {
+    const next = index + delta;
+    if (next >= 0 && next < store.total) onnavigate(next);
+  }
+
+  function toggleZoom(point?: { x: number; y: number }) {
+    focusPoint = point ?? { x: 0.5, y: 0.5 };
+    zoomed = !zoomed;
+  }
+
+  function onFullLoad(e: Event) {
+    fullLoaded = true;
+    const img = e.currentTarget as HTMLImageElement;
+    if (!scroller) return;
+    scroller.scrollLeft =
+      img.naturalWidth * focusPoint.x - scroller.clientWidth / 2;
+    scroller.scrollTop =
+      img.naturalHeight * focusPoint.y - scroller.clientHeight / 2;
+  }
+
+  function clickFitted(e: MouseEvent) {
+    const img = e.currentTarget as HTMLImageElement;
+    const rect = img.getBoundingClientRect();
+    toggleZoom({
+      x: (e.clientX - rect.left) / rect.width,
+      y: (e.clientY - rect.top) / rect.height,
+    });
+  }
+
+  function onpointerdown(e: PointerEvent) {
+    if (!scroller) return;
+    drag = {
+      x: e.clientX,
+      y: e.clientY,
+      left: scroller.scrollLeft,
+      top: scroller.scrollTop,
+    };
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  }
+
+  function onpointermove(e: PointerEvent) {
+    if (!drag || !scroller) return;
+    scroller.scrollLeft = drag.left - (e.clientX - drag.x);
+    scroller.scrollTop = drag.top - (e.clientY - drag.y);
+  }
+
+  function onpointerup(e: PointerEvent) {
+    const moved =
+      drag && Math.hypot(e.clientX - drag.x, e.clientY - drag.y) > 4;
+    drag = null;
+    if (!moved) zoomed = false;
+  }
+
+  function onkeydown(e: KeyboardEvent) {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    const actions: Record<string, () => void> = {
+      ArrowRight: () => go(1),
+      ArrowLeft: () => go(-1),
+      Escape: () => (zoomed ? (zoomed = false) : onclose()),
+      z: () => toggleZoom(),
+      Z: () => toggleZoom(),
+      i: () => (showInfo = !showInfo),
+      I: () => (showInfo = !showInfo),
+    };
+    const action = actions[e.key];
+    if (action) {
+      e.preventDefault();
+      e.stopPropagation();
+      action();
+    }
+  }
+
+  function bytes(n: number): string {
+    return n >= 1e6
+      ? `${(n / 1e6).toFixed(1)} MB`
+      : `${Math.max(1, Math.round(n / 1e3))} KB`;
+  }
+</script>
+
+<svelte:window {onkeydown} />
+
+<div
+  class="loupe"
+  role="dialog"
+  aria-modal="true"
+  aria-label="Photo"
+  data-testid="loupe"
+>
+  <div class="stage">
+    {#if photo}
+      {#if zoomed}
+        <div
+          class="scroller"
+          bind:this={scroller}
+          role="presentation"
+          {onpointerdown}
+          {onpointermove}
+          {onpointerup}
+          data-testid="loupe-zoomed"
+        >
+          {#if !fullLoaded}<p class="loading">Loading full size…</p>{/if}
+          <img
+            class="full"
+            class:hidden={!fullLoaded}
+            src={imageUrl(photo.id, "full")}
+            alt={photo.file_name}
+            draggable="false"
+            onload={onFullLoad}
+          />
+        </div>
+      {:else}
+        <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
+        <img
+          class="fitted"
+          src={imageUrl(photo.id, "preview")}
+          alt={photo.file_name}
+          draggable="false"
+          onclick={clickFitted}
+          data-testid="loupe-image"
+        />
+      {/if}
+    {:else}
+      <p class="loading">Loading…</p>
+    {/if}
+
+    <div class="toolbar">
+      <button
+        onclick={() => go(-1)}
+        disabled={index === 0}
+        aria-label="Previous photo">←</button
+      >
+      <span data-testid="loupe-position">{index + 1} / {store.total}</span>
+      <button
+        onclick={() => go(1)}
+        disabled={index >= store.total - 1}
+        aria-label="Next photo">→</button
+      >
+      <button onclick={() => toggleZoom()} aria-pressed={zoomed}
+        >{zoomed ? "Fit" : "100%"}</button
+      >
+      <button onclick={() => (showInfo = !showInfo)} aria-pressed={showInfo}
+        >Info</button
+      >
+      <button onclick={onclose} aria-label="Close">✕</button>
+    </div>
+  </div>
+
+  {#if showInfo}
+    <aside class="info" data-testid="loupe-info">
+      {#if detail}
+        <h2>{photo?.file_name}</h2>
+        <dl>
+          {#if detail.captured_at}
+            <dt>Taken</dt>
+            <dd>
+              {detail.captured_at.replace("T", " ")}{detail.utc_offset
+                ? ` (UTC${detail.utc_offset})`
+                : ""}
+            </dd>
+          {/if}
+          {#if detail.camera}<dt>Camera</dt>
+            <dd>{detail.camera}</dd>{/if}
+          {#if detail.lens}<dt>Lens</dt>
+            <dd>{detail.lens}</dd>{/if}
+          {#if detail.aperture || detail.shutter || detail.iso || detail.focal_length}
+            <dt>Exposure</dt>
+            <dd data-testid="loupe-exposure">
+              {[
+                detail.aperture,
+                detail.shutter,
+                detail.iso ? `ISO ${detail.iso}` : null,
+                detail.focal_length,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+            </dd>
+          {/if}
+          {#if detail.width && detail.height}<dt>Size</dt>
+            <dd>{detail.width} × {detail.height}</dd>{/if}
+          {#if detail.place}<dt>Place</dt>
+            <dd>{detail.place}</dd>{/if}
+          {#if detail.latitude !== null && detail.longitude !== null}
+            <dt>GPS</dt>
+            <dd>{detail.latitude.toFixed(5)}, {detail.longitude.toFixed(5)}</dd>
+          {/if}
+          <dt>Files</dt>
+          <dd>
+            {#each detail.files as file (file.path)}
+              <div class="file">
+                <code>{file.path}</code>
+                <span class="muted">{bytes(file.size)}</span>
+              </div>
+            {/each}
+          </dd>
+        </dl>
+      {:else if detailError}
+        <p class="error-text">{detailError}</p>
+      {/if}
+      <p class="keys muted">← → move · Z zoom · I info · Esc close</p>
+    </aside>
+  {/if}
+</div>
+
+<style>
+  .loupe {
+    position: fixed;
+    inset: 0;
+    z-index: 10;
+    display: flex;
+    background: #0d0d0c;
+    color: #ececea;
+  }
+
+  .stage {
+    position: relative;
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .fitted {
+    max-width: calc(100% - 2rem);
+    max-height: calc(100% - 5rem);
+    object-fit: contain;
+    cursor: zoom-in;
+    user-select: none;
+  }
+
+  .scroller {
+    position: absolute;
+    inset: 0;
+    overflow: auto;
+    cursor: grab;
+    display: grid;
+    place-items: center;
+  }
+
+  .scroller:active {
+    cursor: grabbing;
+  }
+
+  .full {
+    max-width: none;
+    user-select: none;
+  }
+
+  .full.hidden {
+    visibility: hidden;
+    position: absolute;
+  }
+
+  .loading {
+    color: #9a9a94;
+  }
+
+  .toolbar {
+    position: absolute;
+    bottom: 1rem;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.35rem 0.5rem;
+    background: rgb(30 30 28 / 0.85);
+    border-radius: 10px;
+    font-size: 0.85rem;
+  }
+
+  .toolbar button {
+    background: transparent;
+    color: inherit;
+    border-color: #3a3a36;
+    padding: 0.25rem 0.6rem;
+  }
+
+  .toolbar button[aria-pressed="true"] {
+    background: #3a3a36;
+  }
+
+  .info {
+    width: 20rem;
+    flex-shrink: 0;
+    padding: 1.2rem;
+    background: #171716;
+    border-left: 1px solid #2a2a27;
+    overflow-y: auto;
+    font-size: 0.85rem;
+  }
+
+  .info h2 {
+    font-size: 1rem;
+    overflow-wrap: anywhere;
+    margin-bottom: 0.8rem;
+  }
+
+  dl {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.45rem 0.8rem;
+    margin: 0;
+  }
+
+  dt {
+    color: #9a9a94;
+  }
+
+  dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .file {
+    margin-bottom: 0.2rem;
+  }
+
+  .keys {
+    margin-top: 1.5rem;
+    font-size: 0.8rem;
+  }
+
+  @media (max-width: 900px) {
+    .info {
+      display: none;
+    }
+  }
+</style>
