@@ -8,4 +8,5 @@
 pub mod api;
 pub mod info;
 pub mod ports;
+pub mod scan;
 pub mod settings;

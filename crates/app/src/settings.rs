@@ -163,6 +163,10 @@ pub(crate) mod tests {
                 Err("it does not exist".into())
             }
         }
+
+        fn list_dir(&self, _: &Path) -> Result<Vec<crate::ports::fs::DirEntry>, String> {
+            Err("it does not exist".into())
+        }
     }
 
     fn abs(p: &str) -> PathBuf {

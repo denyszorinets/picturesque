@@ -2,7 +2,7 @@
 
 use std::path::Path;
 
-use picturesque_app::ports::fs::FileSystem;
+use picturesque_app::ports::fs::{DirEntry, EntryKind, FileSystem};
 
 /// [`FileSystem`] backed by `std::fs`.
 #[derive(Debug, Default, Clone, Copy)]
@@ -28,6 +28,46 @@ impl FileSystem for StdFileSystem {
                 std::io::ErrorKind::PermissionDenied => "it is not writable".to_owned(),
                 _ => format!("it is not writable ({e})"),
             })
+    }
+
+    fn list_dir(&self, path: &Path) -> Result<Vec<DirEntry>, String> {
+        let read = std::fs::read_dir(path).map_err(|e| io_reason(&e))?;
+        let mut entries = Vec::new();
+        for entry in read {
+            let entry = entry.map_err(|e| io_reason(&e))?;
+            let Ok(name) = entry.file_name().into_string() else {
+                continue;
+            };
+            let Ok(file_type) = entry.file_type() else {
+                continue;
+            };
+            let (kind, size) = if file_type.is_symlink() {
+                // Follow links to files; never links to directories (loops).
+                match std::fs::metadata(entry.path()) {
+                    Ok(meta) if meta.is_file() => (EntryKind::File, meta.len()),
+                    _ => (EntryKind::Other, 0),
+                }
+            } else if file_type.is_dir() {
+                (EntryKind::Dir, 0)
+            } else if file_type.is_file() {
+                (
+                    EntryKind::File,
+                    entry.metadata().map(|m| m.len()).unwrap_or(0),
+                )
+            } else {
+                (EntryKind::Other, 0)
+            };
+            entries.push(DirEntry { name, kind, size });
+        }
+        Ok(entries)
+    }
+}
+
+fn io_reason(e: &std::io::Error) -> String {
+    match e.kind() {
+        std::io::ErrorKind::NotFound => "it does not exist".to_owned(),
+        std::io::ErrorKind::PermissionDenied => "permission denied".to_owned(),
+        _ => e.to_string(),
     }
 }
 
