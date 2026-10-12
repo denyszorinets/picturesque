@@ -1,21 +1,9 @@
-# Binaries for programs and plugins
-*.exe
-*.exe~
-*.dll
-*.so
-*.so.*
-*.dylib
-mcp-gateway
-/cmd/gateway/gateway
-/cmd/webui/webui
-webui-server
+# Rust build output
+/target/
 
-# Build artifacts
+# Node / front end
+node_modules/
 dist/
-build/
-
-# Test binaries
-*.test
 
 # IDE
 .vscode/
@@ -29,7 +17,6 @@ build/
 Thumbs.db
 
 # Local configuration
-config.local.toml
 .env
 .env.local
 
@@ -39,8 +26,10 @@ config.local.toml
 # SQLite databases
 *.db
 *.sqlite
+*.sqlite-wal
+*.sqlite-shm
 
-# Python (deploy/demo/mcp-servers/)
+# Python
 __pycache__/
 *.pyc
 

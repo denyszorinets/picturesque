@@ -1,0 +1,5 @@
+//! Picturesque infrastructure: implementations of the ports defined in
+//! `picturesque-app` (catalog, decoding, inference, geocoding, sidecars,
+//! file system).
+//!
+//! Types from native libraries and frameworks stay inside this crate.
