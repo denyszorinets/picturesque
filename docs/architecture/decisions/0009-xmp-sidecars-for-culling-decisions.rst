@@ -96,6 +96,29 @@ Validation
 
 :issue:`29` checks sidecars are read correctly by darktable and digiKam.
 
+Findings (2026-10-12), from implementing :issue:`29`:
+
+- Field mapping: ``xmp:Rating`` (stars, −1 for rejects),
+  ``digiKam:PickLabel`` (3 pick, 1 reject) and Picturesque's own
+  ``picturesque:Flag`` / ``picturesque:Stars`` namespace, needed because
+  ``xmp:Rating = -1`` loses a rejected photo's stars.
+- Merging rewrites the XML as an event stream with namespace resolution,
+  so properties are matched by namespace URI whatever their prefix
+  (Lightroom files still use ``xap:``) and in attribute or element form;
+  everything else, including comments, is copied. ``xmltree`` was rejected
+  because it drops attribute prefixes. Merging is idempotent (tested).
+- New sidecars are named ``IMG_0042.CR3.xmp`` by default; a setting
+  switches to ``IMG_0042.xmp`` for Lightroom.
+- Writes are debounced in a background worker. A per-decision revision
+  counter, rather than a timestamp, decides whether a sidecar is current,
+  so a change made while a sidecar is being written is never marked as
+  written.
+- Reading existing sidecars on import (the last part of this decision) is
+  implemented.
+- Verifying in darktable and digiKam needs a desktop session; the steps
+  are documented in :ref:`features-library-sidecars` and are still to be
+  carried out.
+
 References
 ----------
 

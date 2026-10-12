@@ -37,6 +37,19 @@ with values from each photo.
    tokens and rules. An invalid template is rejected with a message naming
    the problem.
 
+.. _reference-settings-sidecar-naming:
+
+``sidecar_naming``
+------------------
+
+How new XMP sidecars are named (:ref:`features-library-sidecars`).
+Existing sidecars are always updated where they are.
+
+:Type: ``file_extension`` or ``base_name``
+:Default: ``file_extension``
+:Values: ``file_extension`` writes ``IMG_0042.CR3.xmp`` (darktable,
+   digiKam); ``base_name`` writes ``IMG_0042.xmp`` (Lightroom, Bridge).
+
 Where settings are stored
 -------------------------
 
@@ -50,7 +63,8 @@ API
 
    .. code-block:: json
 
-      { "library_root": null, "path_template": "{year|Undated}/{date}/{name}.{ext}" }
+      { "library_root": null, "path_template": "{year|Undated}/{date}/{name}.{ext}",
+        "sidecar_naming": "file_extension" }
 
 ``update_settings``
    Arguments: any subset of the settings. Unknown fields are rejected.

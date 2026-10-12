@@ -274,6 +274,7 @@ mod settings {
         let settings = Settings {
             library_root: Some(PathBuf::from("/photos/Clean")),
             path_template: "{year}/{name}.{ext}".into(),
+            ..Settings::default()
         };
         SqliteCatalog::open(&path)
             .unwrap()

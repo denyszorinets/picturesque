@@ -26,7 +26,9 @@ use crate::ports::images::ImageDecoder;
 use crate::ports::imports::ImportStore;
 use crate::ports::metadata::MetadataReader;
 use crate::ports::settings::SettingsStore;
+use crate::ports::sidecars::SidecarStore;
 use crate::settings::{SettingsError, SettingsService, SettingsUpdate};
+use crate::sidecars::SidecarService;
 use crate::templates::{self, PreviewTemplateArgs};
 use crate::thumbnails::{ImageSize, PrefillAfterImport, ThumbnailError, ThumbnailService};
 use picturesque_core::photo::PhotoId;
@@ -87,6 +89,7 @@ pub struct AppContext {
     pub decoder: Arc<dyn ImageDecoder>,
     /// Folder for cached thumbnails and previews.
     pub cache_dir: PathBuf,
+    pub sidecars: Arc<dyn SidecarStore>,
 }
 
 impl fmt::Debug for AppContext {
@@ -104,6 +107,7 @@ pub struct Api {
     imports: ImportService,
     thumbnails: Arc<ThumbnailService>,
     catalog: Arc<dyn PhotoCatalog>,
+    sidecars: Arc<SidecarService>,
 }
 
 impl fmt::Debug for Api {
@@ -129,7 +133,13 @@ impl Api {
         });
         let _ = events.thumbnails.set(Arc::clone(&thumbnails));
         let catalog = Arc::clone(&ctx.catalog);
+        let sidecars = Arc::new(SidecarService::new(
+            Arc::clone(&ctx.catalog),
+            Arc::clone(&ctx.settings_store),
+            Arc::clone(&ctx.sidecars),
+        ));
         let imports = ImportService::new(Deps {
+            sidecars: Arc::clone(&ctx.sidecars),
             settings: Arc::clone(&ctx.settings_store),
             catalog: ctx.catalog,
             store: ctx.imports,
@@ -144,6 +154,7 @@ impl Api {
             imports,
             thumbnails,
             catalog,
+            sidecars,
         })
     }
 
@@ -151,6 +162,12 @@ impl Api {
     /// generating missing thumbnails. Called by entry points, not tests.
     pub fn start_background_work(&self) {
         self.thumbnails.prefill_in_background();
+        self.sidecars.start();
+    }
+
+    /// Writes pending XMP sidecars now (tests and shutdown).
+    pub fn flush_sidecars(&self) -> crate::sidecars::FlushReport {
+        self.sidecars.flush()
     }
 
     /// Resolves an image request path `{size}/{photo_id}` (as used by the
@@ -450,7 +467,11 @@ mod tests {
 
         assert_eq!(
             result,
-            json!({ "library_root": null, "path_template": crate::settings::DEFAULT_PATH_TEMPLATE })
+            json!({
+                "library_root": null,
+                "path_template": crate::settings::DEFAULT_PATH_TEMPLATE,
+                "sidecar_naming": "file_extension"
+            })
         );
     }
 

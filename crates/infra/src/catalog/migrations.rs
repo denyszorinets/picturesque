@@ -17,6 +17,10 @@ const MIGRATIONS: &[(&str, &str)] = &[
         "0004_decisions",
         include_str!("migrations/0004_decisions.sql"),
     ),
+    (
+        "0005_sidecars",
+        include_str!("migrations/0005_sidecars.sql"),
+    ),
 ];
 
 /// Schema version after all migrations have run.

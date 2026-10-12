@@ -117,6 +117,11 @@ how many have run. Each migration runs in its own transaction.
      - ``0004_decisions.sql``
      - ``decision`` (flag, rating, when the sidecar was last written);
        indexes for browsing by date, camera, lens and place
+   * - 5
+     - ``0005_sidecars.sql``
+     - ``decision.revision`` / ``sidecar_revision`` (a sidecar is up to
+       date when it reflects the latest revision); ``import_photo.decision``
+       (decisions read from existing sidecars)
 
 Conventions:
 

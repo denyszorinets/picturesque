@@ -116,6 +116,9 @@ fn import_photo(deps: &Deps, root: &Path, photo: &PlannedPhoto) -> Result<(), Ca
             .ok_or_else(|| CatalogError::Storage("duplicate photo not found".into()))?,
         Err(e) => return Err(e),
     };
+    if let Some(decision) = photo.decision {
+        deps.catalog.set_decision(photo_id, decision)?;
+    }
     deps.store
         .update_photo(photo_row, PhotoStatus::Imported, Some(photo_id), None)
 }

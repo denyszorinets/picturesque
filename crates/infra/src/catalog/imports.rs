@@ -54,7 +54,8 @@ impl ImportStore for SqliteCatalog {
         let tx = conn.transaction().map_err(storage)?;
         for (ord, photo) in photos.iter_mut().enumerate() {
             tx.execute(
-                "INSERT INTO import_photo (run_id, ord, metadata, status, reason, photo_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                "INSERT INTO import_photo (run_id, ord, metadata, status, reason, photo_id, decision)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
                 params![
                     run_id,
                     ord as i64,
@@ -62,6 +63,7 @@ impl ImportStore for SqliteCatalog {
                     photo.status.as_str(),
                     photo.reason,
                     photo.photo_id.map(|p| p.0),
+                    photo.decision.map(|d| serde_json::to_string(&d)).transpose().map_err(storage)?,
                 ],
             )
             .map_err(storage)?;
@@ -126,7 +128,9 @@ impl ImportStore for SqliteCatalog {
         };
 
         let mut photo_stmt = conn
-            .prepare("SELECT id, metadata, status, reason, photo_id FROM import_photo WHERE run_id = ?1 ORDER BY ord")
+            .prepare(
+                "SELECT id, metadata, status, reason, photo_id, decision FROM import_photo WHERE run_id = ?1 ORDER BY ord",
+            )
             .map_err(storage)?;
         let mut photos = photo_stmt
             .query_map([run_id], |row| {
@@ -140,6 +144,10 @@ impl ImportStore for SqliteCatalog {
                     reason: row.get(3)?,
                     photo_id: row.get::<_, Option<i64>>(4)?.map(PhotoId),
                     files: Vec::new(),
+                    decision: row
+                        .get::<_, Option<String>>(5)?
+                        .map(|d| serde_json::from_str(&d).map_err(bad))
+                        .transpose()?,
                 })
             })
             .map_err(storage)?

@@ -12,6 +12,7 @@ pub mod library;
 pub mod ports;
 pub mod scan;
 pub mod settings;
+pub mod sidecars;
 pub mod templates;
 pub mod thumbnails;
 

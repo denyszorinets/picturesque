@@ -21,6 +21,7 @@ imagesize.workspace = true
 flate2.workspace = true
 blake3.workspace = true
 libvips.workspace = true
+quick-xml.workspace = true
 ts-rs.workspace = true
 
 [dev-dependencies]

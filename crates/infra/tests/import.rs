@@ -32,6 +32,7 @@ fn api(catalog: &Arc<SqliteCatalog>) -> Api {
         geocoder: Arc::new(GeoNamesGeocoder::default()),
         events: Arc::new(NoEvents),
         decoder: Arc::new(VipsDecoder),
+        sidecars: Arc::new(picturesque_infra::xmp::XmpSidecars),
         cache_dir,
     })
     .unwrap()
@@ -79,6 +80,7 @@ fn imports_real_files_into_a_real_library() {
         .save_settings(&Settings {
             library_root: Some(lib.clone()),
             path_template: "{year}/{date} {city}/{name}.{ext}".into(),
+            ..Default::default()
         })
         .unwrap();
     let api = api(&catalog);
@@ -163,4 +165,71 @@ fn a_run_survives_reopening_the_catalog() {
         "completed"
     );
     assert!(lib.join("2026").join("2026-01-01").join("a.jpg").exists());
+}
+
+#[test]
+fn sidecars_are_read_on_import_and_updated_with_decisions() {
+    let dir = tempfile::tempdir().unwrap();
+    let (src, lib) = (dir.path().join("src"), dir.path().join("lib"));
+    std::fs::create_dir_all(&lib).unwrap();
+    std::fs::create_dir_all(&src).unwrap();
+    lisbon_photo(&src.join("IMG_7.JPG"), "2026:05:05 10:00:00");
+    std::fs::write(
+        src.join("IMG_7.JPG.xmp"),
+        r#"<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+<rdf:Description rdf:about="" xmlns:xmp="http://ns.adobe.com/xap/1.0/" xmlns:darktable="http://darktable.sf.net/"
+ xmp:Rating="2" darktable:xmp_version="5"/></rdf:RDF></x:xmpmeta>"#,
+    )
+    .unwrap();
+    lisbon_photo(&src.join("IMG_8.JPG"), "2026:05:05 10:00:01");
+    let catalog = Arc::new(SqliteCatalog::open_in_memory().unwrap());
+    catalog
+        .save_settings(&Settings {
+            library_root: Some(lib.clone()),
+            path_template: "{name}.{ext}".into(),
+            ..Default::default()
+        })
+        .unwrap();
+    let api = api(&catalog);
+    let run = call(&api, "plan_import", json!({ "sources": [src] }))["run_id"].clone();
+    api.wait_for_imports();
+    call(&api, "start_import", json!({ "run_id": run }));
+    api.wait_for_imports();
+
+    // The darktable rating came in with the photo.
+    let page = call(&api, "query_photos", json!({ "sort": "captured_asc" }));
+    let (first, second) = (&page["photos"][0], &page["photos"][1]);
+    assert_eq!(first["rating"], 2);
+
+    // Picking both photos updates the imported sidecar and creates the other.
+    call(
+        &api,
+        "set_decisions",
+        json!({ "changes": [{ "photo_id": first["id"], "flag": "pick" }, { "photo_id": second["id"], "flag": "pick", "rating": 5 }] }),
+    );
+    let report = api.flush_sidecars();
+    assert_eq!((report.written, report.failed.len()), (2, 0), "{report:?}");
+
+    let updated = std::fs::read_to_string(lib.join("IMG_7.JPG.xmp")).unwrap();
+    assert!(
+        updated.contains(r#"darktable:xmp_version="5""#),
+        "{updated}"
+    );
+    assert!(
+        updated.contains(r#"xmp:Rating="2""#) && updated.contains(r#"digiKam:PickLabel="3""#),
+        "{updated}"
+    );
+    let created = std::fs::read_to_string(lib.join("IMG_8.JPG.xmp")).unwrap();
+    assert!(created.contains(r#"xmp:Rating="5""#), "{created}");
+    // The new sidecar is now one of the photo's files.
+    let detail = call(&api, "get_photo", json!({ "photo_id": second["id"] }));
+    assert!(
+        detail["files"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|f| f["path"] == "IMG_8.JPG.xmp"),
+        "{detail}"
+    );
+    assert_eq!(api.flush_sidecars().written, 0);
 }

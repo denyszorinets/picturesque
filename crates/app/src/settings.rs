@@ -27,6 +27,20 @@ pub struct Settings {
     pub library_root: Option<PathBuf>,
     /// Template for paths inside the library.
     pub path_template: String,
+    /// How new XMP sidecars are named.
+    pub sidecar_naming: SidecarNaming,
+}
+
+/// How new XMP sidecars are named. Existing sidecars are always updated in place.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export)]
+pub enum SidecarNaming {
+    /// `IMG_0042.CR3.xmp`: read by darktable and digiKam.
+    #[default]
+    FileExtension,
+    /// `IMG_0042.xmp`: read by Lightroom and Bridge.
+    BaseName,
 }
 
 impl Default for Settings {
@@ -34,6 +48,7 @@ impl Default for Settings {
         Self {
             library_root: None,
             path_template: DEFAULT_PATH_TEMPLATE.to_owned(),
+            sidecar_naming: SidecarNaming::default(),
         }
     }
 }
@@ -47,6 +62,8 @@ pub struct SettingsUpdate {
     pub library_root: Option<PathBuf>,
     #[ts(optional)]
     pub path_template: Option<String>,
+    #[ts(optional)]
+    pub sidecar_naming: Option<SidecarNaming>,
 }
 
 /// Why settings could not be read or changed.
@@ -136,6 +153,9 @@ impl SettingsService {
             let parsed = PathTemplate::parse(&template)
                 .map_err(|e| SettingsError::Invalid(e.to_string()))?;
             settings.path_template = parsed.as_str().to_owned();
+        }
+        if let Some(naming) = update.sidecar_naming {
+            settings.sidecar_naming = naming;
         }
         self.store.save_settings(&settings)?;
         Ok(settings)
@@ -331,6 +351,7 @@ pub(crate) mod tests {
         let result = service.update(SettingsUpdate {
             library_root: Some(abs("photos")),
             path_template: Some("   ".into()),
+            ..Default::default()
         });
 
         assert!(result.is_err());
