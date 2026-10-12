@@ -6,3 +6,4 @@
 
 pub mod catalog;
 pub mod fs;
+pub mod metadata;
