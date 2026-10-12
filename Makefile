@@ -2,6 +2,8 @@
 
 DOCS_DIR := docs
 SPHINX := uv run --project $(DOCS_DIR) --frozen
+# Extra Cargo flags; CI sets CARGO_FLAGS=--locked.
+CARGO_FLAGS ?=
 
 help:
 	@echo "Available targets:"
@@ -31,14 +33,14 @@ format-check:
 	cargo fmt --all --check
 
 test:
-	cargo test --workspace --all-targets
-	cargo test --workspace --doc
+	cargo test --workspace --all-targets $(CARGO_FLAGS)
+	cargo test --workspace --doc $(CARGO_FLAGS)
 
 lint:
-	cargo clippy --workspace --all-targets --all-features -- -D warnings
+	cargo clippy --workspace --all-targets --all-features $(CARGO_FLAGS) -- -D warnings
 
 build:
-	cargo build --workspace --all-targets
+	cargo build --workspace --all-targets $(CARGO_FLAGS)
 
 doc:
 	RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps
