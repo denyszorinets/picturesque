@@ -3,5 +3,6 @@
 
 pub mod catalog;
 pub mod fs;
+pub mod geocoder;
 pub mod metadata;
 pub mod settings;

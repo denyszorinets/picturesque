@@ -86,3 +86,31 @@ which understands every common format including CR3, RAF, ORF and RW2;
 other images with `kamadak-exif <https://github.com/kamadak/exif-rs>`_.
 A file whose metadata cannot be read at all is reported in the import
 summary.
+
+.. _features-import-places:
+
+Place names
+-----------
+
+Photos with GPS coordinates get a place name (city, region and country)
+from a dataset bundled with Picturesque. No network access is used and
+locations never leave your computer
+(:doc:`ADR-0007 </architecture/decisions/0007-offline-reverse-geocoding>`).
+
+The place is chosen like this:
+
+- Every town and city "claims" the area around it, larger for bigger
+  places (about 2 km for a small town, 7 km for Paris, 16 km for Tokyo,
+  at most 20 km).
+- If the photo is inside one or more claims, the most populous of those
+  places names it. A photo taken in Shibuya is named *Tokyo*, and one taken
+  in Brooklyn *New York City*, rather than the district.
+- Otherwise the nearest town is used, if it is within 50 km.
+- Farther than that (at sea, in wilderness), the photo gets no place.
+
+Names are the local names used by GeoNames, with accents (*Reykjavík*,
+*Oía*). Nearest-town matching can be wrong close to borders and in
+sparsely populated areas.
+
+The dataset is GeoNames ``cities500``: about 225,000 places with at least
+500 inhabitants. See :doc:`/reference/third-party-data`.

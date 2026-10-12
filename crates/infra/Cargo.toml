@@ -18,6 +18,7 @@ tempfile.workspace = true
 kamadak-exif.workspace = true
 rawler.workspace = true
 imagesize.workspace = true
+flate2.workspace = true
 
 [dev-dependencies]
 image.workspace = true
