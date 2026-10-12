@@ -23,4 +23,8 @@ file_name: string,
 /**
  * The series the photo is in (its first photo's id), if any.
  */
-series_id: number | null, };
+series_id: number | null, 
+/**
+ * Whether this is the best photo of its series.
+ */
+best_in_series: boolean, };

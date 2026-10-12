@@ -50,8 +50,8 @@ Commands
    A ``PhotoSummary`` has ``id``, ``captured_at``, ``day``
    (``YYYY-MM-DD``, for grouping), ``camera``, ``lens``, ``city``,
    ``country``, ``flag``, ``rating``, displayed ``width``/``height``,
-   ``has_raw``, ``file_name`` and ``series_id`` (the first photo of its
-   series, or ``null``).
+   ``has_raw``, ``file_name``, ``series_id`` (the first photo of its
+   series, or ``null``) and ``best_in_series``.
 
 ``get_photo``
    ``{ "photo_id": 7 }``. A ``PhotoDetail``: capture time and UTC offset,
@@ -91,10 +91,19 @@ Commands
 
 ``photo_series``
    ``{ "photo_id": 7 }``. The photo's series:
-   ``{ "photo_id": 7, "series_id": 5, "photo_ids": [5, 6, 7], "edit": null }``.
-   ``series_id`` is the first photo's id (``null``, with no ``photo_ids``,
+
+   .. code-block:: json
+
+      { "photo_id": 7, "series_id": 5, "photo_ids": [5, 6, 7], "edit": null,
+        "best_photo_id": 6, "best_chosen": false,
+        "ranking": [{ "photo_id": 6, "score": 0.97 }, { "photo_id": 5, "score": 0.81 },
+                    { "photo_id": 7, "score": null }] }
+
+   ``series_id`` is the first photo's id (``null``, with empty lists,
    when the photo is in no series); ``edit`` is the user's correction before
-   this photo. Unknown photos are ``not_found``.
+   this photo; ``ranking`` lists members best first with scores
+   (``null`` until analyzed); ``best_chosen`` says whether the user chose
+   the best photo. Unknown photos are ``not_found``.
 
 ``edit_series``
    ``{ "photo_id": 7, "edit": "split" }``. Sets the correction before a
@@ -102,6 +111,11 @@ Commands
    of the photo before it) or ``null`` (automatic). Series are recomputed
    immediately; returns the photo's ``photo_series``
    (:doc:`/features/series`).
+
+``choose_best``
+   ``{ "photo_id": 6, "best": true }``. Makes the photo the best of its
+   series (the latest choice wins); ``"best": false`` withdraws the choice.
+   Returns the photo's ``photo_series``.
 
 ``plan_import``
    ``{ "sources": ["/absolute/folder", ...] }``. Starts planning in the

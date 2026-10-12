@@ -26,6 +26,7 @@ function photo(
     has_raw: false,
     file_name: `${id}.jpg`,
     series_id: null,
+    best_in_series: false,
   };
 }
 

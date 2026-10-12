@@ -14,6 +14,7 @@ vi.mock("./lib/api", async (importOriginal) => {
         path_template: "{name}.{ext}",
         sidecar_naming: "file_extension",
         series: { max_gap_seconds: 30, max_distance: 16 },
+        ranking: { sharpness: 0.6, exposure: 0.3, noise: 0.1 },
       }),
     templatePresets: () => Promise.resolve([]),
     previewTemplate: () => Promise.resolve({ error: null, examples: [] }),

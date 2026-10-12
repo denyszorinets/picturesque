@@ -66,6 +66,21 @@ When photos form a series (:doc:`/features/series`).
 
 Changing it regroups series immediately.
 
+.. _reference-settings-ranking:
+
+``ranking``
+-----------
+
+How much each technical score counts when choosing the best photo of a
+series (:doc:`/features/series`).
+
+:Type: object with ``sharpness``, ``exposure`` and ``noise``
+:Default: ``{ "sharpness": 0.6, "exposure": 0.3, "noise": 0.1 }``
+:Values: numbers, zero or more, at least one above zero. Only the ratios
+   matter: ``{1, 0, 0}`` ranks by sharpness alone.
+
+Changing it re-ranks series immediately.
+
 Where settings are stored
 -------------------------
 
@@ -81,7 +96,8 @@ API
 
       { "library_root": null, "path_template": "{year|Undated}/{date}/{name}.{ext}",
         "sidecar_naming": "file_extension",
-        "series": { "max_gap_seconds": 30, "max_distance": 16 } }
+        "series": { "max_gap_seconds": 30, "max_distance": 16 },
+        "ranking": { "sharpness": 0.6, "exposure": 0.3, "noise": 0.1 } }
 
 ``update_settings``
    Arguments: any subset of the settings. Unknown fields are rejected.

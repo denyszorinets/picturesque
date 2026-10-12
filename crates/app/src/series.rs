@@ -1,22 +1,27 @@
-//! Keeping series up to date (`docs/features/series.rst`).
+//! Keeping series and their best photos up to date
+//! (`docs/features/series.rst`).
 //!
 //! Series are recomputed from scratch (capture times, perceptual hashes,
-//! the user's edits and thresholds) whenever an input changes: right away
-//! after an edit or a settings change, and debounced while analysis and
-//! imports add data. With 10,000 photos a run takes milliseconds.
+//! technical scores, decisions, the user's edits and choices, settings)
+//! whenever an input changes: right away after an edit, a choice or a
+//! settings change, and debounced while analysis, imports and culling
+//! change data. With 10,000 photos a run takes milliseconds.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender, channel};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use picturesque_core::photo::PhotoId;
+use picturesque_core::quality::TechnicalScores;
+use picturesque_core::ranking::{Candidate, best, rank};
 use picturesque_core::series::{SeriesEdit, SeriesInput, detect_series};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use crate::analysis::similarity::SimilarityAnalyzer;
-use crate::ports::catalog::{CatalogError, PhotoCatalog};
+use crate::analysis::technical::TechnicalAnalyzer;
+use crate::ports::catalog::{CatalogError, PhotoCatalog, StoredSeries};
 use crate::ports::events::{AppEvent, EventSink};
 use crate::ports::settings::SettingsStore;
 
@@ -62,8 +67,9 @@ impl From<SeriesEdit> for SeriesEditView {
     }
 }
 
-/// A photo's series, returned by `photo_series` and `edit_series`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+/// A photo's series, returned by `photo_series`, `edit_series` and
+/// `choose_best`.
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
 #[ts(export)]
 pub struct SeriesView {
     #[ts(type = "number")]
@@ -76,6 +82,33 @@ pub struct SeriesView {
     pub photo_ids: Vec<i64>,
     /// The user's correction before this photo, if any.
     pub edit: Option<SeriesEditView>,
+    /// The best photo of the series.
+    #[ts(type = "number | null")]
+    pub best_photo_id: Option<i64>,
+    /// Whether the user chose the best photo (rather than the ranking).
+    pub best_chosen: bool,
+    /// Members best first, with their scores (0–1, `null` until analyzed).
+    pub ranking: Vec<RankedView>,
+}
+
+/// A photo's place in its series' ranking.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, TS)]
+#[ts(export)]
+pub struct RankedView {
+    #[ts(type = "number")]
+    pub photo_id: i64,
+    pub score: Option<f32>,
+}
+
+/// Arguments of `choose_best`.
+#[derive(Debug, Clone, Copy, Deserialize, TS)]
+#[serde(deny_unknown_fields)]
+#[ts(export)]
+pub struct ChooseBestArgs {
+    #[ts(type = "number")]
+    pub photo_id: i64,
+    /// `false` withdraws the choice, returning to the ranking.
+    pub best: bool,
 }
 
 /// Arguments of `edit_series`.
@@ -95,7 +128,7 @@ pub struct SeriesService {
     settings: Arc<dyn SettingsStore>,
     events: Arc<dyn EventSink>,
     /// The last stored series; also serializes recomputes.
-    last: Mutex<Option<Vec<Vec<PhotoId>>>>,
+    last: Mutex<Option<Vec<StoredSeries>>>,
     notify: Mutex<Option<Sender<()>>>,
 }
 
@@ -120,11 +153,12 @@ impl SeriesService {
         }
     }
 
-    /// Recomputes series now. Stores them and sends `series_changed` only
-    /// when membership changed. Returns the number of series.
+    /// Recomputes series and their best photos now. Stores them and sends
+    /// `series_changed` only when something changed. Returns the number of
+    /// series.
     pub fn recompute(&self) -> Result<usize, CatalogError> {
         let mut last = self.last.lock().expect("series lock");
-        let thresholds = self.settings.load_settings()?.series.thresholds();
+        let settings = self.settings.load_settings()?;
         let signatures: HashMap<PhotoId, _> = self
             .catalog
             .analysis_results(SimilarityAnalyzer::ID)?
@@ -142,13 +176,45 @@ impl SeriesService {
             })
             .collect();
         let edits = self.catalog.series_edits()?.into_iter().collect();
-        let series = detect_series(&inputs, &edits, thresholds);
+        let groups = detect_series(&inputs, &edits, settings.series.thresholds());
+
+        let scores: HashMap<PhotoId, TechnicalScores> = self
+            .catalog
+            .analysis_results(TechnicalAnalyzer::ID)?
+            .into_iter()
+            .filter_map(|(id, result)| Some((id, serde_json::from_value(result).ok()?)))
+            .collect();
+        let rejected: HashSet<PhotoId> = self.catalog.rejected_photos()?.into_iter().collect();
+        let choices = self.catalog.best_choices()?;
+        let weights = settings.ranking.weights();
+        let series: Vec<StoredSeries> = groups
+            .into_iter()
+            .filter_map(|members| {
+                let candidates: Vec<Candidate> = members
+                    .iter()
+                    .map(|id| Candidate {
+                        id: *id,
+                        scores: scores.get(id).copied(),
+                        rejected: rejected.contains(id),
+                    })
+                    .collect();
+                let ranking = rank(&candidates, weights);
+                let (best, best_chosen) = best(&ranking, &choices)?;
+                Some(StoredSeries {
+                    members,
+                    ranking,
+                    best,
+                    best_chosen,
+                })
+            })
+            .collect();
+
         let count = series.len();
         if last.as_ref() != Some(&series) {
             self.catalog.replace_series(&series)?;
             self.events.emit(&AppEvent::SeriesChanged(SeriesStatus {
                 series: count,
-                photos: series.iter().map(Vec::len).sum(),
+                photos: series.iter().map(|s| s.members.len()).sum(),
             }));
             *last = Some(series);
         }
@@ -163,16 +229,38 @@ impl SeriesService {
             .into_iter()
             .find(|(p, _)| *p == id)
             .map(|(_, e)| e.into());
-        let (series_id, photo_ids) = match self.catalog.series_of(id)? {
-            Some((series, members)) => (Some(series.0), members.iter().map(|p| p.0).collect()),
-            None => (None, Vec::new()),
-        };
-        Ok(SeriesView {
+        let mut view = SeriesView {
             photo_id: id.0,
-            series_id,
-            photo_ids,
+            series_id: None,
+            photo_ids: Vec::new(),
             edit,
-        })
+            best_photo_id: None,
+            best_chosen: false,
+            ranking: Vec::new(),
+        };
+        if let Some((series_id, series)) = self.catalog.series_of(id)? {
+            view.series_id = Some(series_id.0);
+            view.photo_ids = series.members.iter().map(|p| p.0).collect();
+            view.best_photo_id = Some(series.best.0);
+            view.best_chosen = series.best_chosen;
+            view.ranking = series
+                .ranking
+                .iter()
+                .map(|r| RankedView {
+                    photo_id: r.id.0,
+                    score: r.score,
+                })
+                .collect();
+        }
+        Ok(view)
+    }
+
+    /// Makes `id` the best photo of its series (or withdraws that choice)
+    /// and recomputes right away.
+    pub fn choose_best(&self, id: PhotoId, chosen: bool) -> Result<SeriesView, CatalogError> {
+        self.catalog.set_best_choice(id, chosen)?;
+        self.recompute()?;
+        self.view(id)
     }
 
     /// Records a correction and recomputes right away.

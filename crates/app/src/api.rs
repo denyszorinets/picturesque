@@ -31,7 +31,7 @@ use crate::ports::metadata::MetadataReader;
 use crate::ports::pixels::PixelLoader;
 use crate::ports::settings::SettingsStore;
 use crate::ports::sidecars::SidecarStore;
-use crate::series::{EditSeriesArgs, SeriesService};
+use crate::series::{ChooseBestArgs, EditSeriesArgs, SeriesService};
 use crate::settings::{SettingsError, SettingsService, SettingsUpdate};
 use crate::sidecars::SidecarService;
 use crate::templates::{self, PreviewTemplateArgs};
@@ -318,7 +318,7 @@ impl Api {
             }
             "update_settings" => {
                 let update: SettingsUpdate = parse_args(command, args)?;
-                let series_changed = update.series.is_some();
+                let series_changed = update.series.is_some() || update.ranking.is_some();
                 let settings = self.settings.update(update).map_err(settings_error)?;
                 if series_changed {
                     self.series.recompute().map_err(catalog_error)?;
@@ -376,7 +376,10 @@ impl Api {
             }
             "set_decisions" => {
                 let SetDecisionsArgs { changes } = parse_args(command, args)?;
-                respond(self.set_decisions(&changes)?)
+                let decisions = self.set_decisions(&changes)?;
+                // Rejected photos are never chosen as best.
+                self.series.notify();
+                respond(decisions)
             }
             "photo_facets" => {
                 let FacetsArgs { filter } = if args.is_null() {
@@ -415,6 +418,15 @@ impl Api {
                 respond(
                     self.series
                         .edit(PhotoId(photo_id), edit.map(Into::into))
+                        .map_err(catalog_error)?,
+                )
+            }
+            "choose_best" => {
+                let ChooseBestArgs { photo_id, best } = parse_args(command, args)?;
+                self.require_photo(photo_id)?;
+                respond(
+                    self.series
+                        .choose_best(PhotoId(photo_id), best)
                         .map_err(catalog_error)?,
                 )
             }
@@ -566,7 +578,8 @@ mod tests {
                 "library_root": null,
                 "path_template": crate::settings::DEFAULT_PATH_TEMPLATE,
                 "sidecar_naming": "file_extension",
-                "series": { "max_gap_seconds": 30, "max_distance": 16 }
+                "series": { "max_gap_seconds": 30, "max_distance": 16 },
+                "ranking": { "sharpness": 0.6, "exposure": 0.3, "noise": 0.1 }
             })
         );
     }

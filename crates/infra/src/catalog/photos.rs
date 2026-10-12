@@ -4,7 +4,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Component, Path, PathBuf};
 
 use chrono::{FixedOffset, NaiveDateTime};
-use picturesque_app::ports::catalog::{AnalyzerId, CatalogError, PhotoCatalog};
+use picturesque_app::ports::catalog::{AnalyzerId, CatalogError, PhotoCatalog, StoredSeries};
 use picturesque_core::hash::ContentHash;
 use picturesque_core::media::MediaFormat;
 use picturesque_core::metadata::{
@@ -316,12 +316,24 @@ impl PhotoCatalog for SqliteCatalog {
         self.save_series_edit(id, edit)
     }
 
-    fn replace_series(&self, series: &[Vec<PhotoId>]) -> Result<(), CatalogError> {
+    fn replace_series(&self, series: &[StoredSeries]) -> Result<(), CatalogError> {
         self.save_series(series)
     }
 
-    fn series_of(&self, id: PhotoId) -> Result<Option<(PhotoId, Vec<PhotoId>)>, CatalogError> {
+    fn series_of(&self, id: PhotoId) -> Result<Option<(PhotoId, StoredSeries)>, CatalogError> {
         self.load_series_of(id)
+    }
+
+    fn best_choices(&self) -> Result<Vec<PhotoId>, CatalogError> {
+        self.load_best_choices()
+    }
+
+    fn set_best_choice(&self, id: PhotoId, chosen: bool) -> Result<(), CatalogError> {
+        self.save_best_choice(id, chosen)
+    }
+
+    fn rejected_photos(&self) -> Result<Vec<PhotoId>, CatalogError> {
+        self.load_rejected()
     }
 
     fn photo_count(&self) -> Result<u64, CatalogError> {

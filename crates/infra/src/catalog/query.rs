@@ -181,8 +181,8 @@ fn query_page(conn: &Connection, query: &PhotoQuery) -> Result<PhotoPage, Catalo
                 EXISTS (SELECT 1 FROM asset a WHERE a.photo_id = p.id AND a.role = 'raw'),
                 (SELECT a.path FROM asset a WHERE a.photo_id = p.id AND a.role <> 'sidecar'
                  ORDER BY a.role = 'raw' LIMIT 1),
-                (SELECT sm.series_id FROM series_member sm WHERE sm.photo_id = p.id)
-         {FROM} {} ORDER BY {} LIMIT ?",
+                sm.series_id, sm.best IS NOT NULL
+         {FROM} LEFT JOIN series_member sm ON sm.photo_id = p.id {} ORDER BY {} LIMIT ?",
         where_sql(&clauses),
         order_by(sort)
     );
@@ -218,6 +218,7 @@ fn query_page(conn: &Connection, query: &PhotoQuery) -> Result<PhotoPage, Catalo
                 has_raw: row.get(12)?,
                 file_name: path.rsplit('/').next().unwrap_or_default().to_owned(),
                 series_id: row.get(14)?,
+                best_in_series: row.get::<_, Option<bool>>(15)?.unwrap_or(false),
             })
         })
         .map_err(storage)?

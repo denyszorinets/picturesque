@@ -1,8 +1,9 @@
 //! Series and their inputs on SQLite.
 
 use chrono::NaiveDateTime;
-use picturesque_app::ports::catalog::{AnalyzerId, CatalogError};
+use picturesque_app::ports::catalog::{AnalyzerId, CatalogError, StoredSeries};
 use picturesque_core::photo::PhotoId;
+use picturesque_core::ranking::Ranked;
 use picturesque_core::series::SeriesEdit;
 use rusqlite::{OptionalExtension, params};
 
@@ -88,7 +89,7 @@ impl SqliteCatalog {
         Ok(())
     }
 
-    pub(super) fn save_series(&self, series: &[Vec<PhotoId>]) -> Result<(), CatalogError> {
+    pub(super) fn save_series(&self, series: &[StoredSeries]) -> Result<(), CatalogError> {
         let mut conn = self.conn();
         let tx = conn.transaction().map_err(storage)?;
         tx.execute("DELETE FROM series_member", [])
@@ -96,16 +97,28 @@ impl SqliteCatalog {
         {
             let mut insert = tx
                 .prepare(
-                    "INSERT INTO series_member (photo_id, series_id, position) VALUES (?1, ?2, ?3)",
+                    "INSERT INTO series_member (photo_id, series_id, position, rank, score, best)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
                 )
                 .map_err(storage)?;
-            for members in series {
-                let Some(first) = members.first() else {
+            for s in series {
+                let Some(first) = s.members.first() else {
                     continue;
                 };
-                for (position, id) in members.iter().enumerate() {
+                for (position, id) in s.members.iter().enumerate() {
+                    let rank = s.ranking.iter().position(|r| r.id == *id);
+                    let score = rank.and_then(|r| s.ranking[r].score);
+                    let best =
+                        (s.best == *id).then_some(if s.best_chosen { "user" } else { "auto" });
                     insert
-                        .execute(params![id.0, first.0, position as i64])
+                        .execute(params![
+                            id.0,
+                            first.0,
+                            position as i64,
+                            rank.unwrap_or(position) as i64,
+                            score,
+                            best
+                        ])
                         .map_err(storage)?;
                 }
             }
@@ -116,7 +129,7 @@ impl SqliteCatalog {
     pub(super) fn load_series_of(
         &self,
         id: PhotoId,
-    ) -> Result<Option<(PhotoId, Vec<PhotoId>)>, CatalogError> {
+    ) -> Result<Option<(PhotoId, StoredSeries)>, CatalogError> {
         let conn = self.conn();
         let Some(series) = conn
             .query_row(
@@ -130,13 +143,75 @@ impl SqliteCatalog {
             return Ok(None);
         };
         let mut stmt = conn
-            .prepare("SELECT photo_id FROM series_member WHERE series_id = ?1 ORDER BY position")
+            .prepare(
+                "SELECT photo_id, rank, score, best FROM series_member WHERE series_id = ?1 ORDER BY position",
+            )
             .map_err(storage)?;
-        let members = stmt
-            .query_map(params![series], |row| row.get(0).map(PhotoId))
+        let rows: Vec<(PhotoId, i64, Option<f32>, Option<String>)> = stmt
+            .query_map(params![series], |row| {
+                Ok((PhotoId(row.get(0)?), row.get(1)?, row.get(2)?, row.get(3)?))
+            })
             .map_err(storage)?
             .collect::<Result<_, _>>()
             .map_err(storage)?;
-        Ok(Some((PhotoId(series), members)))
+        let mut ranked: Vec<&(PhotoId, i64, Option<f32>, Option<String>)> = rows.iter().collect();
+        ranked.sort_by_key(|(id, rank, _, _)| (*rank, *id));
+        let (best, best_chosen) = rows
+            .iter()
+            .find_map(|(id, _, _, best)| best.as_deref().map(|b| (*id, b == "user")))
+            .ok_or_else(|| CatalogError::Storage(format!("series {series} has no best photo")))?;
+        Ok(Some((
+            PhotoId(series),
+            StoredSeries {
+                members: rows.iter().map(|(id, ..)| *id).collect(),
+                ranking: ranked
+                    .into_iter()
+                    .map(|(id, _, score, _)| Ranked {
+                        id: *id,
+                        score: *score,
+                    })
+                    .collect(),
+                best,
+                best_chosen,
+            },
+        )))
+    }
+
+    pub(super) fn load_best_choices(&self) -> Result<Vec<PhotoId>, CatalogError> {
+        let conn = self.conn();
+        let mut stmt = conn
+            .prepare("SELECT photo_id FROM best_choice ORDER BY seq")
+            .map_err(storage)?;
+        stmt.query_map([], |row| row.get(0).map(PhotoId))
+            .map_err(storage)?
+            .collect::<Result<_, _>>()
+            .map_err(storage)
+    }
+
+    pub(super) fn save_best_choice(&self, id: PhotoId, chosen: bool) -> Result<(), CatalogError> {
+        let conn = self.conn();
+        if chosen {
+            conn.execute(
+                "INSERT INTO best_choice (photo_id, seq)
+                 VALUES (?1, (SELECT coalesce(max(seq), 0) + 1 FROM best_choice))
+                 ON CONFLICT (photo_id) DO UPDATE SET seq = excluded.seq",
+                params![id.0],
+            )
+        } else {
+            conn.execute("DELETE FROM best_choice WHERE photo_id = ?1", params![id.0])
+        }
+        .map_err(storage)?;
+        Ok(())
+    }
+
+    pub(super) fn load_rejected(&self) -> Result<Vec<PhotoId>, CatalogError> {
+        let conn = self.conn();
+        let mut stmt = conn
+            .prepare("SELECT photo_id FROM decision WHERE flag = 'reject' ORDER BY photo_id")
+            .map_err(storage)?;
+        stmt.query_map([], |row| row.get(0).map(PhotoId))
+            .map_err(storage)?
+            .collect::<Result<_, _>>()
+            .map_err(storage)
     }
 }
