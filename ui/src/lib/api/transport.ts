@@ -13,7 +13,7 @@ export interface Transport {
 }
 
 /** Cached image sizes (see `picturesque_app::thumbnails::ImageSize`). */
-export type ImageSize = "grid" | "preview";
+export type ImageSize = "grid" | "preview" | "full";
 
 /** Name of the Tauri event carrying backend events (see src-tauri/src/lib.rs). */
 export const TAURI_EVENT = "app-event";

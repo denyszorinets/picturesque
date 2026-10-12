@@ -1,66 +1,22 @@
-import { mkdtempSync, utimesSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { expect, test, type APIRequestContext } from "@playwright/test";
-import { folder, jpeg } from "./fixtures";
+import { jpeg } from "./fixtures";
+import { call, importFiles } from "./helpers";
 
 const DAYS = ["2001-02-01", "2001-02-02", "2001-02-03", "2001-02-04"];
 const PER_DAY = 60;
 
-async function call<T>(
-  request: APIRequestContext,
-  command: string,
-  args: unknown,
-): Promise<T> {
-  const response = await request.post(`/api/commands/${command}`, {
-    data: args,
-  });
-  expect(response.ok(), await response.text()).toBeTruthy();
-  return (await response.json()) as T;
-}
-
-async function waitFor(
-  request: APIRequestContext,
-  runId: number,
-  state: string,
-) {
-  await expect
-    .poll(
-      async () =>
-        (
-          await call<{ state: string }>(request, "import_status", {
-            run_id: runId,
-          })
-        ).state,
-      {
-        timeout: 60_000,
-      },
-    )
-    .toBe(state);
-}
-
 /** Imports PER_DAY tiny JPEGs for each day (dated by file time; no EXIF). */
 async function importPhotos(request: APIRequestContext) {
-  const files: Record<string, Buffer> = {};
-  DAYS.forEach((_, d) => {
-    for (let i = 0; i < PER_DAY; i++)
-      files[`d${d}/IMG_${d}_${i}.JPG`] = jpeg(1000 + d * PER_DAY + i);
-  });
-  const src = folder(files);
+  const files: Record<string, { bytes: Buffer; time: Date }> = {};
   DAYS.forEach((day, d) => {
     for (let i = 0; i < PER_DAY; i++) {
-      const t = new Date(`${day}T12:00:${String(i % 60).padStart(2, "0")}`);
-      utimesSync(join(src, `d${d}/IMG_${d}_${i}.JPG`), t, t);
+      files[`d${d}/IMG_${d}_${i}.JPG`] = {
+        bytes: jpeg(1000 + d * PER_DAY + i),
+        time: new Date(`${day}T12:00:${String(i % 60).padStart(2, "0")}`),
+      };
     }
   });
-  const library = mkdtempSync(join(tmpdir(), "picturesque-e2e-lib-"));
-  await call(request, "update_settings", { library_root: library });
-  const plan = await call<{ run_id: number }>(request, "plan_import", {
-    sources: [src],
-  });
-  await waitFor(request, plan.run_id, "planned");
-  await call(request, "start_import", { run_id: plan.run_id });
-  await waitFor(request, plan.run_id, "completed");
+  await importFiles(request, files);
 }
 
 test("shows the library as a virtualized timeline grouped by day", async ({

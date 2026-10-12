@@ -16,7 +16,9 @@ The root folder of the Clean library, where imported photos are copied.
 :Type: absolute path, or unset
 :Default: unset (chosen on first import)
 :Validation: must be an absolute path to an existing folder that
-   Picturesque can create files in. Writability is checked by creating and
+   Picturesque can create files in. Once the library has photos, the
+   folder cannot be changed (photo locations are stored relative to it);
+   moving a library is not supported yet. Writability is checked by creating and
    removing a temporary file, so read-only mounts and folders without
    permission are caught.
 

@@ -15,7 +15,7 @@ use ts_rs::TS;
 
 use crate::import::{Deps, ImportError, ImportService, PlanImportArgs, RunArgs};
 use crate::info;
-use crate::library::PhotoQuery;
+use crate::library::{PhotoArgs, PhotoDetail, PhotoQuery};
 use crate::ports::catalog::PhotoCatalog;
 use crate::ports::events::EventSink;
 use crate::ports::fs::FileSystem;
@@ -138,7 +138,7 @@ impl Api {
         })
         .map_err(import_error)?;
         Ok(Self {
-            settings: SettingsService::new(ctx.settings_store, ctx.fs),
+            settings: SettingsService::new(ctx.settings_store, ctx.fs, Arc::clone(&catalog)),
             imports,
             thumbnails,
             catalog,
@@ -223,6 +223,22 @@ impl Api {
                     .validate()
                     .map_err(|m| ApiError::new(ApiErrorCode::InvalidArguments, m))?;
                 respond(self.catalog.query(&query).map_err(catalog_error)?)
+            }
+            "get_photo" => {
+                let PhotoArgs { photo_id } = parse_args(command, args)?;
+                let id = PhotoId(photo_id);
+                let photo = self
+                    .catalog
+                    .photo(id)
+                    .map_err(catalog_error)?
+                    .ok_or_else(|| {
+                        ApiError::new(
+                            ApiErrorCode::NotFound,
+                            format!("There is no photo {photo_id}."),
+                        )
+                    })?;
+                let decision = self.catalog.decision(id).map_err(catalog_error)?;
+                respond(PhotoDetail::new(&photo, decision))
             }
             "photo_facets" => {
                 no_args(command, &args)?;

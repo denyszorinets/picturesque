@@ -40,3 +40,37 @@ Selecting photos
      - Adds or removes that photo; Shift+Ctrl/⌘+click adds a range.
 
 The number of selected photos is shown above the timeline.
+
+.. _features-library-loupe:
+
+Loupe
+-----
+
+Double-click a photo, or press **Enter** on the selected one, to view it
+full screen. The photo is fitted to the window; zoom to 100% to check
+focus.
+
+.. list-table::
+   :header-rows: 1
+
+   * - Key
+     - Action
+   * - ← / →
+     - Previous / next photo
+   * - Z, or click the photo
+     - Toggle 100% zoom. Clicking zooms in on the spot you clicked; drag to
+       move around, click again to fit.
+   * - I
+     - Show or hide the information panel
+   * - Esc
+     - Leave 100% zoom, then close the loupe
+
+The information panel shows when and where the photo was taken (with the
+UTC offset when known), camera, lens, exposure (aperture, shutter speed,
+ISO, focal length), size, GPS position and the photo's files with their
+sizes. Closing the loupe leaves the last viewed photo selected in the
+timeline.
+
+The fitted view uses a 2048-pixel preview. 100% zoom uses a full-size
+image, created the first time you zoom into a photo and then cached
+(:doc:`/reference/data-locations`).

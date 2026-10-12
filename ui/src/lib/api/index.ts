@@ -2,6 +2,7 @@ import type { AppEvent } from "./generated/AppEvent";
 import type { AppInfo } from "./generated/AppInfo";
 import type { ImportPlanView } from "./generated/ImportPlanView";
 import type { ImportStatus } from "./generated/ImportStatus";
+import type { PhotoDetail } from "./generated/PhotoDetail";
 import type { PhotoFacets } from "./generated/PhotoFacets";
 import type { PhotoPage } from "./generated/PhotoPage";
 import type { PhotoQuery } from "./generated/PhotoQuery";
@@ -16,6 +17,7 @@ export type { AppEvent } from "./generated/AppEvent";
 export type { AppInfo } from "./generated/AppInfo";
 export type { ImportPlanView } from "./generated/ImportPlanView";
 export type { ImportStatus } from "./generated/ImportStatus";
+export type { PhotoDetail } from "./generated/PhotoDetail";
 export type { PhotoFacets } from "./generated/PhotoFacets";
 export type { PhotoPage } from "./generated/PhotoPage";
 export type { PhotoQuery } from "./generated/PhotoQuery";
@@ -89,7 +91,12 @@ export function onAppEvent(handler: (event: AppEvent) => void): () => void {
   return transport.subscribe(handler);
 }
 
-/** URL of a photo's cached image (`grid`: 512 px, `preview`: 2048 px). */
+/** Everything known about a photo, formatted for display. */
+export function getPhoto(photoId: number): Promise<PhotoDetail> {
+  return transport.call<PhotoDetail>("get_photo", { photo_id: photoId });
+}
+
+/** URL of a photo's cached image (`grid`: 512 px, `preview`: 2048 px, `full`: native size). */
 export function imageUrl(photoId: number, size: ImageSize): string {
   return transport.imageUrl(photoId, size);
 }

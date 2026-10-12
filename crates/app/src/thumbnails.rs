@@ -33,6 +33,8 @@ pub enum ImageSize {
     Grid,
     /// Loupe and analysis (longest edge 2048 px).
     Preview,
+    /// Full resolution, for 100% zoom; generated only when asked for.
+    Full,
 }
 
 impl ImageSize {
@@ -40,6 +42,8 @@ impl ImageSize {
         match self {
             Self::Grid => 512,
             Self::Preview => 2048,
+            // Rendering never enlarges, so this keeps the source size.
+            Self::Full => 65_535,
         }
     }
 
@@ -47,11 +51,12 @@ impl ImageSize {
         match self {
             Self::Grid => "grid",
             Self::Preview => "preview",
+            Self::Full => "full",
         }
     }
 
     pub fn from_name(name: &str) -> Option<Self> {
-        [Self::Grid, Self::Preview]
+        [Self::Grid, Self::Preview, Self::Full]
             .into_iter()
             .find(|s| s.name() == name)
     }

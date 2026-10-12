@@ -8,7 +8,7 @@ use picturesque_core::template::PathTemplate;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use crate::ports::catalog::CatalogError;
+use crate::ports::catalog::{CatalogError, PhotoCatalog};
 use crate::ports::fs::FileSystem;
 use crate::ports::settings::SettingsStore;
 
@@ -78,6 +78,7 @@ impl From<CatalogError> for SettingsError {
 pub struct SettingsService {
     store: Arc<dyn SettingsStore>,
     fs: Arc<dyn FileSystem>,
+    catalog: Arc<dyn PhotoCatalog>,
 }
 
 impl fmt::Debug for SettingsService {
@@ -87,8 +88,12 @@ impl fmt::Debug for SettingsService {
 }
 
 impl SettingsService {
-    pub fn new(store: Arc<dyn SettingsStore>, fs: Arc<dyn FileSystem>) -> Self {
-        Self { store, fs }
+    pub fn new(
+        store: Arc<dyn SettingsStore>,
+        fs: Arc<dyn FileSystem>,
+        catalog: Arc<dyn PhotoCatalog>,
+    ) -> Self {
+        Self { store, fs, catalog }
     }
 
     pub fn get(&self) -> Result<Settings, SettingsError> {
@@ -100,6 +105,19 @@ impl SettingsService {
     pub fn update(&self, update: SettingsUpdate) -> Result<Settings, SettingsError> {
         let mut settings = self.store.load_settings()?;
         if let Some(root) = update.library_root {
+            // Photo paths are relative to the library folder: pointing it
+            // elsewhere would break every photo already in the catalog.
+            if let Some(current) = &settings.library_root
+                && *current != root
+            {
+                let photos = self.catalog.photo_count()?;
+                if photos > 0 {
+                    return Err(SettingsError::Invalid(format!(
+                        "The library in `{}` already has {photos} photos; choosing a different library folder is not supported yet.",
+                        current.display()
+                    )));
+                }
+            }
             if !root.is_absolute() {
                 return Err(SettingsError::Invalid(format!(
                     "The library folder must be an absolute path, got `{}`.",
@@ -129,7 +147,7 @@ pub(crate) mod tests {
     use std::sync::Mutex;
 
     use super::*;
-    use crate::testing::MemFs;
+    use crate::testing::{MemFs, MemoryCatalog};
 
     /// Settings kept in memory.
     #[derive(Default)]
@@ -159,7 +177,14 @@ pub(crate) mod tests {
         let fs = writable
             .iter()
             .fold(MemFs::new(), |fs, p| fs.dir(abs(p).to_str().unwrap()));
-        (SettingsService::new(store.clone(), Arc::new(fs)), store)
+        (
+            SettingsService::new(
+                store.clone(),
+                Arc::new(fs),
+                Arc::new(MemoryCatalog::default()),
+            ),
+            store,
+        )
     }
 
     #[test]
@@ -225,7 +250,7 @@ pub(crate) mod tests {
         let fs = MemFs::new()
             .dir(abs("ro").to_str().unwrap())
             .read_only(abs("ro").to_str().unwrap());
-        let service = SettingsService::new(store, Arc::new(fs));
+        let service = SettingsService::new(store, Arc::new(fs), Arc::new(MemoryCatalog::default()));
 
         let err = service
             .update(SettingsUpdate {
@@ -237,6 +262,65 @@ pub(crate) mod tests {
         assert!(
             matches!(&err, SettingsError::Invalid(m) if m.contains("not writable")),
             "{err}"
+        );
+    }
+
+    #[test]
+    fn the_library_folder_cannot_change_once_it_has_photos() {
+        use picturesque_core::hash::ContentHash;
+        use picturesque_core::media::MediaFormat;
+        use picturesque_core::photo::{Asset, NewPhoto, PhotoAssets};
+
+        let store = Arc::new(MemorySettings::default());
+        let fs = MemFs::new()
+            .dir(abs("a").to_str().unwrap())
+            .dir(abs("b").to_str().unwrap());
+        let catalog = Arc::new(MemoryCatalog::default());
+        let service = SettingsService::new(store, Arc::new(fs), catalog.clone());
+        service
+            .update(SettingsUpdate {
+                library_root: Some(abs("a")),
+                ..Default::default()
+            })
+            .unwrap();
+        // While empty, it can still change.
+        service
+            .update(SettingsUpdate {
+                library_root: Some(abs("b")),
+                ..Default::default()
+            })
+            .unwrap();
+        catalog
+            .insert_photo(&NewPhoto {
+                metadata: Default::default(),
+                assets: PhotoAssets::new(vec![Asset {
+                    format: MediaFormat::Jpeg,
+                    path: "x.jpg".into(),
+                    size: 1,
+                    hash: ContentHash::from_bytes([1; 32]),
+                }])
+                .unwrap(),
+            })
+            .unwrap();
+
+        let err = service
+            .update(SettingsUpdate {
+                library_root: Some(abs("a")),
+                ..Default::default()
+            })
+            .unwrap_err();
+        assert!(
+            matches!(&err, SettingsError::Invalid(m) if m.contains("1 photos")),
+            "{err}"
+        );
+        // Saving the same folder again is fine.
+        assert!(
+            service
+                .update(SettingsUpdate {
+                    library_root: Some(abs("b")),
+                    ..Default::default()
+                })
+                .is_ok()
         );
     }
 
