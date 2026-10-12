@@ -40,6 +40,7 @@ pub struct Deps {
     pub metadata: Arc<dyn MetadataReader>,
     pub geocoder: Arc<dyn ReverseGeocoder>,
     pub events: Arc<dyn EventSink>,
+    pub sidecars: Arc<dyn crate::ports::sidecars::SidecarStore>,
 }
 
 impl fmt::Debug for Deps {

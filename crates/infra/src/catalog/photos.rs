@@ -210,6 +210,35 @@ impl PhotoCatalog for SqliteCatalog {
         self.store_decision(id, decision)
     }
 
+    fn dirty_decisions(
+        &self,
+    ) -> Result<Vec<picturesque_app::ports::catalog::DirtyDecision>, CatalogError> {
+        self.load_dirty()
+    }
+
+    fn mark_sidecar_written(&self, id: PhotoId, token: &str) -> Result<(), CatalogError> {
+        self.mark_written(id, token)
+    }
+
+    fn upsert_sidecar(
+        &self,
+        id: PhotoId,
+        path: &Path,
+        size: u64,
+        hash: &ContentHash,
+    ) -> Result<(), CatalogError> {
+        let path = to_library_path(path)?;
+        self.conn()
+            .execute(
+                "INSERT INTO asset (photo_id, role, format, path, size, hash) VALUES (?1, 'sidecar', 'xmp', ?2, ?3, ?4)
+                 ON CONFLICT (path) DO UPDATE SET size = excluded.size, hash = excluded.hash
+                 WHERE asset.photo_id = excluded.photo_id",
+                params![id.0, path, i64::try_from(size).map_err(storage)?, hash.as_bytes().as_slice()],
+            )
+            .map_err(storage)?;
+        Ok(())
+    }
+
     fn set_dimensions(&self, id: PhotoId, width: u32, height: u32) -> Result<(), CatalogError> {
         self.conn()
             .execute(

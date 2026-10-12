@@ -335,6 +335,8 @@ use crate::settings::tests::MemorySettings;
 pub struct MemoryCatalog {
     pub photos: Mutex<Vec<Photo>>,
     pub decisions: Mutex<HashMap<PhotoId, picturesque_core::decision::Decision>>,
+    /// (revision, revision the sidecar reflects) per decision.
+    pub revisions: Mutex<HashMap<PhotoId, (u64, Option<u64>)>>,
 }
 
 impl PhotoCatalog for MemoryCatalog {
@@ -438,7 +440,73 @@ impl PhotoCatalog for MemoryCatalog {
         id: PhotoId,
         decision: picturesque_core::decision::Decision,
     ) -> Result<(), CatalogError> {
+        if !self.photos.lock().unwrap().iter().any(|p| p.id == id) {
+            return Err(CatalogError::Storage(format!("no photo {}", id.0)));
+        }
         self.decisions.lock().unwrap().insert(id, decision);
+        self.revisions
+            .lock()
+            .unwrap()
+            .entry(id)
+            .or_insert((0, None))
+            .0 += 1;
+        Ok(())
+    }
+
+    fn dirty_decisions(&self) -> Result<Vec<crate::ports::catalog::DirtyDecision>, CatalogError> {
+        let decisions = self.decisions.lock().unwrap();
+        let mut dirty: Vec<_> = self
+            .revisions
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(_, (rev, written))| *written != Some(*rev))
+            .map(|(id, (rev, _))| crate::ports::catalog::DirtyDecision {
+                id: *id,
+                decision: decisions[id],
+                token: rev.to_string(),
+            })
+            .collect();
+        dirty.sort_by_key(|d| d.id);
+        Ok(dirty)
+    }
+
+    fn mark_sidecar_written(&self, id: PhotoId, token: &str) -> Result<(), CatalogError> {
+        if let Some((rev, written)) = self.revisions.lock().unwrap().get_mut(&id)
+            && rev.to_string() == token
+        {
+            *written = Some(*rev);
+        }
+        Ok(())
+    }
+
+    fn upsert_sidecar(
+        &self,
+        id: PhotoId,
+        path: &Path,
+        size: u64,
+        hash: &ContentHash,
+    ) -> Result<(), CatalogError> {
+        let mut photos = self.photos.lock().unwrap();
+        let photo = photos
+            .iter_mut()
+            .find(|p| p.id == id)
+            .ok_or_else(|| CatalogError::Storage("no photo".into()))?;
+        let mut assets: Vec<picturesque_core::photo::Asset> = photo.assets.clone().into();
+        match assets.iter_mut().find(|a| a.path == path) {
+            Some(a) => {
+                a.size = size;
+                a.hash = *hash;
+            }
+            None => assets.push(picturesque_core::photo::Asset {
+                format: MediaFormat::Xmp,
+                path: path.to_path_buf(),
+                size,
+                hash: *hash,
+            }),
+        }
+        photo.assets = picturesque_core::photo::PhotoAssets::new(assets)
+            .map_err(|e| CatalogError::Storage(e.to_string()))?;
         Ok(())
     }
 
@@ -640,6 +708,25 @@ impl crate::ports::images::ImageDecoder for FakeDecoder {
     }
 }
 
+/// Sidecars kept in memory: path → decision.
+#[derive(Default)]
+pub struct MemorySidecars(pub Mutex<HashMap<PathBuf, picturesque_core::decision::Decision>>);
+
+impl crate::ports::sidecars::SidecarStore for MemorySidecars {
+    fn read(&self, path: &Path) -> Result<Option<picturesque_core::decision::Decision>, String> {
+        Ok(self.0.lock().unwrap().get(path).copied())
+    }
+
+    fn write(
+        &self,
+        path: &Path,
+        decision: picturesque_core::decision::Decision,
+    ) -> Result<(ContentHash, u64), String> {
+        self.0.lock().unwrap().insert(path.to_path_buf(), decision);
+        Ok((fake_hash(path.to_string_lossy().as_bytes()), 1))
+    }
+}
+
 /// Everything a test needs, with handles to inspect afterwards.
 pub struct TestWorld {
     pub fs: Arc<MemFs>,
@@ -649,6 +736,7 @@ pub struct TestWorld {
     pub metadata: Arc<FakeMetadata>,
     pub events: Arc<RecordedEvents>,
     pub decoder: Arc<FakeDecoder>,
+    pub sidecars: Arc<MemorySidecars>,
 }
 
 impl TestWorld {
@@ -661,6 +749,7 @@ impl TestWorld {
         let _ = decoder.fs.set(Arc::clone(&fs));
         Self {
             decoder: Arc::new(decoder),
+            sidecars: Arc::default(),
             fs,
             settings: Arc::default(),
             catalog: Arc::default(),
@@ -681,6 +770,7 @@ impl TestWorld {
             events: self.events.clone(),
             decoder: self.decoder.clone(),
             cache_dir: PathBuf::from("/cache"),
+            sidecars: self.sidecars.clone(),
         }
     }
 }

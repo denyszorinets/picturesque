@@ -31,6 +31,7 @@ fn api_with(catalog: Arc<SqliteCatalog>, cache_dir: std::path::PathBuf) -> Arc<A
             geocoder: Arc::new(GeoNamesGeocoder::default()),
             events: Arc::new(EventBus::default()),
             decoder: Arc::new(VipsDecoder),
+            sidecars: Arc::new(picturesque_infra::xmp::XmpSidecars),
             cache_dir,
         })
         .expect("api"),

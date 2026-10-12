@@ -58,6 +58,7 @@ async fn serve() -> Result<(), String> {
         geocoder: Arc::new(GeoNamesGeocoder::default()),
         events: Arc::new(events.clone()),
         decoder: Arc::new(VipsDecoder),
+        sidecars: Arc::new(picturesque_infra::xmp::XmpSidecars),
         cache_dir: data_dir.join("cache"),
     })
     .map_err(|e| e.message)?;

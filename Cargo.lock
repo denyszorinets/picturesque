@@ -2948,6 +2948,7 @@ dependencies = [
  "libvips",
  "picturesque-app",
  "picturesque-core",
+ "quick-xml",
  "rawler",
  "rusqlite",
  "serde_json",

@@ -59,6 +59,7 @@ pub fn run() {
                 geocoder: Arc::new(GeoNamesGeocoder::default()),
                 events: Arc::new(TauriEvents(app.handle().clone())),
                 decoder: Arc::new(VipsDecoder),
+                sidecars: Arc::new(picturesque_infra::xmp::XmpSidecars),
                 cache_dir: app.path().app_cache_dir()?,
             })?;
             api.start_background_work();

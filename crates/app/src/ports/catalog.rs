@@ -29,6 +29,14 @@ impl fmt::Display for CatalogError {
 
 impl std::error::Error for CatalogError {}
 
+/// A decision whose sidecar is out of date.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DirtyDecision {
+    pub id: PhotoId,
+    pub decision: Decision,
+    pub token: String,
+}
+
 /// Stores and retrieves photos.
 pub trait PhotoCatalog: Send + Sync {
     /// Stores a new photo with its assets in one transaction.
@@ -61,6 +69,23 @@ pub trait PhotoCatalog: Send + Sync {
     fn decision(&self, id: PhotoId) -> Result<Decision, CatalogError>;
 
     fn set_decision(&self, id: PhotoId, decision: Decision) -> Result<(), CatalogError>;
+
+    /// Decisions changed since their sidecar was last written, with a token
+    /// identifying the change.
+    fn dirty_decisions(&self) -> Result<Vec<DirtyDecision>, CatalogError>;
+
+    /// Records that the sidecar reflects the change identified by `token`.
+    /// Does nothing if the decision changed again meanwhile.
+    fn mark_sidecar_written(&self, id: PhotoId, token: &str) -> Result<(), CatalogError>;
+
+    /// Adds a sidecar file to a photo, or updates its size and hash.
+    fn upsert_sidecar(
+        &self,
+        id: PhotoId,
+        path: &std::path::Path,
+        size: u64,
+        hash: &ContentHash,
+    ) -> Result<(), CatalogError>;
 
     /// Sizes of all catalogued RAW and image files. A new file can only be
     /// a duplicate if its size is in this set, so only those are hashed.

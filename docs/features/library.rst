@@ -120,3 +120,62 @@ The timeline, day headers and counts all reflect the filters. A photo you
 change while filtering (for example rejecting it while showing only
 picks) stays in view until the filters change, so it does not jump away
 mid-cull.
+
+.. _features-library-sidecars:
+
+XMP sidecars
+------------
+
+Picks, rejects and ratings are written to **XMP sidecar files** next to
+each photo in the library, so other photo tools see them
+(:doc:`ADR-0009 </architecture/decisions/0009-xmp-sidecars-for-culling-decisions>`).
+Photo files themselves are never modified.
+
+.. list-table::
+   :header-rows: 1
+
+   * - Written
+     - Value
+     - Read by
+   * - ``xmp:Rating``
+     - Stars 0–5, or −1 for a rejected photo
+     - darktable, Lightroom, Bridge
+   * - ``digiKam:PickLabel``
+     - 3 for picks, 1 for rejects, 0 otherwise
+     - digiKam
+   * - ``picturesque:Flag``, ``picturesque:Stars``
+     - The exact flag and stars (a rejected photo keeps its stars)
+     - Picturesque
+
+- If a photo already has a sidecar (for example from darktable or
+  Lightroom), it is **updated in place**: only the properties above are
+  changed; everything else other tools stored there is kept.
+- Otherwise a new sidecar is created next to the photo's RAW file (or its
+  only file), named ``IMG_0042.CR3.xmp`` by default (darktable,
+  digiKam) or ``IMG_0042.xmp`` (Lightroom, Bridge); see
+  :ref:`reference-settings-sidecar-naming`.
+- Sidecars are written in the background about a second after you stop
+  changing decisions, so rapid culling writes each file once. Anything not
+  yet written when the app closes is written the next time it starts.
+- A sidecar that cannot be read as XMP is left untouched.
+
+On import, decisions found in existing sidecars (ratings, darktable or
+Lightroom rejects, digiKam pick labels) become the photo's starting
+decision.
+
+Checking with other tools
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+To confirm that another tool picks up decisions:
+
+1. In Picturesque, rate a RAW photo 3 stars and pick another; reject a
+   third.
+2. **darktable**: import the library folder (or re-read sidecars with
+   *selected images → metadata → refresh EXIF*). The first photo shows
+   three stars and the rejected one shows the reject mark.
+3. **digiKam**: with *Settings → Metadata → Sidecars → Read from sidecar
+   files* enabled, the picked photo shows the green "Accepted" pick label
+   and the rejected one the red "Rejected" label.
+4. **Lightroom Classic**: set sidecar naming to ``IMG_0042.xmp``, then
+   *Metadata → Read Metadata from Files*; ratings appear. Lightroom does
+   not read pick/reject flags from XMP.

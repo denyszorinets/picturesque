@@ -403,6 +403,7 @@ impl SqliteCatalog {
             .execute(
                 "INSERT INTO decision (photo_id, flag, rating) VALUES (?1, ?2, ?3)
                  ON CONFLICT (photo_id) DO UPDATE SET flag = excluded.flag, rating = excluded.rating,
+                     revision = revision + 1,
                      updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')",
                 params![id.0, decision.flag.as_str(), decision.rating.stars()],
             )
@@ -410,6 +411,48 @@ impl SqliteCatalog {
                 Some(rusqlite::ErrorCode::ConstraintViolation) => CatalogError::Storage(format!("no photo {}", id.0)),
                 _ => storage(e),
             })?;
+        Ok(())
+    }
+}
+
+impl SqliteCatalog {
+    pub(super) fn load_dirty(
+        &self,
+    ) -> Result<Vec<picturesque_app::ports::catalog::DirtyDecision>, CatalogError> {
+        let conn = self.conn();
+        let mut stmt = conn
+            .prepare(
+                "SELECT photo_id, flag, rating, revision FROM decision
+                 WHERE sidecar_revision IS NULL OR sidecar_revision <> revision ORDER BY photo_id",
+            )
+            .map_err(storage)?;
+        stmt.query_map([], |r| {
+            let flag: String = r.get(1)?;
+            Ok(picturesque_app::ports::catalog::DirtyDecision {
+                id: PhotoId(r.get(0)?),
+                decision: Decision {
+                    flag: Flag::from_name(&flag).unwrap_or_default(),
+                    rating: Rating::new(r.get(2)?).unwrap_or_default(),
+                },
+                token: r.get::<_, i64>(3)?.to_string(),
+            })
+        })
+        .map_err(storage)?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(storage)
+    }
+
+    pub(super) fn mark_written(&self, id: PhotoId, token: &str) -> Result<(), CatalogError> {
+        let revision: i64 = token
+            .parse()
+            .map_err(|_| CatalogError::Storage(format!("bad sidecar token {token}")))?;
+        self.conn()
+            .execute(
+                "UPDATE decision SET sidecar_revision = ?2, sidecar_written_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+                 WHERE photo_id = ?1 AND revision = ?2",
+                params![id.0, revision],
+            )
+            .map_err(storage)?;
         Ok(())
     }
 }

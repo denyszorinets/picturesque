@@ -160,8 +160,15 @@ fn read_one(deps: &Deps, source: &SourcePhoto) -> PlannedPhoto {
         });
     }
 
+    // Decisions recorded by other tools (or earlier Picturesque use).
+    let decision = source
+        .sidecars
+        .iter()
+        .find_map(|s| deps.sidecars.read(&s.path).ok().flatten());
+
     PlannedPhoto {
         id: None,
+        decision,
         metadata,
         status: if reason.is_some() {
             PhotoStatus::Failed

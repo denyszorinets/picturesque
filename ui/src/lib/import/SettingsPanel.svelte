@@ -22,6 +22,7 @@
   let presets = $state<TemplatePresetView[]>([]);
   let libraryRoot = $state("");
   let template = $state("");
+  let sidecarNaming = $state<Settings["sidecar_naming"]>("file_extension");
   let preview = $state<TemplatePreview | null>(null);
   let error = $state<string | null>(null);
   let notice = $state<string | null>(null);
@@ -33,7 +34,8 @@
   const dirty = $derived(
     saved !== null &&
       (libraryRoot.trim() !== (saved.library_root ?? "") ||
-        template.trim() !== saved.path_template),
+        template.trim() !== saved.path_template ||
+        sidecarNaming !== saved.sidecar_naming),
   );
 
   $effect(() => {
@@ -62,6 +64,7 @@
     saved = settings;
     libraryRoot = settings.library_root ?? "";
     template = settings.path_template;
+    sidecarNaming = settings.sidecar_naming;
     onchange?.(settings);
   }
 
@@ -76,7 +79,13 @@
     error = null;
     notice = null;
     try {
-      const update: { library_root?: string; path_template?: string } = {};
+      const update: {
+        library_root?: string;
+        path_template?: string;
+        sidecar_naming?: Settings["sidecar_naming"];
+      } = {};
+      if (sidecarNaming !== saved.sidecar_naming)
+        update.sidecar_naming = sidecarNaming;
       if (libraryRoot.trim() !== (saved.library_root ?? ""))
         update.library_root = libraryRoot.trim();
       if (template.trim() !== saved.path_template)
@@ -142,6 +151,24 @@
         {/each}
       </ul>
     {/if}
+  </div>
+
+  <div class="field">
+    <label class="label" for="sidecar-naming">New XMP sidecars</label>
+    <select
+      id="sidecar-naming"
+      bind:value={sidecarNaming}
+      data-testid="sidecar-naming"
+    >
+      <option value="file_extension"
+        >IMG_0042.CR3.xmp (darktable, digiKam)</option
+      >
+      <option value="base_name">IMG_0042.xmp (Lightroom, Bridge)</option>
+    </select>
+    <p class="hint muted">
+      Picks, rejects and ratings are written to sidecars so other photo tools
+      see them.
+    </p>
   </div>
 
   <div class="actions">

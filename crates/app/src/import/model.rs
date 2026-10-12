@@ -148,6 +148,8 @@ pub struct PlannedPhoto {
     /// Catalog id once imported.
     pub photo_id: Option<PhotoId>,
     pub files: Vec<PlannedFile>,
+    /// A decision found in the photo's existing sidecar, applied on import.
+    pub decision: Option<picturesque_core::decision::Decision>,
 }
 
 /// A path that could not be imported, with the reason.

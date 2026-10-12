@@ -50,6 +50,7 @@ impl Harness {
             .save_settings(&Settings {
                 library_root: Some("/lib".into()),
                 path_template: template.into(),
+                ..Default::default()
             })
             .unwrap();
         let api = Api::new(world.context()).unwrap();
@@ -651,6 +652,58 @@ impl Harness {
             metadata: ctx.metadata,
             geocoder: ctx.geocoder,
             events: Arc::new(crate::ports::events::NoEvents),
+            sidecars: ctx.sidecars,
         }
     }
+}
+
+#[test]
+fn decisions_in_existing_sidecars_are_imported() {
+    use picturesque_core::decision::{Decision, Flag, Rating};
+    let fs = MemFs::new()
+        .file("/src/IMG_1.CR3", b"raw")
+        .file("/src/IMG_1.CR3.xmp", b"<x/>")
+        .file("/src/IMG_2.JPG", b"jpg");
+    let h = Harness::new(fs, &[]);
+    let rejected = Decision {
+        flag: Flag::Reject,
+        rating: Rating::new(2).unwrap(),
+    };
+    h.world
+        .sidecars
+        .0
+        .lock()
+        .unwrap()
+        .insert(PathBuf::from("/src/IMG_1.CR3.xmp"), rejected);
+
+    let plan = h.plan(&["/src"]);
+    h.run(plan.run_id);
+
+    let decisions: Vec<_> = h
+        .world
+        .catalog
+        .all_photos()
+        .unwrap()
+        .iter()
+        .map(|p| {
+            (
+                p.assets
+                    .primary()
+                    .path
+                    .file_name()
+                    .unwrap()
+                    .to_string_lossy()
+                    .into_owned(),
+                h.world.catalog.decision(p.id).unwrap(),
+            )
+        })
+        .collect();
+    assert!(
+        decisions.contains(&("IMG_1.CR3".to_owned(), rejected)),
+        "{decisions:?}"
+    );
+    assert!(
+        decisions.contains(&("IMG_2.JPG".to_owned(), Decision::default())),
+        "{decisions:?}"
+    );
 }
