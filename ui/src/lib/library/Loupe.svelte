@@ -56,6 +56,8 @@
     }
   });
 
+  const percent = (score: number) => `${Math.round(score * 100)}%`;
+
   function go(delta: number) {
     const next = index + delta;
     if (next >= 0 && next < store.total) onnavigate(next);
@@ -231,6 +233,17 @@
               ]
                 .filter(Boolean)
                 .join(" · ")}
+            </dd>
+          {/if}
+          {#if detail.quality}
+            <dt>Quality</dt>
+            <dd
+              data-testid="loupe-quality"
+              title="Technical scores from background analysis"
+            >
+              Sharpness {percent(detail.quality.sharpness)} · Exposure {percent(
+                detail.quality.exposure,
+              )} · Low noise {percent(detail.quality.noise)}
             </dd>
           {/if}
           {#if detail.width && detail.height}<dt>Size</dt>

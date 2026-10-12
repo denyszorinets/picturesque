@@ -13,6 +13,7 @@ use serde::de::DeserializeOwned;
 use serde_json::Value;
 use ts_rs::TS;
 
+use crate::analysis::technical::{QualityView, TechnicalAnalyzer};
 use crate::analysis::{AnalysisService, Analyzer, PrioritizeArgs};
 use crate::import::{Deps, ImportError, ImportService, PlanImportArgs, RunArgs};
 use crate::info;
@@ -329,7 +330,18 @@ impl Api {
                         )
                     })?;
                 let decision = self.catalog.decision(id).map_err(catalog_error)?;
-                respond(PhotoDetail::new(&photo, decision))
+                let mut detail = PhotoDetail::new(&photo, decision);
+                detail.quality = self
+                    .catalog
+                    .analysis(id)
+                    .map_err(catalog_error)?
+                    .into_iter()
+                    .find(|(name, version, _)| {
+                        *name == TechnicalAnalyzer::ID.name
+                            && *version == TechnicalAnalyzer::ID.version
+                    })
+                    .and_then(|(_, _, result)| QualityView::from_result(&result));
+                respond(detail)
             }
             "set_decisions" => {
                 let SetDecisionsArgs { changes } = parse_args(command, args)?;

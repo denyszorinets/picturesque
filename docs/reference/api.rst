@@ -56,8 +56,10 @@ Commands
    ``{ "photo_id": 7 }``. A ``PhotoDetail``: capture time and UTC offset,
    camera, lens, ``iso``, ``aperture`` (``f/2.8``), ``shutter``
    (``1/250 s``), ``focal_length`` (``35 mm``), GPS, ``place``, displayed
-   size, ``flag``, ``rating`` and ``files`` (path, format, size). Unknown
-   photos are ``not_found``.
+   size, ``flag``, ``rating``, ``files`` (path, format, size) and
+   ``quality`` (``sharpness``, ``exposure``, ``noise``, ``overall``,
+   ``highlights_clipped``, ``shadows_clipped``; ``null`` until analyzed,
+   see :doc:`quality-scores`). Unknown photos are ``not_found``.
 
 ``set_decisions``
    ``{ "changes": [{ "photo_id": 7, "flag": "pick" }, { "photo_id": 8, "rating": 4 }] }``.

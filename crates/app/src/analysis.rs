@@ -21,6 +21,13 @@ use crate::ports::events::{AppEvent, EventSink};
 use crate::ports::pixels::PixelLoader;
 use crate::thumbnails::{ImageSize, ThumbnailService};
 
+pub mod technical;
+
+/// The analyzers the app runs.
+pub fn default_analyzers() -> Vec<Arc<dyn Analyzer>> {
+    vec![Arc::new(technical::TechnicalAnalyzer)]
+}
+
 /// Longest edge of the pixels analyzers receive.
 pub const ANALYSIS_EDGE: u32 = 1024;
 

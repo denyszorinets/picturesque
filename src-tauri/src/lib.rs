@@ -61,7 +61,7 @@ pub fn run() {
                 decoder: Arc::new(VipsDecoder),
                 sidecars: Arc::new(picturesque_infra::xmp::XmpSidecars),
                 pixels: Arc::new(picturesque_infra::images::VipsPixels),
-                analyzers: Vec::new(),
+                analyzers: picturesque_app::analysis::default_analyzers(),
                 cache_dir: app.path().app_cache_dir()?,
             })?;
             api.start_background_work();

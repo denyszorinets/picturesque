@@ -217,6 +217,8 @@ pub struct PhotoDetail {
     pub flag: picturesque_core::decision::Flag,
     pub rating: u8,
     pub files: Vec<PhotoFileView>,
+    /// Technical scores, once analyzed.
+    pub quality: Option<crate::analysis::technical::QualityView>,
 }
 
 /// Arguments of commands that act on one photo.
@@ -340,6 +342,7 @@ impl PhotoDetail {
             height,
             flag: decision.flag,
             rating: decision.rating.stars(),
+            quality: None,
             files: photo
                 .assets
                 .iter()
