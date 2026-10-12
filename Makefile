@@ -1,4 +1,4 @@
-.PHONY: help format format-check test lint build doc check clean docs docs-serve docs-check
+.PHONY: help format format-check test lint build doc check clean ui-deps ui-check app-dev docs docs-serve docs-check
 
 DOCS_DIR := docs
 SPHINX := uv run --project $(DOCS_DIR) --frozen
@@ -11,7 +11,10 @@ help:
 	@echo "  lint          Run clippy with warnings as errors"
 	@echo "  build         Build all workspace targets"
 	@echo "  doc           Build Rust API docs with warnings as errors"
-	@echo "  check         format-check + lint + test + build"
+	@echo "  check         format-check + lint + test + build + ui-check"
+	@echo "  ui-deps       Install front-end dependencies (npm ci)"
+	@echo "  ui-check      Front-end type check, lint, format check and tests"
+	@echo "  app-dev       Run the desktop app with hot reload (needs a display)"
 	@echo "  clean         Remove build artifacts"
 	@echo "  docs          Build documentation into docs/_build/html"
 	@echo "  docs-serve    Live-reloading documentation preview on http://127.0.0.1:8000"
@@ -19,6 +22,7 @@ help:
 
 format:
 	cargo fmt --all
+	npm run format -w ui
 
 format-check:
 	cargo fmt --all --check
@@ -36,7 +40,18 @@ build:
 doc:
 	RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps
 
-check: format-check lint test build
+check: format-check lint test build ui-check
+
+ui-deps:
+	npm ci
+
+ui-check:
+	npm run check -w ui
+	npm run lint -w ui
+	npm run test -w ui
+
+app-dev:
+	npx tauri dev
 
 clean:
 	cargo clean

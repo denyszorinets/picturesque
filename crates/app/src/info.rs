@@ -1,7 +1,7 @@
 //! Application identity, shown in the UI's About screen.
 
 /// Name and version of the running application.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct AppInfo {
     pub name: &'static str,
     pub version: &'static str,
@@ -25,5 +25,15 @@ mod tests {
 
         assert_eq!(info.name, "Picturesque");
         assert_eq!(info.version, env!("CARGO_PKG_VERSION"));
+    }
+
+    #[test]
+    fn app_info_serializes_to_the_shape_the_ui_expects() {
+        let json = serde_json::to_value(app_info()).expect("AppInfo serializes");
+
+        assert_eq!(
+            json,
+            serde_json::json!({ "name": "Picturesque", "version": env!("CARGO_PKG_VERSION") })
+        );
     }
 }

@@ -9,10 +9,20 @@ needed. Outside it you need:
 
 - Rust 1.99.0 with ``rustfmt`` and ``clippy``. :repo:`rust-toolchain.toml`
   pins the version, so ``rustup`` installs it automatically.
+- Node.js 22 or newer with npm, for the front end and the Tauri CLI.
+- The `Tauri 2 system dependencies <https://v2.tauri.app/start/prerequisites/>`_
+  for your platform (WebKitGTK 4.1 and friends on Linux, WebView2 on
+  Windows, Xcode command-line tools on macOS).
 - `uv <https://docs.astral.sh/uv/>`_ for the documentation site.
 
-Later milestones add Node.js, the Tauri system libraries, libvips and
-LibRaw; this page lists them as they are introduced.
+Later milestones add libvips and LibRaw; this page lists them as they are
+introduced.
+
+After cloning, install the front-end dependencies once:
+
+.. code-block:: bash
+
+   make ui-deps
 
 .. note::
 
@@ -29,6 +39,9 @@ Workspace layout
    crates/core/          picturesque-core   domain, no I/O
    crates/app/           picturesque-app    use cases and ports
    crates/infra/         picturesque-infra  adapters (SQLite, decoding, ...)
+   src-tauri/            picturesque-desktop  Tauri 2 shell
+   ui/                   Svelte 5 + TypeScript front end (Vite)
+   package.json          npm workspace root; holds the Tauri CLI
    docs/                 this site (Sphinx, uv project)
 
 See :doc:`/architecture/components` for the layer rules.
@@ -44,7 +57,7 @@ The :repo:`Makefile` is the entry point for everyday tasks.
    * - Target
      - What it does
    * - ``make format``
-     - Format Rust code with ``rustfmt``.
+     - Format Rust code with ``rustfmt`` and front-end code with Prettier.
    * - ``make format-check``
      - Fail if any Rust file is not formatted.
    * - ``make lint``
@@ -55,9 +68,17 @@ The :repo:`Makefile` is the entry point for everyday tasks.
      - Build every workspace target.
    * - ``make doc``
      - Build Rust API docs; warnings are errors.
+   * - ``make ui-deps``
+     - Install front-end dependencies from ``package-lock.json``.
+   * - ``make ui-check``
+     - Front end: ``svelte-check`` (warnings fail), ESLint, Prettier check
+       and Vitest.
    * - ``make check``
-     - ``format-check``, ``lint``, ``test`` and ``build``. Run before every
-       commit; CI runs the same target.
+     - ``format-check``, ``lint``, ``test``, ``build`` and ``ui-check``.
+       Run before every commit; CI runs the same target.
+   * - ``make app-dev``
+     - Run the desktop app with hot reload (``tauri dev``). Needs a
+       display, so it does not work in the devcontainer.
    * - ``make clean``
      - Remove Rust and documentation build output.
    * - ``make docs`` / ``docs-serve`` / ``docs-check``
@@ -71,3 +92,30 @@ Lint levels are set once in ``[workspace.lints]`` in :repo:`Cargo.toml`.
 ``unsafe_code`` is denied workspace-wide, and ``picturesque-core`` and
 ``picturesque-app`` forbid it outright. Suppress a lint only on the
 narrowest item, with ``#[expect(..., reason = "...")]``.
+
+Front end
+---------
+
+The UI lives in ``ui/`` and is a plain Vite single-page app (no SvelteKit).
+Code reaches the backend only through ``ui/src/lib/api``; components never
+call Tauri directly, so the same UI runs in a browser against the
+development server (:issue:`8`).
+
+Front-end commands run from the repository root through the npm workspace:
+
+.. code-block:: bash
+
+   npm run dev -w ui      # Vite dev server on http://127.0.0.1:5173
+   npm run test -w ui     # Vitest
+   npm run check -w ui    # svelte-check
+
+Dependency versions
+~~~~~~~~~~~~~~~~~~~
+
+- TypeScript stays on 6.0 until ``typescript-eslint`` and ``svelte-check``
+  support TypeScript 7.
+- New dependencies should be releases that are at least two weeks old,
+  unless a newer release fixes a security advisory. With npm:
+  ``npm install --before=<date two weeks ago> ...``.
+- The ``@tauri-apps/api`` and ``@tauri-apps/cli`` npm packages must have
+  the same major and minor version as the ``tauri`` crate.
