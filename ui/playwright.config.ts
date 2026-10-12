@@ -3,6 +3,9 @@ import { defineConfig, devices } from "@playwright/test";
 // Runs the real UI in a browser against the development server (ADR-0010).
 export default defineConfig({
   testDir: "e2e",
+  // The tests share one dev server and catalog.
+  workers: 1,
+  fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? [["list"], ["html", { open: "never" }]] : "list",
