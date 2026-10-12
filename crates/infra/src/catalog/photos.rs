@@ -1,6 +1,6 @@
 //! `PhotoCatalog` on SQLite: mapping between rows and domain types.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::{Component, Path, PathBuf};
 
 use chrono::{FixedOffset, NaiveDateTime};
@@ -122,6 +122,76 @@ impl PhotoCatalog for SqliteCatalog {
             )
             .optional()
             .map_err(storage)
+    }
+
+    fn all_photos(&self) -> Result<Vec<Photo>, CatalogError> {
+        let conn = self.conn();
+        let mut assets: HashMap<i64, Vec<Asset>> = HashMap::new();
+        let mut stmt = conn
+            .prepare("SELECT photo_id, format, path, size, hash FROM asset ORDER BY id")
+            .map_err(storage)?;
+        let rows = stmt
+            .query_map([], |row| {
+                let id: i64 = row.get(0)?;
+                // asset_from_row reads columns 0..4; shift by one.
+                let format: String = row.get(1)?;
+                let hash: Vec<u8> = row.get(4)?;
+                let hash: [u8; 32] = hash
+                    .try_into()
+                    .map_err(|_| conversion(4, "hash is not 32 bytes"))?;
+                Ok((
+                    id,
+                    Asset {
+                        format: MediaFormat::from_name(&format)
+                            .ok_or_else(|| conversion(1, format!("unknown format {format}")))?,
+                        path: from_library_path(&row.get::<_, String>(2)?),
+                        size: row.get::<_, i64>(3)? as u64,
+                        hash: ContentHash::from_bytes(hash),
+                    },
+                ))
+            })
+            .map_err(storage)?;
+        for row in rows {
+            let (id, asset) = row.map_err(storage)?;
+            assets.entry(id).or_default().push(asset);
+        }
+
+        let mut stmt = conn
+            .prepare(
+                "SELECT captured_local, captured_offset_s, camera_make, camera_model, lens,
+                        iso, f_number, exposure_num, exposure_den, focal_length_mm,
+                        gps_lat, gps_lon, place_city, place_region, place_country, place_country_code,
+                        orientation, width, height, id
+                 FROM photo ORDER BY captured_local IS NULL, captured_local, id",
+            )
+            .map_err(storage)?;
+        let rows = stmt
+            .query_map([], |row| {
+                Ok((row.get::<_, i64>(19)?, metadata_from_row(row)?))
+            })
+            .map_err(storage)?;
+        let mut photos = Vec::new();
+        for row in rows {
+            let (id, metadata) = row.map_err(storage)?;
+            let assets = PhotoAssets::new(assets.remove(&id).unwrap_or_default())
+                .map_err(|e| storage(format!("photo {id}: {e}")))?;
+            photos.push(Photo {
+                id: PhotoId(id),
+                metadata,
+                assets,
+            });
+        }
+        Ok(photos)
+    }
+
+    fn set_dimensions(&self, id: PhotoId, width: u32, height: u32) -> Result<(), CatalogError> {
+        self.conn()
+            .execute(
+                "UPDATE photo SET width = ?2, height = ?3 WHERE id = ?1",
+                params![id.0, width, height],
+            )
+            .map_err(storage)?;
+        Ok(())
     }
 
     fn media_sizes(&self) -> Result<HashSet<u64>, CatalogError> {

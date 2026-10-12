@@ -113,7 +113,12 @@ Negative
 - ``libvips`` crate caveats: ``VipsImage`` is not thread-safe (keep images
   on one thread per job), error details live in the libvips error buffer
   rather than the returned error, and libvips' operation cache must be
-  sized deliberately.
+  sized deliberately. Found while implementing :issue:`22`: images made
+  with ``new_from_buffer`` do not copy the buffer and are decoded lazily,
+  so the buffer must outlive every use of the image (a dropped buffer
+  produced corrupt output); and ``thumbnail_image`` auto-rotates from EXIF
+  carried by the image unless ``no_rotate`` is set, which rotated RAW
+  previews twice.
 
 Risks
 ~~~~~
@@ -128,7 +133,11 @@ Risks
   rawler decodes the sensor data. The embedded preview works, so culling
   works; only a future full-resolution development path is affected.
 - **CI on Ubuntu 24.04** ships older libvips and LibRaw than Fedora 44;
-  infrastructure tests may need newer builds there.
+  infrastructure tests may need newer builds there. In particular
+  ``dcrawload`` (the fallback for RAW files without a preview) needs
+  libvips 8.17 or newer.
+- **Windows builds** need libvips and LibRaw import libraries; until that
+  is set up, Windows CI checks only the crates without native libraries.
 
 Follow-up
 ~~~~~~~~~

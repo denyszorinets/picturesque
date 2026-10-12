@@ -170,6 +170,55 @@ fn identical_sidecars_may_belong_to_different_photos() {
 }
 
 #[test]
+fn lists_all_photos_oldest_first_with_undated_last() {
+    let catalog = SqliteCatalog::open_in_memory().unwrap();
+    let mut later = full_metadata();
+    later.captured_at = Some(CaptureTime::new(
+        NaiveDate::from_ymd_opt(2027, 1, 1)
+            .unwrap()
+            .and_hms_opt(0, 0, 0)
+            .unwrap(),
+        None,
+    ));
+    let undated = catalog
+        .insert_photo(&photo(CaptureMetadata::default(), vec![asset("u.jpg", 1)]))
+        .unwrap();
+    let late = catalog
+        .insert_photo(&photo(later, vec![asset("l.jpg", 2)]))
+        .unwrap();
+    let early = catalog
+        .insert_photo(&photo(
+            full_metadata(),
+            vec![asset("e.CR3", 3), asset("e.JPG", 4)],
+        ))
+        .unwrap();
+
+    let all = catalog.all_photos().unwrap();
+
+    assert_eq!(
+        all.iter().map(|p| p.id).collect::<Vec<_>>(),
+        [early, late, undated]
+    );
+    assert_eq!(all[0].assets.iter().count(), 2);
+    assert_eq!(all[0], catalog.photo(early).unwrap().unwrap());
+}
+
+#[test]
+fn records_dimensions() {
+    let catalog = SqliteCatalog::open_in_memory().unwrap();
+    let id = catalog
+        .insert_photo(&photo(CaptureMetadata::default(), vec![asset("a.heic", 1)]))
+        .unwrap();
+
+    catalog.set_dimensions(id, 4032, 3024).unwrap();
+
+    assert_eq!(
+        catalog.photo(id).unwrap().unwrap().metadata.dimensions,
+        Some((4032, 3024))
+    );
+}
+
+#[test]
 fn file_catalog_persists_and_reopens_without_remigrating() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("catalog.sqlite");

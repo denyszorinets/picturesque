@@ -7,4 +7,5 @@
 pub mod catalog;
 pub mod fs;
 pub mod geocode;
+pub mod images;
 pub mod metadata;

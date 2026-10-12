@@ -43,4 +43,5 @@ linkcheck_ignore = [
     # Local development servers mentioned in the docs.
     r"https?://(127\.0\.0\.1|localhost)(:\d+)?(/.*)?",
 ]
-linkcheck_timeout = 15
+linkcheck_timeout = 20
+linkcheck_retries = 3

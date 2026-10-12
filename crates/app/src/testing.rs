@@ -390,6 +390,20 @@ impl PhotoCatalog for MemoryCatalog {
         Ok(self.photos.lock().unwrap().len() as u64)
     }
 
+    fn all_photos(&self) -> Result<Vec<Photo>, CatalogError> {
+        Ok(self.photos.lock().unwrap().clone())
+    }
+
+    fn set_dimensions(&self, id: PhotoId, width: u32, height: u32) -> Result<(), CatalogError> {
+        let mut photos = self.photos.lock().unwrap();
+        let photo = photos
+            .iter_mut()
+            .find(|p| p.id == id)
+            .ok_or_else(|| CatalogError::Storage("no photo".into()))?;
+        photo.metadata.dimensions = Some((width, height));
+        Ok(())
+    }
+
     fn media_sizes(&self) -> Result<StdHashSet<u64>, CatalogError> {
         Ok(self
             .photos
@@ -549,6 +563,45 @@ impl EventSink for RecordedEvents {
     }
 }
 
+/// Decoder that writes a small marker file and records each call.
+#[derive(Default)]
+pub struct FakeDecoder {
+    pub calls: Mutex<Vec<(PathBuf, u32)>>,
+    /// Source size it reports, upright.
+    pub source_size: Option<(u32, u32)>,
+    pub fail: bool,
+    pub fs: std::sync::OnceLock<Arc<MemFs>>,
+}
+
+impl crate::ports::images::ImageDecoder for FakeDecoder {
+    fn render(
+        &self,
+        source: &Path,
+        _format: MediaFormat,
+        _orientation: picturesque_core::metadata::Orientation,
+        max_edge: u32,
+        dest: &Path,
+    ) -> Result<crate::ports::images::Rendered, String> {
+        self.calls
+            .lock()
+            .unwrap()
+            .push((source.to_path_buf(), max_edge));
+        if self.fail {
+            return Err("unsupported image".into());
+        }
+        let fs = self.fs.get().expect("fake decoder needs the test fs");
+        if !fs.exists(source) {
+            return Err("it does not exist".into());
+        }
+        fs.write(dest, format!("jpeg {max_edge}").as_bytes());
+        Ok(crate::ports::images::Rendered {
+            width: max_edge,
+            height: max_edge * 2 / 3,
+            source_size: self.source_size,
+        })
+    }
+}
+
 /// Everything a test needs, with handles to inspect afterwards.
 pub struct TestWorld {
     pub fs: Arc<MemFs>,
@@ -557,12 +610,20 @@ pub struct TestWorld {
     pub imports: Arc<MemoryImports>,
     pub metadata: Arc<FakeMetadata>,
     pub events: Arc<RecordedEvents>,
+    pub decoder: Arc<FakeDecoder>,
 }
 
 impl TestWorld {
     pub fn new(fs: MemFs, metadata: FakeMetadata) -> Self {
+        Self::with_decoder(fs, metadata, FakeDecoder::default())
+    }
+
+    pub fn with_decoder(fs: MemFs, metadata: FakeMetadata, decoder: FakeDecoder) -> Self {
+        let fs = Arc::new(fs);
+        let _ = decoder.fs.set(Arc::clone(&fs));
         Self {
-            fs: Arc::new(fs),
+            decoder: Arc::new(decoder),
+            fs,
             settings: Arc::default(),
             catalog: Arc::default(),
             imports: Arc::default(),
@@ -580,6 +641,8 @@ impl TestWorld {
             metadata: self.metadata.clone(),
             geocoder: Arc::new(FakeGeocoder),
             events: self.events.clone(),
+            decoder: self.decoder.clone(),
+            cache_dir: PathBuf::from("/cache"),
         }
     }
 }

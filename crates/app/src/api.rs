@@ -5,7 +5,8 @@
 //! so behaviour is defined once (ADR-0010).
 
 use std::fmt;
-use std::sync::Arc;
+use std::path::PathBuf;
+use std::sync::{Arc, OnceLock};
 
 use serde::Serialize;
 use serde::de::DeserializeOwned;
@@ -18,11 +19,14 @@ use crate::ports::catalog::PhotoCatalog;
 use crate::ports::events::EventSink;
 use crate::ports::fs::FileSystem;
 use crate::ports::geocoder::ReverseGeocoder;
+use crate::ports::images::ImageDecoder;
 use crate::ports::imports::ImportStore;
 use crate::ports::metadata::MetadataReader;
 use crate::ports::settings::SettingsStore;
 use crate::settings::{SettingsError, SettingsService, SettingsUpdate};
 use crate::templates::{self, PreviewTemplateArgs};
+use crate::thumbnails::{ImageSize, PrefillAfterImport, ThumbnailError, ThumbnailService};
+use picturesque_core::photo::PhotoId;
 
 /// Category of an API failure. Transports map it to their own error form
 /// (for example an HTTP status code).
@@ -75,6 +79,9 @@ pub struct AppContext {
     pub metadata: Arc<dyn MetadataReader>,
     pub geocoder: Arc<dyn ReverseGeocoder>,
     pub events: Arc<dyn EventSink>,
+    pub decoder: Arc<dyn ImageDecoder>,
+    /// Folder for cached thumbnails and previews.
+    pub cache_dir: PathBuf,
 }
 
 impl fmt::Debug for AppContext {
@@ -91,12 +98,25 @@ impl fmt::Debug for AppContext {
 pub struct Api {
     settings: SettingsService,
     imports: ImportService,
+    thumbnails: Arc<ThumbnailService>,
 }
 
 impl Api {
     /// Fails only if import runs left over from a previous session cannot
     /// be marked interrupted (the catalog is unusable).
     pub fn new(ctx: AppContext) -> Result<Self, ApiError> {
+        let thumbnails = Arc::new(ThumbnailService::new(
+            Arc::clone(&ctx.catalog),
+            Arc::clone(&ctx.settings_store),
+            Arc::clone(&ctx.fs),
+            ctx.decoder,
+            ctx.cache_dir,
+        ));
+        let events = Arc::new(PrefillAfterImport {
+            inner: ctx.events,
+            thumbnails: OnceLock::new(),
+        });
+        let _ = events.thumbnails.set(Arc::clone(&thumbnails));
         let imports = ImportService::new(Deps {
             settings: Arc::clone(&ctx.settings_store),
             catalog: ctx.catalog,
@@ -104,13 +124,35 @@ impl Api {
             fs: Arc::clone(&ctx.fs),
             metadata: ctx.metadata,
             geocoder: ctx.geocoder,
-            events: ctx.events,
+            events,
         })
         .map_err(import_error)?;
         Ok(Self {
             settings: SettingsService::new(ctx.settings_store, ctx.fs),
             imports,
+            thumbnails,
         })
+    }
+
+    /// Starts background work that should run while the app is open:
+    /// generating missing thumbnails. Called by entry points, not tests.
+    pub fn start_background_work(&self) {
+        self.thumbnails.prefill_in_background();
+    }
+
+    /// Path of a photo's cached image, generating it if needed. Images are
+    /// served as files by each transport rather than through JSON.
+    pub fn image_path(&self, photo_id: i64, size: ImageSize) -> Result<PathBuf, ApiError> {
+        self.thumbnails
+            .image(PhotoId(photo_id), size)
+            .map_err(|e| match e {
+                ThumbnailError::NotFound(_) | ThumbnailError::NoLibrary => {
+                    ApiError::new(ApiErrorCode::InvalidArguments, e.to_string())
+                }
+                ThumbnailError::Decode(_) | ThumbnailError::Storage(_) => {
+                    ApiError::internal(e.to_string())
+                }
+            })
     }
 
     /// Waits for a running import, if any (used on shutdown and in tests).

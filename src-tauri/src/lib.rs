@@ -11,6 +11,7 @@ use picturesque_app::ports::events::{AppEvent, EventSink};
 use picturesque_infra::catalog::SqliteCatalog;
 use picturesque_infra::fs::StdFileSystem;
 use picturesque_infra::geocode::GeoNamesGeocoder;
+use picturesque_infra::images::VipsDecoder;
 use picturesque_infra::metadata::ExifMetadataReader;
 use tauri::{AppHandle, Emitter, Manager};
 
@@ -43,7 +44,10 @@ pub fn run() {
                 metadata: Arc::new(ExifMetadataReader),
                 geocoder: Arc::new(GeoNamesGeocoder::default()),
                 events: Arc::new(TauriEvents(app.handle().clone())),
+                decoder: Arc::new(VipsDecoder),
+                cache_dir: app.path().app_cache_dir()?,
             })?;
+            api.start_background_work();
             app.manage(Arc::new(api));
             Ok(())
         })
