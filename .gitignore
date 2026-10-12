@@ -47,6 +47,6 @@ __pycache__/
 # Playwright MCP scratch output (page snapshots, screenshots)
 .playwright-mcp/
 
-# Documentation site (docs/ is a uv project, ADR-0022)
+# Documentation site (docs/ is a uv project, ADR-0001)
 docs/_build/
 docs/.venv/
