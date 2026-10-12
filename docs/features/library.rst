@@ -74,3 +74,16 @@ timeline.
 The fitted view uses a 2048-pixel preview. 100% zoom uses a full-size
 image, created the first time you zoom into a photo and then cached
 (:doc:`/reference/data-locations`).
+
+Culling
+-------
+
+Mark photos as **picks** or **rejects** and give them **star ratings**
+with the keyboard (:doc:`/reference/keyboard-shortcuts`): P, X and U for
+pick, reject and unflag, 1–5 for stars and 0 to clear. In the timeline the
+keys apply to every selected photo; in the loupe, to the photo shown.
+
+Decisions are saved immediately. **Undo** and **Redo** (above the
+timeline, or Ctrl+Z / Ctrl+Shift+Z) step back and forward through the
+last 200 changes; undoing restores each photo's previous flag and rating,
+even when a change covered photos that had different ones.

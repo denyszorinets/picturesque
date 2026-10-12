@@ -31,9 +31,8 @@ test("imports a folder into the library through the UI", async ({ page }) => {
   await page.getByTestId("library-root").fill(library);
   await page.getByTestId("path-template").fill("{year|Undated}/{name}");
   await expect(page.getByTestId("template-error")).toContainText(".{ext}");
-  await page
-    .getByTestId("path-template")
-    .fill("{year|Undated}/{date}/{name}.{ext}");
+  // A non-default template, so saving is a change whatever ran before.
+  await page.getByTestId("path-template").fill("{year}/{date}/{name}.{ext}");
   await expect(page.getByTestId("template-preview")).toContainText(
     "2026/2026-10-12/IMG_0042.CR3",
   );

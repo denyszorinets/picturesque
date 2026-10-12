@@ -118,3 +118,29 @@ export function rowTopOf(rows: Row[], index: number): number | null {
   }
   return null;
 }
+
+export type Direction = "left" | "right" | "up" | "down";
+
+/**
+ * The photo next to `index` in the laid-out timeline. Up and down go to the
+ * same column of the previous or next row of tiles (across day headers),
+ * or the last tile of a shorter row. Returns `index` at the edges.
+ */
+export function neighbour(
+  rows: Row[],
+  index: number,
+  direction: Direction,
+  total: number,
+): number {
+  if (direction === "left") return Math.max(0, index - 1);
+  if (direction === "right") return Math.min(total - 1, index + 1);
+  const tileRows = rows.filter(
+    (r): r is Extract<Row, { kind: "tiles" }> => r.kind === "tiles",
+  );
+  const at = tileRows.findIndex((r) => index >= r.start && index < r.end);
+  if (at === -1) return index;
+  const target = tileRows[direction === "up" ? at - 1 : at + 1];
+  if (!target) return index;
+  const column = index - tileRows[at]!.start;
+  return Math.min(target.start + column, target.end - 1);
+}

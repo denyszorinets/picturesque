@@ -1,5 +1,7 @@
 <script lang="ts">
   import * as api from "../api";
+  import { Culling } from "./culling.svelte";
+  import { neighbour, type Direction, type Layout } from "./layout";
   import Loupe from "./Loupe.svelte";
   import { Selection } from "./selection.svelte";
   import { LibraryStore } from "./store.svelte";
@@ -19,6 +21,78 @@
 
   /** Index of the photo open in the loupe. */
   let loupe = $state<number | null>(null);
+  let layout = $state<Layout>();
+  const culling = $derived(new Culling(api, store));
+
+  const FLAGS: Record<string, "pick" | "reject" | "unflagged"> = {
+    p: "pick",
+    x: "reject",
+    u: "unflagged",
+  };
+  const ARROWS: Record<string, Direction> = {
+    ArrowLeft: "left",
+    ArrowRight: "right",
+    ArrowUp: "up",
+    ArrowDown: "down",
+  };
+
+  /** The photos a culling key applies to: the loupe photo, else the selection. */
+  function targets(): number[] {
+    if (loupe !== null) return [loupe];
+    if (selection.size > 0) return [...selection.selected];
+    return selection.focus === null ? [] : [selection.focus];
+  }
+
+  /** Handles culling keys; returns whether the key was used. */
+  function cull(e: KeyboardEvent): boolean {
+    const mod = e.ctrlKey || e.metaKey;
+    const key = e.key.toLowerCase();
+    if (mod && key === "z") {
+      void (e.shiftKey ? culling.redo() : culling.undo());
+      return true;
+    }
+    if (mod && key === "y") {
+      void culling.redo();
+      return true;
+    }
+    if (mod || e.altKey) return false;
+    const flag = FLAGS[key];
+    if (flag) {
+      void culling.flag(targets(), flag);
+      return true;
+    }
+    if (/^[0-5]$/.test(e.key)) {
+      void culling.rate(targets(), Number(e.key));
+      return true;
+    }
+    return false;
+  }
+
+  /** Moves through the grid; returns whether the key was used. */
+  function navigate(e: KeyboardEvent): boolean {
+    const total = store.total;
+    if (total === 0) return false;
+    const from = selection.focus ?? -1;
+    const direction = ARROWS[e.key];
+    let to: number | null = null;
+    if (direction)
+      to =
+        from < 0
+          ? 0
+          : layout
+            ? neighbour(layout.rows, from, direction, total)
+            : from;
+    else if (e.key === "Home") to = 0;
+    else if (e.key === "End") to = total - 1;
+    else if (e.key === "Escape") {
+      selection.clear();
+      return true;
+    }
+    if (to === null) return false;
+    void store.ensureLoaded(to);
+    selection.moveTo(to, total, e.shiftKey);
+    return true;
+  }
 
   function open(index: number) {
     selection.click(index);
@@ -26,12 +100,27 @@
   }
 
   function onkeydown(e: KeyboardEvent) {
-    if (loupe !== null || e.target instanceof HTMLInputElement) return;
-    if (e.key === "Enter" && selection.focus !== null) {
-      e.preventDefault();
-      open(selection.focus);
+    const target = e.target as HTMLElement | null;
+    if (
+      e.defaultPrevented ||
+      target?.closest("input, select, textarea, [contenteditable]")
+    )
+      return;
+    // The library is hidden while the Import tab is shown.
+    if (!section?.offsetParent) return;
+    let used = cull(e);
+    if (!used && loupe === null) {
+      if (e.key === "Enter" && selection.focus !== null) {
+        open(selection.focus);
+        used = true;
+      } else {
+        used = navigate(e);
+      }
     }
+    if (used) e.preventDefault();
   }
+
+  let section: HTMLElement | undefined = $state();
 
   $effect(() => {
     void store.load();
@@ -45,7 +134,7 @@
 
 <svelte:window {onkeydown} />
 
-<section class="library" aria-label="Library">
+<section class="library" aria-label="Library" bind:this={section}>
   {#if store.error}
     <p class="error-text" role="alert">{store.error}</p>
   {:else if store.facets && store.total === 0}
@@ -63,9 +152,30 @@
           >{selection.size} selected</span
         >
       {/if}
+      <span class="spacer"></span>
+      {#if culling.error}
+        <span class="error-text" role="alert">{culling.error}</span>
+      {/if}
+      <button
+        class="small"
+        onclick={() => culling.undo()}
+        disabled={!culling.canUndo}
+        title="Undo (Ctrl+Z)">Undo</button
+      >
+      <button
+        class="small"
+        onclick={() => culling.redo()}
+        disabled={!culling.canRedo}
+        title="Redo (Ctrl+Shift+Z)">Redo</button
+      >
     </div>
     <div class="grid">
-      <Timeline {store} {selection} onopen={open} />
+      <Timeline
+        {store}
+        {selection}
+        onopen={open}
+        onlayout={(l) => (layout = l)}
+      />
     </div>
     {#if loupe !== null}
       <Loupe
@@ -91,9 +201,19 @@
 
   .bar {
     display: flex;
+    align-items: center;
     gap: 1rem;
     padding-bottom: 0.4rem;
     font-size: 0.9rem;
+  }
+
+  .spacer {
+    flex: 1;
+  }
+
+  .small {
+    padding: 0.2rem 0.6rem;
+    font-size: 0.85rem;
   }
 
   .grid {
