@@ -17,3 +17,4 @@ reused; superseded decisions stay in place and link to their replacement.
    0008-non-destructive-verified-import
    0009-xmp-sidecars-for-culling-decisions
    0010-dual-transport-tauri-ipc-and-dev-http
+   0011-resumable-background-analysis

@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use chrono::{FixedOffset, NaiveDate};
-use picturesque_app::ports::catalog::{CatalogError, PhotoCatalog};
+use picturesque_app::ports::catalog::{AnalyzerId, CatalogError, PhotoCatalog};
 use picturesque_core::hash::ContentHash;
 use picturesque_core::media::MediaFormat;
 use picturesque_core::metadata::{
@@ -9,6 +9,7 @@ use picturesque_core::metadata::{
 };
 use picturesque_core::photo::{Asset, NewPhoto, PhotoAssets, PhotoId};
 use picturesque_infra::catalog::{SCHEMA_VERSION, SqliteCatalog};
+use serde_json::json;
 
 fn hash(n: u8) -> ContentHash {
     ContentHash::from_bytes([n; 32])
@@ -299,4 +300,102 @@ mod settings {
 
         assert_eq!(catalog.load_settings().unwrap(), changed);
     }
+}
+
+const SHARPNESS: AnalyzerId = AnalyzerId {
+    name: "sharpness",
+    version: 1,
+};
+const HASH: AnalyzerId = AnalyzerId {
+    name: "phash",
+    version: 2,
+};
+
+#[test]
+fn tracks_pending_analysis_per_analyzer_and_version() {
+    let catalog = SqliteCatalog::open_in_memory().unwrap();
+    let undated = catalog
+        .insert_photo(&photo(CaptureMetadata::default(), vec![asset("u.jpg", 1)]))
+        .unwrap();
+    let dated = catalog
+        .insert_photo(&photo(full_metadata(), vec![asset("d.jpg", 2)]))
+        .unwrap();
+    let both = [SHARPNESS, HASH];
+
+    assert_eq!(
+        catalog.pending_analysis(&both, 10).unwrap(),
+        [dated, undated]
+    );
+    assert_eq!(catalog.pending_analysis(&both, 1).unwrap(), [dated]);
+    assert_eq!(catalog.analysis_progress(&both).unwrap(), (2, 2));
+
+    catalog
+        .store_analysis(dated, SHARPNESS, &json!({ "score": 0.5 }))
+        .unwrap();
+    assert_eq!(catalog.analyzed(dated, &both).unwrap(), [SHARPNESS]);
+    assert_eq!(
+        catalog.pending_analysis(&both, 10).unwrap(),
+        [dated, undated]
+    );
+    assert_eq!(
+        catalog.pending_analysis(&[SHARPNESS], 10).unwrap(),
+        [undated]
+    );
+
+    catalog
+        .store_analysis(dated, HASH, &json!({ "hash": "ab" }))
+        .unwrap();
+    assert_eq!(catalog.pending_analysis(&both, 10).unwrap(), [undated]);
+    assert_eq!(catalog.analysis_progress(&both).unwrap(), (1, 2));
+
+    // A new analyzer version makes the old result stale.
+    let newer = AnalyzerId {
+        name: "sharpness",
+        version: 2,
+    };
+    assert_eq!(catalog.analyzed(dated, &[newer, HASH]).unwrap(), [HASH]);
+    assert_eq!(
+        catalog.pending_analysis(&[newer, HASH], 10).unwrap(),
+        [dated, undated]
+    );
+    assert!(catalog.pending_analysis(&[], 10).unwrap().is_empty());
+}
+
+#[test]
+fn stores_and_replaces_analysis_results() {
+    let catalog = SqliteCatalog::open_in_memory().unwrap();
+    let id = catalog
+        .insert_photo(&photo(full_metadata(), vec![asset("d.jpg", 2)]))
+        .unwrap();
+
+    catalog
+        .store_analysis(id, SHARPNESS, &json!({ "score": 0.5 }))
+        .unwrap();
+    catalog
+        .store_analysis(id, HASH, &json!({ "hash": "ab" }))
+        .unwrap();
+    catalog
+        .store_analysis(
+            id,
+            AnalyzerId {
+                name: "sharpness",
+                version: 3,
+            },
+            &json!({ "score": 0.9 }),
+        )
+        .unwrap();
+
+    assert_eq!(
+        catalog.analysis(id).unwrap(),
+        [
+            ("phash".to_owned(), 2, json!({ "hash": "ab" })),
+            ("sharpness".to_owned(), 3, json!({ "score": 0.9 })),
+        ]
+    );
+    assert!(
+        catalog
+            .store_analysis(PhotoId(999), HASH, &json!({}))
+            .is_err(),
+        "results need a photo"
+    );
 }

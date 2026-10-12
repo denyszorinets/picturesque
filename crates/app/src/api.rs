@@ -13,6 +13,7 @@ use serde::de::DeserializeOwned;
 use serde_json::Value;
 use ts_rs::TS;
 
+use crate::analysis::{AnalysisService, Analyzer, PrioritizeArgs};
 use crate::import::{Deps, ImportError, ImportService, PlanImportArgs, RunArgs};
 use crate::info;
 use crate::library::{
@@ -25,6 +26,7 @@ use crate::ports::geocoder::ReverseGeocoder;
 use crate::ports::images::ImageDecoder;
 use crate::ports::imports::ImportStore;
 use crate::ports::metadata::MetadataReader;
+use crate::ports::pixels::PixelLoader;
 use crate::ports::settings::SettingsStore;
 use crate::ports::sidecars::SidecarStore;
 use crate::settings::{SettingsError, SettingsService, SettingsUpdate};
@@ -90,6 +92,9 @@ pub struct AppContext {
     /// Folder for cached thumbnails and previews.
     pub cache_dir: PathBuf,
     pub sidecars: Arc<dyn SidecarStore>,
+    pub pixels: Arc<dyn PixelLoader>,
+    /// Analyses run in the background over every photo.
+    pub analyzers: Vec<Arc<dyn Analyzer>>,
 }
 
 impl fmt::Debug for AppContext {
@@ -108,6 +113,7 @@ pub struct Api {
     thumbnails: Arc<ThumbnailService>,
     catalog: Arc<dyn PhotoCatalog>,
     sidecars: Arc<SidecarService>,
+    analysis: Arc<AnalysisService>,
 }
 
 impl fmt::Debug for Api {
@@ -130,8 +136,17 @@ impl Api {
         let events = Arc::new(PrefillAfterImport {
             inner: ctx.events,
             thumbnails: OnceLock::new(),
+            analysis: OnceLock::new(),
         });
         let _ = events.thumbnails.set(Arc::clone(&thumbnails));
+        let analysis = Arc::new(AnalysisService::new(
+            Arc::clone(&ctx.catalog),
+            Arc::clone(&thumbnails),
+            ctx.pixels,
+            ctx.analyzers,
+            Arc::clone(&events) as Arc<dyn EventSink>,
+        ));
+        let _ = events.analysis.set(Arc::clone(&analysis));
         let catalog = Arc::clone(&ctx.catalog);
         let sidecars = Arc::new(SidecarService::new(
             Arc::clone(&ctx.catalog),
@@ -155,14 +170,22 @@ impl Api {
             thumbnails,
             catalog,
             sidecars,
+            analysis,
         })
     }
 
     /// Starts background work that should run while the app is open:
-    /// generating missing thumbnails. Called by entry points, not tests.
+    /// generating missing thumbnails, writing sidecars and analyzing
+    /// photos. Called by entry points, not tests.
     pub fn start_background_work(&self) {
         self.thumbnails.prefill_in_background();
         self.sidecars.start();
+        self.analysis.start(analysis_workers());
+    }
+
+    /// Runs all pending analysis on the calling thread (tests and tools).
+    pub fn run_analysis(&self) -> usize {
+        self.analysis.run_until_idle()
     }
 
     /// Writes pending XMP sidecars now (tests and shutdown).
@@ -328,6 +351,16 @@ impl Api {
                         .map_err(catalog_error)?,
                 )
             }
+            "analysis_status" => {
+                no_args(command, &args)?;
+                respond(self.analysis.status())
+            }
+            "prioritize_analysis" => {
+                let PrioritizeArgs { photo_ids } = parse_args(command, args)?;
+                let ids: Vec<PhotoId> = photo_ids.into_iter().map(PhotoId).collect();
+                self.analysis.prioritize(&ids);
+                respond(self.analysis.status())
+            }
             "plan_import" => {
                 let args: PlanImportArgs = parse_args(command, args)?;
                 let run_id = self.imports.plan(args.sources).map_err(import_error)?;
@@ -357,6 +390,11 @@ impl Api {
             )),
         }
     }
+}
+
+/// Half the cores (at least one), leaving the rest for the UI and imports.
+fn analysis_workers() -> usize {
+    std::thread::available_parallelism().map_or(1, |n| (n.get() / 2).max(1))
 }
 
 fn catalog_error(e: crate::ports::catalog::CatalogError) -> ApiError {

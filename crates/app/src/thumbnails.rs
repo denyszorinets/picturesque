@@ -259,10 +259,12 @@ impl ThumbnailService {
     }
 }
 
-/// Forwards events and starts a thumbnail prefill when an import completes.
+/// Forwards events; when an import completes, starts a thumbnail prefill
+/// and wakes the analysis workers.
 pub struct PrefillAfterImport {
     pub inner: Arc<dyn EventSink>,
     pub thumbnails: std::sync::OnceLock<Arc<ThumbnailService>>,
+    pub analysis: std::sync::OnceLock<Arc<crate::analysis::AnalysisService>>,
 }
 
 impl std::fmt::Debug for PrefillAfterImport {
@@ -274,11 +276,16 @@ impl std::fmt::Debug for PrefillAfterImport {
 impl EventSink for PrefillAfterImport {
     fn emit(&self, event: &AppEvent) {
         self.inner.emit(event);
-        let AppEvent::ImportProgress(status) = event;
-        if status.state == ImportState::Completed
-            && let Some(thumbnails) = self.thumbnails.get()
-        {
-            thumbnails.prefill_in_background();
+        let AppEvent::ImportProgress(status) = event else {
+            return;
+        };
+        if status.state == ImportState::Completed {
+            if let Some(thumbnails) = self.thumbnails.get() {
+                thumbnails.prefill_in_background();
+            }
+            if let Some(analysis) = self.analysis.get() {
+                analysis.wake();
+            }
         }
     }
 }

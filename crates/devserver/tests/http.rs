@@ -32,6 +32,8 @@ fn api_with(catalog: Arc<SqliteCatalog>, cache_dir: std::path::PathBuf) -> Arc<A
             events: Arc::new(EventBus::default()),
             decoder: Arc::new(VipsDecoder),
             sidecars: Arc::new(picturesque_infra::xmp::XmpSidecars),
+            pixels: Arc::new(picturesque_infra::images::VipsPixels),
+            analyzers: Vec::new(),
             cache_dir,
         })
         .expect("api"),

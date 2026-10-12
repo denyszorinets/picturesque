@@ -261,7 +261,13 @@ fn reports_progress_and_completion_as_events() {
     h.run(plan.run_id);
 
     let events = h.world.events.0.lock().unwrap();
-    let statuses: Vec<&ImportStatus> = events.iter().map(|AppEvent::ImportProgress(s)| s).collect();
+    let statuses: Vec<&ImportStatus> = events
+        .iter()
+        .filter_map(|e| match e {
+            AppEvent::ImportProgress(s) => Some(s),
+            AppEvent::AnalysisProgress(_) => None,
+        })
+        .collect();
     assert!(statuses.iter().any(|s| s.state == ImportState::Planning));
     assert!(
         statuses

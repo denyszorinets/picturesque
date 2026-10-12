@@ -5,6 +5,7 @@
 
 #![forbid(unsafe_code)]
 
+pub mod analysis;
 pub mod api;
 pub mod import;
 pub mod info;

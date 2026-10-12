@@ -1,5 +1,6 @@
 <script lang="ts">
   import * as api from "../api";
+  import { AnalysisProgress } from "./analysis.svelte";
   import { Culling } from "./culling.svelte";
   import FilterPanel from "./FilterPanel.svelte";
   import { Filters } from "./filters.svelte";
@@ -22,6 +23,7 @@
   }: Props = $props();
 
   const filters = new Filters();
+  const analysis = new AnalysisProgress(api);
   let showFilters = $state(true);
 
   // Reload whenever the filters change; indices change, so selection resets.
@@ -144,11 +146,17 @@
 
   $effect(() => {
     void store.setFilter(filters.toQuery());
+    void analysis.load();
     // New photos appear when an import completes.
-    return api.onAppEvent((event) => {
+    const unsubscribe = api.onAppEvent((event) => {
       if (event.type === "import_progress" && event.state === "completed")
         void store.load();
+      analysis.handle(event);
     });
+    return () => {
+      unsubscribe();
+      analysis.dispose();
+    };
   });
 </script>
 
@@ -197,6 +205,14 @@
         >
       {/if}
       <span class="spacer"></span>
+      {#if analysis.status && analysis.remaining > 0}
+        <span
+          class="muted"
+          data-testid="analysis-progress"
+          title="Scoring photos in the background; photos on screen go first"
+          >Analyzing {analysis.status.analyzed} / {analysis.status.total}</span
+        >
+      {/if}
       {#if culling.error}
         <span class="error-text" role="alert">{culling.error}</span>
       {/if}
@@ -230,6 +246,7 @@
             {selection}
             onopen={open}
             onlayout={(l) => (layout = l)}
+            onvisible={(ids) => analysis.visible(ids)}
           />
         {/if}
       </div>

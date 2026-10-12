@@ -76,6 +76,16 @@ Commands
    ``places``, ``flags``, ``ratings`` (counts for 0–5 stars), plus
    ``total``, ``first_day`` and ``last_day``.
 
+``analysis_status``
+   No arguments. ``{ "analyzed": 120, "total": 300, "running": true }``:
+   photos with every analysis done, all photos, and whether workers are
+   busy (:doc:`/architecture/decisions/0011-resumable-background-analysis`).
+
+``prioritize_analysis``
+   ``{ "photo_ids": [7, 8, 9] }``. Analyzes these photos next; the library
+   sends the photos on screen. Unknown or finished photos are ignored.
+   Returns the ``analysis_status``.
+
 ``plan_import``
    ``{ "sources": ["/absolute/folder", ...] }``. Starts planning in the
    background and returns the run's ``ImportStatus`` (state
@@ -158,6 +168,9 @@ events from ``GET /api/events``.
 ``import_progress``
    An ``ImportStatus``. Sent when a phase starts, about every percent of
    progress, and when a run ends (with its summary).
+
+``analysis_progress``
+   The ``analysis_status``, sent after each analyzed photo.
 
    .. code-block:: json
 

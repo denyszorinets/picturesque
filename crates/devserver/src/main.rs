@@ -59,6 +59,8 @@ async fn serve() -> Result<(), String> {
         events: Arc::new(events.clone()),
         decoder: Arc::new(VipsDecoder),
         sidecars: Arc::new(picturesque_infra::xmp::XmpSidecars),
+        pixels: Arc::new(picturesque_infra::images::VipsPixels),
+        analyzers: Vec::new(),
         cache_dir: data_dir.join("cache"),
     })
     .map_err(|e| e.message)?;

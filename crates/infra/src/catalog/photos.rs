@@ -4,7 +4,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Component, Path, PathBuf};
 
 use chrono::{FixedOffset, NaiveDateTime};
-use picturesque_app::ports::catalog::{CatalogError, PhotoCatalog};
+use picturesque_app::ports::catalog::{AnalyzerId, CatalogError, PhotoCatalog};
 use picturesque_core::hash::ContentHash;
 use picturesque_core::media::MediaFormat;
 use picturesque_core::metadata::{
@@ -261,6 +261,39 @@ impl PhotoCatalog for SqliteCatalog {
             .collect::<Result<HashSet<_>, _>>()
             .map_err(storage)?;
         Ok(sizes)
+    }
+
+    fn pending_analysis(
+        &self,
+        analyzers: &[AnalyzerId],
+        limit: usize,
+    ) -> Result<Vec<PhotoId>, CatalogError> {
+        self.load_pending_analysis(analyzers, limit)
+    }
+
+    fn analysis_progress(&self, analyzers: &[AnalyzerId]) -> Result<(usize, usize), CatalogError> {
+        self.count_analysis(analyzers)
+    }
+
+    fn analyzed(
+        &self,
+        id: PhotoId,
+        analyzers: &[AnalyzerId],
+    ) -> Result<Vec<AnalyzerId>, CatalogError> {
+        self.current_analyzers(id, analyzers)
+    }
+
+    fn store_analysis(
+        &self,
+        id: PhotoId,
+        analyzer: AnalyzerId,
+        result: &serde_json::Value,
+    ) -> Result<(), CatalogError> {
+        self.save_analysis(id, analyzer, result)
+    }
+
+    fn analysis(&self, id: PhotoId) -> Result<Vec<(String, u32, serde_json::Value)>, CatalogError> {
+        self.load_analysis(id)
     }
 
     fn photo_count(&self) -> Result<u64, CatalogError> {

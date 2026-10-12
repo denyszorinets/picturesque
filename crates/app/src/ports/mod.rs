@@ -8,5 +8,6 @@ pub mod geocoder;
 pub mod images;
 pub mod imports;
 pub mod metadata;
+pub mod pixels;
 pub mod settings;
 pub mod sidecars;
