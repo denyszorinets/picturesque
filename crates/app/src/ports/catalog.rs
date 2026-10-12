@@ -3,8 +3,11 @@
 use std::collections::HashSet;
 use std::fmt;
 
+use picturesque_core::decision::Decision;
 use picturesque_core::hash::ContentHash;
 use picturesque_core::photo::{NewPhoto, Photo, PhotoId};
+
+use crate::library::{PhotoFacets, PhotoPage, PhotoQuery};
 
 /// Failure of a catalog operation.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -45,6 +48,17 @@ pub trait PhotoCatalog: Send + Sync {
     /// Records a photo's stored pixel dimensions (before orientation), for
     /// formats whose size is only known after decoding.
     fn set_dimensions(&self, id: PhotoId, width: u32, height: u32) -> Result<(), CatalogError>;
+
+    /// A page of photos matching `query` (already validated).
+    fn query(&self, query: &PhotoQuery) -> Result<PhotoPage, CatalogError>;
+
+    /// Values present in the library, for filters.
+    fn facets(&self) -> Result<PhotoFacets, CatalogError>;
+
+    /// A photo's decision; the default when none was made.
+    fn decision(&self, id: PhotoId) -> Result<Decision, CatalogError>;
+
+    fn set_decision(&self, id: PhotoId, decision: Decision) -> Result<(), CatalogError>;
 
     /// Sizes of all catalogued RAW and image files. A new file can only be
     /// a duplicate if its size is in this set, so only those are hashed.

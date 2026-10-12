@@ -184,6 +184,29 @@ impl PhotoCatalog for SqliteCatalog {
         Ok(photos)
     }
 
+    fn query(
+        &self,
+        query: &picturesque_app::library::PhotoQuery,
+    ) -> Result<picturesque_app::library::PhotoPage, CatalogError> {
+        self.query_photos(query)
+    }
+
+    fn facets(&self) -> Result<picturesque_app::library::PhotoFacets, CatalogError> {
+        self.photo_facets()
+    }
+
+    fn decision(&self, id: PhotoId) -> Result<picturesque_core::decision::Decision, CatalogError> {
+        self.load_decision(id)
+    }
+
+    fn set_decision(
+        &self,
+        id: PhotoId,
+        decision: picturesque_core::decision::Decision,
+    ) -> Result<(), CatalogError> {
+        self.store_decision(id, decision)
+    }
+
     fn set_dimensions(&self, id: PhotoId, width: u32, height: u32) -> Result<(), CatalogError> {
         self.conn()
             .execute(

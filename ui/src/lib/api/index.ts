@@ -2,6 +2,9 @@ import type { AppEvent } from "./generated/AppEvent";
 import type { AppInfo } from "./generated/AppInfo";
 import type { ImportPlanView } from "./generated/ImportPlanView";
 import type { ImportStatus } from "./generated/ImportStatus";
+import type { PhotoFacets } from "./generated/PhotoFacets";
+import type { PhotoPage } from "./generated/PhotoPage";
+import type { PhotoQuery } from "./generated/PhotoQuery";
 import type { Settings } from "./generated/Settings";
 import type { SettingsUpdate } from "./generated/SettingsUpdate";
 import type { TemplatePresetView } from "./generated/TemplatePresetView";
@@ -13,6 +16,12 @@ export type { AppEvent } from "./generated/AppEvent";
 export type { AppInfo } from "./generated/AppInfo";
 export type { ImportPlanView } from "./generated/ImportPlanView";
 export type { ImportStatus } from "./generated/ImportStatus";
+export type { PhotoFacets } from "./generated/PhotoFacets";
+export type { PhotoPage } from "./generated/PhotoPage";
+export type { PhotoQuery } from "./generated/PhotoQuery";
+export type { PhotoSummary } from "./generated/PhotoSummary";
+export type { PhotoSort } from "./generated/PhotoSort";
+export type { CameraKey } from "./generated/CameraKey";
 export type { Settings } from "./generated/Settings";
 export type { SettingsUpdate } from "./generated/SettingsUpdate";
 export type { TemplatePresetView } from "./generated/TemplatePresetView";
@@ -83,4 +92,14 @@ export function onAppEvent(handler: (event: AppEvent) => void): () => void {
 /** URL of a photo's cached image (`grid`: 512 px, `preview`: 2048 px). */
 export function imageUrl(photoId: number, size: ImageSize): string {
   return transport.imageUrl(photoId, size);
+}
+
+/** A page of photos matching the filters (default: newest first, 200 per page). */
+export function queryPhotos(query: PhotoQuery = {}): Promise<PhotoPage> {
+  return transport.call<PhotoPage>("query_photos", query);
+}
+
+/** Values present in the library, for building filters. */
+export function photoFacets(): Promise<PhotoFacets> {
+  return transport.call<PhotoFacets>("photo_facets");
 }

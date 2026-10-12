@@ -334,6 +334,7 @@ use crate::settings::tests::MemorySettings;
 #[derive(Default)]
 pub struct MemoryCatalog {
     pub photos: Mutex<Vec<Photo>>,
+    pub decisions: Mutex<HashMap<PhotoId, picturesque_core::decision::Decision>>,
 }
 
 impl PhotoCatalog for MemoryCatalog {
@@ -401,6 +402,40 @@ impl PhotoCatalog for MemoryCatalog {
             .find(|p| p.id == id)
             .ok_or_else(|| CatalogError::Storage("no photo".into()))?;
         photo.metadata.dimensions = Some((width, height));
+        Ok(())
+    }
+
+    fn query(
+        &self,
+        _query: &crate::library::PhotoQuery,
+    ) -> Result<crate::library::PhotoPage, CatalogError> {
+        Err(CatalogError::Storage(
+            "queries are tested against SQLite".into(),
+        ))
+    }
+
+    fn facets(&self) -> Result<crate::library::PhotoFacets, CatalogError> {
+        Err(CatalogError::Storage(
+            "facets are tested against SQLite".into(),
+        ))
+    }
+
+    fn decision(&self, id: PhotoId) -> Result<picturesque_core::decision::Decision, CatalogError> {
+        Ok(self
+            .decisions
+            .lock()
+            .unwrap()
+            .get(&id)
+            .copied()
+            .unwrap_or_default())
+    }
+
+    fn set_decision(
+        &self,
+        id: PhotoId,
+        decision: picturesque_core::decision::Decision,
+    ) -> Result<(), CatalogError> {
+        self.decisions.lock().unwrap().insert(id, decision);
         Ok(())
     }
 

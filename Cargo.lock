@@ -2952,6 +2952,7 @@ dependencies = [
  "rusqlite",
  "serde_json",
  "tempfile",
+ "ts-rs",
 ]
 
 [[package]]

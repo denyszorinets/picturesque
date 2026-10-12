@@ -30,6 +30,34 @@ Commands
    three sample photos (RAW+JPEG with a place, a phone photo without
    location, an undated scan).
 
+``query_photos``
+   A ``PhotoQuery``; every field is optional and filters combine:
+
+   .. code-block:: json
+
+      { "from": "2026-10-01", "to": "2026-10-31", "country_code": "PT",
+        "city": "Lisbon", "camera": { "make": "Canon", "model": "Canon EOS R5" },
+        "lens": "RF50mm F1.2 L USM", "flags": ["pick", "unflagged"],
+        "min_rating": 3, "sort": "captured_desc", "limit": 200, "cursor": null }
+
+   ``sort`` is ``captured_desc`` (default), ``captured_asc`` or
+   ``imported_desc``; photos without a capture date always come last.
+   Returns ``{ "photos": [PhotoSummary], "next_cursor": "...", "total": 1234 }``.
+   Pass ``next_cursor`` back as ``cursor`` for the next page; it is
+   ``null`` on the last page. Paging is keyset-based, so later pages are as
+   fast as the first. ``limit`` is 1–1000.
+
+   A ``PhotoSummary`` has ``id``, ``captured_at``, ``day``
+   (``YYYY-MM-DD``, for grouping), ``camera``, ``lens``, ``city``,
+   ``country``, ``flag``, ``rating``, displayed ``width``/``height``,
+   ``has_raw`` and ``file_name``.
+
+``photo_facets``
+   No arguments. The values present in the library with photo counts:
+   ``days`` (newest first), ``cameras`` (with display labels), ``lenses``,
+   ``places``, ``flags``, ``ratings`` (counts for 0–5 stars), plus
+   ``total``, ``first_day`` and ``last_day``.
+
 ``plan_import``
    ``{ "sources": ["/absolute/folder", ...] }``. Starts planning in the
    background and returns the run's ``ImportStatus`` (state
