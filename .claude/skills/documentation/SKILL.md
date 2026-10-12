@@ -23,7 +23,7 @@ implement the feature.
 
 Project documentation is a **Sphinx** site written in **reStructuredText**
 (`.rst`), published to GitHub Pages
-([ADR-0022](../../../docs/architecture/decisions/0022-sphinx-and-restructuredtext-for-project-documentation.rst)).
+([ADR-0001](../../../docs/architecture/decisions/0001-sphinx-and-restructuredtext-for-project-documentation.rst)).
 
 - `docs/` is the Sphinx source root **and** a self-contained Python project
   (`docs/pyproject.toml`, `docs/uv.lock`, `docs/conf.py`), managed with `uv`.
@@ -54,7 +54,7 @@ it on every pull request.
     ├── index.rst              # landing page, top-level toctrees
     ├── conf.py, pyproject.toml, uv.lock, Makefile
     ├── getting-started/       # first run, first config
-    ├── concepts/              # how the gateway thinks: planes, policies, rules
+    ├── concepts/              # how Picturesque thinks: photos, series, scores
     ├── use-cases/             # task-driven tutorials
     ├── how-to/                # focused operational recipes
     ├── reference/             # configuration, APIs, CLI — exhaustive and exact
