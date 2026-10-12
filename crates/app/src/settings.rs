@@ -126,10 +126,10 @@ impl SettingsService {
 
 #[cfg(test)]
 pub(crate) mod tests {
-    use std::path::Path;
     use std::sync::Mutex;
 
     use super::*;
+    use crate::testing::MemFs;
 
     /// Settings kept in memory.
     #[derive(Default)]
@@ -146,26 +146,6 @@ pub(crate) mod tests {
         }
     }
 
-    /// Treats only the listed directories as writable.
-    #[derive(Default)]
-    pub struct FakeFs {
-        pub writable: Vec<PathBuf>,
-    }
-
-    impl FileSystem for FakeFs {
-        fn probe_writable_dir(&self, path: &Path) -> Result<(), String> {
-            if self.writable.iter().any(|w| w == path) {
-                Ok(())
-            } else {
-                Err("it does not exist".into())
-            }
-        }
-
-        fn list_dir(&self, _: &Path) -> Result<Vec<crate::ports::fs::DirEntry>, String> {
-            Err("it does not exist".into())
-        }
-    }
-
     fn abs(p: &str) -> PathBuf {
         if cfg!(windows) {
             PathBuf::from(format!("C:\\{p}"))
@@ -176,10 +156,10 @@ pub(crate) mod tests {
 
     fn service(writable: &[&str]) -> (SettingsService, Arc<MemorySettings>) {
         let store = Arc::new(MemorySettings::default());
-        let fs = Arc::new(FakeFs {
-            writable: writable.iter().map(|p| abs(p)).collect(),
-        });
-        (SettingsService::new(store.clone(), fs), store)
+        let fs = writable
+            .iter()
+            .fold(MemFs::new(), |fs, p| fs.dir(abs(p).to_str().unwrap()));
+        (SettingsService::new(store.clone(), Arc::new(fs)), store)
     }
 
     #[test]
@@ -235,6 +215,27 @@ pub(crate) mod tests {
 
         assert!(
             matches!(&err, SettingsError::Invalid(m) if m.contains("does not exist")),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn rejects_a_read_only_library_root() {
+        let store = Arc::new(MemorySettings::default());
+        let fs = MemFs::new()
+            .dir(abs("ro").to_str().unwrap())
+            .read_only(abs("ro").to_str().unwrap());
+        let service = SettingsService::new(store, Arc::new(fs));
+
+        let err = service
+            .update(SettingsUpdate {
+                library_root: Some(abs("ro")),
+                ..Default::default()
+            })
+            .unwrap_err();
+
+        assert!(
+            matches!(&err, SettingsError::Invalid(m) if m.contains("not writable")),
             "{err}"
         );
     }

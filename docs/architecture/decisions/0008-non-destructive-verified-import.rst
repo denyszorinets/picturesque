@@ -112,6 +112,25 @@ Validation
 :issue:`19` tests interruption and resume, corrupted copies and duplicate
 handling.
 
+Findings (2026-10-12), from implementing :issue:`19`:
+
+- Hashing every source while planning would read every file three times
+  (plan, copy, verify). Instead, planning hashes only files whose size
+  matches another file (the only possible duplicates); copying hashes the
+  bytes as it streams them and then re-reads the temporary copy. A source
+  that changes after planning is detected by its size and modification
+  time, and by its hash when one was taken.
+- A photo is imported all-or-nothing: if any of its files fails, copies
+  already made for it are removed, so a RAW is never left without its
+  JPEG.
+- The no-overwrite rename uses a hard link (fails atomically if the target
+  exists), falling back to check-then-rename on file systems without hard
+  links, such as exFAT on external drives.
+- Tests inject corrupted copies, failing reads, sources changing before and
+  during a copy, files left by an interrupted attempt, and occupied
+  targets; deliberately removing the rollback or the verification makes
+  them fail.
+
 References
 ----------
 

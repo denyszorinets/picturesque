@@ -61,6 +61,11 @@ The server mirrors the Tauri command API exactly:
       * - ``internal``
         - 500
 
+``GET /api/events``
+   Server-sent events: each backend event (for example import progress) is
+   one ``data:`` line holding a JSON object with a ``type`` field. In the
+   desktop app the same objects arrive as the Tauri event ``app-event``.
+
 For example:
 
 .. code-block:: console

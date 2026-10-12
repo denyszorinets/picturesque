@@ -6,7 +6,11 @@
 #![forbid(unsafe_code)]
 
 pub mod api;
+pub mod import;
 pub mod info;
 pub mod ports;
 pub mod scan;
 pub mod settings;
+
+#[cfg(test)]
+mod testing;

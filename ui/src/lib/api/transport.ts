@@ -1,12 +1,19 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { ApiError } from "./error";
+import type { AppEvent } from "./generated/AppEvent";
 
-/** Delivers a named command with JSON arguments to the backend (ADR-0010). */
+/** Delivers named commands to the backend and backend events to the UI (ADR-0010). */
 export interface Transport {
   call<T>(command: string, args?: unknown): Promise<T>;
+  /** Calls `handler` for every backend event; returns a function that stops listening. */
+  subscribe(handler: (event: AppEvent) => void): () => void;
 }
 
-/** Inside the desktop app: the single `api` Tauri command. */
+/** Name of the Tauri event carrying backend events (see src-tauri/src/lib.rs). */
+export const TAURI_EVENT = "app-event";
+
+/** Inside the desktop app: the single `api` Tauri command and the `app-event` event. */
 export const tauriTransport: Transport = {
   async call<T>(command: string, args?: unknown): Promise<T> {
     try {
@@ -15,12 +22,30 @@ export const tauriTransport: Transport = {
       throw ApiError.from(e);
     }
   },
+  subscribe(handler) {
+    let stop: (() => void) | undefined;
+    let stopped = false;
+    void listen<AppEvent>(TAURI_EVENT, (e) => handler(e.payload)).then(
+      (unlisten) => {
+        if (stopped) unlisten();
+        else stop = unlisten;
+      },
+    );
+    return () => {
+      stopped = true;
+      stop?.();
+    };
+  },
 };
 
-/** In a browser: `POST /api/commands/{command}` on the development server. */
+/**
+ * In a browser: `POST /api/commands/{command}` and server-sent events from
+ * `/api/events` on the development server.
+ */
 export function httpTransport(
   fetchFn: typeof fetch = fetch,
   baseUrl = "",
+  eventSource: (url: string) => EventSource = (url) => new EventSource(url),
 ): Transport {
   return {
     async call<T>(command: string, args?: unknown): Promise<T> {
@@ -48,6 +73,17 @@ export function httpTransport(
           : ApiError.from(body);
       }
       return body as T;
+    },
+    subscribe(handler) {
+      const source = eventSource(`${baseUrl}/api/events`);
+      source.onmessage = (message: MessageEvent<string>) => {
+        try {
+          handler(JSON.parse(message.data) as AppEvent);
+        } catch {
+          // Ignore malformed events rather than breaking the stream.
+        }
+      };
+      return () => source.close();
     },
   };
 }

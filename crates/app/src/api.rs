@@ -12,8 +12,14 @@ use serde::de::DeserializeOwned;
 use serde_json::Value;
 use ts_rs::TS;
 
+use crate::import::{Deps, ImportError, ImportService, PlanImportArgs, RunArgs};
 use crate::info;
+use crate::ports::catalog::PhotoCatalog;
+use crate::ports::events::EventSink;
 use crate::ports::fs::FileSystem;
+use crate::ports::geocoder::ReverseGeocoder;
+use crate::ports::imports::ImportStore;
+use crate::ports::metadata::MetadataReader;
 use crate::ports::settings::SettingsStore;
 use crate::settings::{SettingsError, SettingsService, SettingsUpdate};
 
@@ -62,7 +68,12 @@ impl std::error::Error for ApiError {}
 #[derive(Clone)]
 pub struct AppContext {
     pub settings_store: Arc<dyn SettingsStore>,
+    pub catalog: Arc<dyn PhotoCatalog>,
+    pub imports: Arc<dyn ImportStore>,
     pub fs: Arc<dyn FileSystem>,
+    pub metadata: Arc<dyn MetadataReader>,
+    pub geocoder: Arc<dyn ReverseGeocoder>,
+    pub events: Arc<dyn EventSink>,
 }
 
 impl fmt::Debug for AppContext {
@@ -78,13 +89,32 @@ impl fmt::Debug for AppContext {
 #[derive(Debug)]
 pub struct Api {
     settings: SettingsService,
+    imports: ImportService,
 }
 
 impl Api {
-    pub fn new(ctx: AppContext) -> Self {
-        Self {
+    /// Fails only if import runs left over from a previous session cannot
+    /// be marked interrupted (the catalog is unusable).
+    pub fn new(ctx: AppContext) -> Result<Self, ApiError> {
+        let imports = ImportService::new(Deps {
+            settings: Arc::clone(&ctx.settings_store),
+            catalog: ctx.catalog,
+            store: ctx.imports,
+            fs: Arc::clone(&ctx.fs),
+            metadata: ctx.metadata,
+            geocoder: ctx.geocoder,
+            events: ctx.events,
+        })
+        .map_err(import_error)?;
+        Ok(Self {
             settings: SettingsService::new(ctx.settings_store, ctx.fs),
-        }
+            imports,
+        })
+    }
+
+    /// Waits for a running import, if any (used on shutdown and in tests).
+    pub fn wait_for_imports(&self) {
+        self.imports.wait();
     }
 
     /// Runs `command` with JSON `args` and returns its JSON result.
@@ -102,11 +132,43 @@ impl Api {
                 let update: SettingsUpdate = parse_args(command, args)?;
                 respond(self.settings.update(update).map_err(settings_error)?)
             }
+            "plan_import" => {
+                let args: PlanImportArgs = parse_args(command, args)?;
+                let run_id = self.imports.plan(args.sources).map_err(import_error)?;
+                respond(self.imports.status(run_id).map_err(import_error)?)
+            }
+            "get_import" => {
+                let RunArgs { run_id } = parse_args(command, args)?;
+                respond(self.imports.plan_view(run_id).map_err(import_error)?)
+            }
+            "import_status" => {
+                let RunArgs { run_id } = parse_args(command, args)?;
+                respond(self.imports.status(run_id).map_err(import_error)?)
+            }
+            "start_import" => {
+                let RunArgs { run_id } = parse_args(command, args)?;
+                self.imports.start(run_id).map_err(import_error)?;
+                respond(self.imports.status(run_id).map_err(import_error)?)
+            }
+            "cancel_import" => {
+                let RunArgs { run_id } = parse_args(command, args)?;
+                self.imports.cancel(run_id).map_err(import_error)?;
+                respond(self.imports.status(run_id).map_err(import_error)?)
+            }
             _ => Err(ApiError::new(
                 ApiErrorCode::UnknownCommand,
                 format!("unknown command `{command}`"),
             )),
         }
+    }
+}
+
+fn import_error(e: ImportError) -> ApiError {
+    match e {
+        ImportError::Invalid(_) | ImportError::NotFound(_) => {
+            ApiError::new(ApiErrorCode::InvalidArguments, e.to_string())
+        }
+        ImportError::Storage(e) => ApiError::internal(e.to_string()),
     }
 }
 
@@ -147,13 +209,10 @@ mod tests {
     use serde_json::json;
 
     use super::*;
-    use crate::settings::tests::{FakeFs, MemorySettings};
+    use crate::testing::{FakeMetadata, MemFs, TestWorld};
 
     fn api() -> Api {
-        Api::new(AppContext {
-            settings_store: Arc::new(MemorySettings::default()),
-            fs: Arc::new(FakeFs::default()),
-        })
+        Api::new(TestWorld::new(MemFs::new(), FakeMetadata::default()).context()).unwrap()
     }
 
     #[test]
