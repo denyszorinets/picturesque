@@ -345,7 +345,8 @@ pub struct MemoryCatalog {
     /// (photo, analyzer) → (version, result).
     pub analysis: Mutex<HashMap<(PhotoId, String), (u32, serde_json::Value)>>,
     pub series_edits: Mutex<HashMap<PhotoId, picturesque_core::series::SeriesEdit>>,
-    pub series: Mutex<Vec<Vec<PhotoId>>>,
+    pub series: Mutex<Vec<crate::ports::catalog::StoredSeries>>,
+    pub best_choices: Mutex<Vec<PhotoId>>,
 }
 
 impl MemoryCatalog {
@@ -660,19 +661,51 @@ impl PhotoCatalog for MemoryCatalog {
         Ok(())
     }
 
-    fn replace_series(&self, series: &[Vec<PhotoId>]) -> Result<(), CatalogError> {
+    fn replace_series(
+        &self,
+        series: &[crate::ports::catalog::StoredSeries],
+    ) -> Result<(), CatalogError> {
         *self.series.lock().unwrap() = series.to_vec();
         Ok(())
     }
 
-    fn series_of(&self, id: PhotoId) -> Result<Option<(PhotoId, Vec<PhotoId>)>, CatalogError> {
+    fn series_of(
+        &self,
+        id: PhotoId,
+    ) -> Result<Option<(PhotoId, crate::ports::catalog::StoredSeries)>, CatalogError> {
         Ok(self
             .series
             .lock()
             .unwrap()
             .iter()
-            .find(|s| s.contains(&id))
-            .map(|s| (s[0], s.clone())))
+            .find(|s| s.members.contains(&id))
+            .map(|s| (s.members[0], s.clone())))
+    }
+
+    fn best_choices(&self) -> Result<Vec<PhotoId>, CatalogError> {
+        Ok(self.best_choices.lock().unwrap().clone())
+    }
+
+    fn set_best_choice(&self, id: PhotoId, chosen: bool) -> Result<(), CatalogError> {
+        let mut choices = self.best_choices.lock().unwrap();
+        choices.retain(|c| *c != id);
+        if chosen {
+            choices.push(id);
+        }
+        Ok(())
+    }
+
+    fn rejected_photos(&self) -> Result<Vec<PhotoId>, CatalogError> {
+        let mut ids: Vec<PhotoId> = self
+            .decisions
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(_, d)| d.flag == picturesque_core::decision::Flag::Reject)
+            .map(|(id, _)| *id)
+            .collect();
+        ids.sort();
+        Ok(ids)
     }
 
     fn media_sizes(&self) -> Result<StdHashSet<u64>, CatalogError> {

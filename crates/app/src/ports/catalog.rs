@@ -6,6 +6,7 @@ use std::fmt;
 use picturesque_core::decision::Decision;
 use picturesque_core::hash::ContentHash;
 use picturesque_core::photo::{NewPhoto, Photo, PhotoId};
+use picturesque_core::ranking::Ranked;
 use picturesque_core::series::SeriesEdit;
 
 use crate::library::{PhotoFacets, PhotoPage, PhotoQuery};
@@ -35,6 +36,18 @@ impl std::error::Error for CatalogError {}
 pub struct AnalyzerId {
     pub name: &'static str,
     pub version: u32,
+}
+
+/// A series as stored: members in capture order, their ranking and the
+/// best photo.
+#[derive(Debug, Clone, PartialEq)]
+pub struct StoredSeries {
+    pub members: Vec<PhotoId>,
+    /// Best first.
+    pub ranking: Vec<Ranked>,
+    pub best: PhotoId,
+    /// Whether the user chose `best`.
+    pub best_chosen: bool,
 }
 
 /// A decision whose sidecar is out of date.
@@ -139,12 +152,20 @@ pub trait PhotoCatalog: Send + Sync {
     /// Sets (or with `None` removes) the correction before a photo.
     fn set_series_edit(&self, id: PhotoId, edit: Option<SeriesEdit>) -> Result<(), CatalogError>;
 
-    /// Replaces all series. Each series lists its photos in order; its id
-    /// is its first photo's id.
-    fn replace_series(&self, series: &[Vec<PhotoId>]) -> Result<(), CatalogError>;
+    /// Replaces all series. A series' id is its first member's id.
+    fn replace_series(&self, series: &[StoredSeries]) -> Result<(), CatalogError>;
 
-    /// The series a photo belongs to: its id and members in order.
-    fn series_of(&self, id: PhotoId) -> Result<Option<(PhotoId, Vec<PhotoId>)>, CatalogError>;
+    /// The series a photo belongs to, with its id.
+    fn series_of(&self, id: PhotoId) -> Result<Option<(PhotoId, StoredSeries)>, CatalogError>;
+
+    /// Photos the user chose as best of their series, oldest choice first.
+    fn best_choices(&self) -> Result<Vec<PhotoId>, CatalogError>;
+
+    /// Records (as the latest choice) or removes a best-photo choice.
+    fn set_best_choice(&self, id: PhotoId, chosen: bool) -> Result<(), CatalogError>;
+
+    /// Photos flagged as rejected.
+    fn rejected_photos(&self) -> Result<Vec<PhotoId>, CatalogError>;
 
     /// Sizes of all catalogued RAW and image files. A new file can only be
     /// a duplicate if its size is in this set, so only those are hashed.

@@ -76,8 +76,9 @@ task that introduces them. The rest is in the schema today
    series (identified by its first photo) and its position, and is
    rewritten whenever series are recomputed. ``series_edit`` holds the
    user's corrections (split or join before a photo), which are kept and
-   applied on every run (:doc:`/features/series`). The best photo of a
-   series is planned (:issue:`35`).
+   applied on every run (:doc:`/features/series`). Members also carry
+   their rank, score and whether they are the best photo (ranked or chosen);
+   ``best_choice`` keeps the user's choices in order.
 
 ``decision``
    Pick, reject or unflagged; star rating; timestamp of the
@@ -141,6 +142,10 @@ how many have run. Each migration runs in its own transaction.
      - ``0007_series.sql``
      - ``series_member`` (derived series membership) and ``series_edit``
        (user corrections)
+   * - 8
+     - ``0008_series_ranking.sql``
+     - ``series_member.rank`` / ``score`` / ``best``; ``best_choice``
+       (the user's best-photo choices)
 
 Conventions:
 

@@ -527,6 +527,22 @@ fn queries_over_ten_thousand_photos_are_fast() {
     );
 }
 
+/// A series ranked in capture order, best first, unscored.
+fn stored(members: &[PhotoId]) -> picturesque_app::ports::catalog::StoredSeries {
+    picturesque_app::ports::catalog::StoredSeries {
+        members: members.to_vec(),
+        ranking: members
+            .iter()
+            .map(|id| picturesque_core::ranking::Ranked {
+                id: *id,
+                score: None,
+            })
+            .collect(),
+        best: members[0],
+        best_chosen: false,
+    }
+}
+
 #[test]
 fn series_are_stored_replaced_and_shown_in_summaries() {
     use chrono::NaiveDate;
@@ -551,8 +567,9 @@ fn series_are_stored_replaced_and_shown_in_summaries() {
     );
     assert_eq!(times[3], (PhotoId(4), None));
 
-    c.replace_series(&[vec![p2, p1], vec![p3, p5]]).unwrap();
-    assert_eq!(c.series_of(p1).unwrap(), Some((p2, vec![p2, p1])));
+    c.replace_series(&[stored(&[p2, p1]), stored(&[p3, p5])])
+        .unwrap();
+    assert_eq!(c.series_of(p1).unwrap(), Some((p2, stored(&[p2, p1]))));
     assert_eq!(c.series_of(PhotoId(4)).unwrap(), None);
     let page = c.query(&PhotoQuery::default()).unwrap();
     let series: Vec<(i64, Option<i64>)> = page.photos.iter().map(|p| (p.id, p.series_id)).collect();
@@ -569,9 +586,9 @@ fn series_are_stored_replaced_and_shown_in_summaries() {
     );
 
     // Replacing drops old membership.
-    c.replace_series(&[vec![p1, p2, p3]]).unwrap();
+    c.replace_series(&[stored(&[p1, p2, p3])]).unwrap();
     assert_eq!(c.series_of(p5).unwrap(), None);
-    assert_eq!(c.series_of(p3).unwrap(), Some((p1, vec![p1, p2, p3])));
+    assert_eq!(c.series_of(p3).unwrap(), Some((p1, stored(&[p1, p2, p3]))));
     c.replace_series(&[]).unwrap();
     assert_eq!(c.series_of(p1).unwrap(), None);
 
@@ -629,4 +646,70 @@ fn analysis_results_are_listed_per_analyzer_version() {
         ]
     );
     assert_eq!(c.analysis_results(v2).unwrap().len(), 1);
+}
+
+#[test]
+fn rankings_best_photos_and_choices_round_trip() {
+    use picturesque_app::ports::catalog::StoredSeries;
+    use picturesque_core::ranking::Ranked;
+
+    let c = sample();
+    let (p1, p2, p3) = (PhotoId(1), PhotoId(2), PhotoId(3));
+    let series = StoredSeries {
+        members: vec![p2, p1, p3],
+        ranking: vec![
+            Ranked {
+                id: p3,
+                score: Some(0.75),
+            },
+            Ranked {
+                id: p2,
+                score: Some(0.5),
+            },
+            Ranked {
+                id: p1,
+                score: None,
+            },
+        ],
+        best: p1,
+        best_chosen: true,
+    };
+    c.replace_series(std::slice::from_ref(&series)).unwrap();
+    assert_eq!(c.series_of(p3).unwrap(), Some((p2, series)));
+
+    let best: Vec<(i64, bool)> = c
+        .query(&PhotoQuery::default())
+        .unwrap()
+        .photos
+        .iter()
+        .map(|p| (p.id, p.best_in_series))
+        .collect();
+    assert!(best.contains(&(1, true)));
+    assert!(best.contains(&(2, false)));
+    assert!(best.contains(&(4, false)));
+
+    c.set_best_choice(p2, true).unwrap();
+    c.set_best_choice(p1, true).unwrap();
+    c.set_best_choice(p2, true).unwrap(); // chosen again: now the latest
+    assert_eq!(c.best_choices().unwrap(), [p1, p2]);
+    c.set_best_choice(p1, false).unwrap();
+    assert_eq!(c.best_choices().unwrap(), [p2]);
+
+    c.set_decision(
+        p3,
+        Decision {
+            flag: Flag::Reject,
+            rating: Rating::new(0).unwrap(),
+        },
+    )
+    .unwrap();
+    c.set_decision(
+        p1,
+        Decision {
+            flag: Flag::Pick,
+            rating: Rating::new(0).unwrap(),
+        },
+    )
+    .unwrap();
+    assert_eq!(c.rejected_photos().unwrap(), [p3]);
 }

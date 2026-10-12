@@ -7,8 +7,13 @@ type SeriesView = {
   series_id: number | null;
   photo_ids: number[];
   edit: "split" | "join" | null;
+  best_photo_id: number | null;
+  best_chosen: boolean;
+  ranking: { photo_id: number; score: number | null }[];
 };
-type Page = { photos: { id: number; series_id: number | null }[] };
+type Page = {
+  photos: { id: number; series_id: number | null; best_in_series: boolean }[];
+};
 
 test("groups a burst into a series that can be split and rejoined", async ({
   request,
@@ -45,11 +50,46 @@ test("groups a burst into a series that can be split and rejoined", async ({
   });
   expect(alone.series_id).toBeNull();
 
+  // Identical photos tie on score; the earliest wins until the user
+  // chooses another.
+  await expect
+    .poll(
+      async () =>
+        (
+          await call<SeriesView>(request, "photo_series", { photo_id: a })
+        ).ranking.every((r) => r.score !== null),
+      { timeout: 60_000 },
+    )
+    .toBe(true);
+  const first = await call<SeriesView>(request, "photo_series", {
+    photo_id: a,
+  });
+  expect(first.ranking.map((r) => r.photo_id)).toEqual([a, b, c]);
+  expect(first.best_photo_id).toBe(a);
+  const chosen = await call<SeriesView>(request, "choose_best", {
+    photo_id: c,
+    best: true,
+  });
+  expect(chosen.best_photo_id).toBe(c);
+  expect(chosen.best_chosen).toBe(true);
+  const marked = await call<Page>(request, "query_photos", {
+    from: "2003-05-05",
+    to: "2003-05-05",
+    sort: "captured_asc",
+  });
+  expect(marked.photos.map((p) => p.best_in_series)).toEqual([
+    false,
+    false,
+    true,
+    false,
+  ]);
+  await call(request, "choose_best", { photo_id: c, best: false });
+
   const split = await call<SeriesView>(request, "edit_series", {
     photo_id: c,
     edit: "split",
   });
-  expect(split).toEqual({
+  expect(split).toMatchObject({
     photo_id: c,
     series_id: null,
     photo_ids: [],

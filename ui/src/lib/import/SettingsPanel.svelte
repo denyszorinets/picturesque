@@ -26,6 +26,12 @@
   let sidecarNaming = $state<Settings["sidecar_naming"]>("file_extension");
   let maxGap = $state(30);
   let maxDistance = $state(16);
+  let weights = $state({ sharpness: 0.6, exposure: 0.3, noise: 0.1 });
+  const WEIGHT_LABELS = {
+    sharpness: "Sharpness",
+    exposure: "Exposure",
+    noise: "Low noise",
+  } as const;
   let preview = $state<TemplatePreview | null>(null);
   let error = $state<string | null>(null);
   let notice = $state<string | null>(null);
@@ -39,12 +45,19 @@
       (maxGap !== saved.series.max_gap_seconds ||
         maxDistance !== saved.series.max_distance),
   );
+  const rankingChanged = $derived(
+    saved !== null &&
+      (weights.sharpness !== saved.ranking.sharpness ||
+        weights.exposure !== saved.ranking.exposure ||
+        weights.noise !== saved.ranking.noise),
+  );
   const dirty = $derived(
     saved !== null &&
       (libraryRoot.trim() !== (saved.library_root ?? "") ||
         template.trim() !== saved.path_template ||
         sidecarNaming !== saved.sidecar_naming ||
-        seriesChanged),
+        seriesChanged ||
+        rankingChanged),
   );
 
   $effect(() => {
@@ -76,6 +89,7 @@
     sidecarNaming = settings.sidecar_naming;
     maxGap = settings.series.max_gap_seconds;
     maxDistance = settings.series.max_distance;
+    weights = { ...settings.ranking };
     onchange?.(settings);
   }
 
@@ -93,6 +107,7 @@
       const update: SettingsUpdate = {};
       if (seriesChanged)
         update.series = { max_gap_seconds: maxGap, max_distance: maxDistance };
+      if (rankingChanged) update.ranking = { ...weights };
       if (sidecarNaming !== saved.sidecar_naming)
         update.sidecar_naming = sidecarNaming;
       if (libraryRoot.trim() !== (saved.library_root ?? ""))
@@ -207,6 +222,25 @@
     <p class="hint muted">
       Photos taken within this pause that look alike form a series.
     </p>
+    <span class="label">Best photo of a series</span>
+    <div class="weights">
+      {#each ["sharpness", "exposure", "noise"] as const as key (key)}
+        <label class="inline">
+          {WEIGHT_LABELS[key]}
+          <input
+            type="number"
+            min="0"
+            step="0.1"
+            bind:value={weights[key]}
+            data-testid={`ranking-${key}`}
+          />
+        </label>
+      {/each}
+    </div>
+    <p class="hint muted">
+      How much each score counts when choosing the best photo; only the ratios
+      matter.
+    </p>
   </fieldset>
 
   <div class="actions">
@@ -281,6 +315,12 @@
     align-items: center;
     gap: 0.5rem;
     font-size: 0.9rem;
+  }
+
+  .weights {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem 1rem;
   }
 
   .inline input {

@@ -72,7 +72,7 @@ fn series(world: &TestWorld) -> Vec<Vec<i64>> {
         .lock()
         .unwrap()
         .iter()
-        .map(|s| s.iter().map(|id| id.0).collect())
+        .map(|s| s.members.iter().map(|id| id.0).collect())
         .collect()
 }
 
@@ -145,6 +145,12 @@ fn edits_apply_immediately_and_survive_reanalysis() {
             "series_id": ids[2],
             "photo_ids": [ids[2], ids[3]],
             "edit": "split",
+            "best_photo_id": ids[2],
+            "best_chosen": false,
+            "ranking": [
+                { "photo_id": ids[2], "score": null },
+                { "photo_id": ids[3], "score": null },
+            ],
         })
     );
     assert_eq!(series(&world), [vec![ids[0], ids[1]], vec![ids[2], ids[3]]]);
@@ -178,7 +184,15 @@ fn photo_series_describes_membership_and_validates_arguments() {
     assert_eq!(
         api.call("photo_series", json!({ "photo_id": ids[2] }))
             .unwrap(),
-        json!({ "photo_id": ids[2], "series_id": null, "photo_ids": [], "edit": null })
+        json!({
+            "photo_id": ids[2],
+            "series_id": null,
+            "photo_ids": [],
+            "edit": null,
+            "best_photo_id": null,
+            "best_chosen": false,
+            "ranking": [],
+        })
     );
 
     let err = api
@@ -251,4 +265,132 @@ fn analysis_progress_triggers_a_debounced_recompute_in_the_background() {
         series(&world) == [vec![ids[0].0, ids[1].0, more[0].0]]
     });
     assert_eq!(changes(&world).len(), 2);
+}
+
+fn set_scores(world: &TestWorld, id: i64, laplacian_variance: f32, exposure: f32) {
+    use crate::analysis::technical::TechnicalAnalyzer;
+    world
+        .catalog
+        .store_analysis(
+            PhotoId(id),
+            TechnicalAnalyzer::ID,
+            &json!({
+                "sharpness": 1.0, "exposure": exposure, "noise": 1.0, "overall": 1.0,
+                "laplacian_variance": laplacian_variance, "highlights_clipped": 0.0,
+                "shadows_clipped": 0.0, "mean_brightness": 0.5, "noise_sigma": 1.0,
+            }),
+        )
+        .unwrap();
+}
+
+fn best_of(api: &Api, id: i64) -> (Value, Value) {
+    let view = api.call("photo_series", json!({ "photo_id": id })).unwrap();
+    (view["best_photo_id"].clone(), view["best_chosen"].clone())
+}
+
+#[test]
+fn the_best_photo_is_ranked_from_technical_scores() {
+    let (world, api, ids) = setup(&[0, 1, 2]);
+    set_scores(&world, ids[0], 2_000.0, 1.0);
+    set_scores(&world, ids[1], 8_000.0, 1.0);
+    // ids[2] is not analyzed yet.
+    api.recompute_series().unwrap();
+
+    assert_eq!(best_of(&api, ids[0]), (json!(ids[1]), json!(false)));
+    let view = api
+        .call("photo_series", json!({ "photo_id": ids[0] }))
+        .unwrap();
+    let order: Vec<i64> = view["ranking"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|r| r["photo_id"].as_i64().unwrap())
+        .collect();
+    assert_eq!(order, [ids[1], ids[0], ids[2]]);
+    assert_eq!(view["ranking"][0]["score"], json!(1.0));
+    assert_eq!(view["ranking"][2]["score"], Value::Null);
+}
+
+#[test]
+fn rejecting_the_best_photo_moves_the_choice() {
+    let (world, api, ids) = setup(&[0, 1]);
+    set_scores(&world, ids[0], 2_000.0, 1.0);
+    set_scores(&world, ids[1], 8_000.0, 1.0);
+    api.recompute_series().unwrap();
+
+    api.call(
+        "set_decisions",
+        json!({ "changes": [{ "photo_id": ids[1], "flag": "reject" }] }),
+    )
+    .unwrap();
+    api.recompute_series().unwrap();
+
+    assert_eq!(best_of(&api, ids[0]), (json!(ids[0]), json!(false)));
+}
+
+#[test]
+fn the_users_choice_wins_and_survives_reanalysis_until_withdrawn() {
+    let (world, api, ids) = setup(&[0, 1, 2]);
+    set_scores(&world, ids[0], 8_000.0, 1.0);
+    api.recompute_series().unwrap();
+    assert_eq!(best_of(&api, ids[1]), (json!(ids[0]), json!(false)));
+
+    let view = api
+        .call("choose_best", json!({ "photo_id": ids[2], "best": true }))
+        .unwrap();
+    assert_eq!(view["best_photo_id"], ids[2]);
+    assert_eq!(view["best_chosen"], true);
+
+    // New scores favour another photo; the choice stands.
+    set_scores(&world, ids[1], 50_000.0, 1.0);
+    api.recompute_series().unwrap();
+    assert_eq!(best_of(&api, ids[0]), (json!(ids[2]), json!(true)));
+
+    // The latest choice in a series wins.
+    api.call("choose_best", json!({ "photo_id": ids[0], "best": true }))
+        .unwrap();
+    assert_eq!(best_of(&api, ids[0]), (json!(ids[0]), json!(true)));
+
+    api.call("choose_best", json!({ "photo_id": ids[0], "best": false }))
+        .unwrap();
+    assert_eq!(best_of(&api, ids[0]), (json!(ids[2]), json!(true)));
+    api.call("choose_best", json!({ "photo_id": ids[2], "best": false }))
+        .unwrap();
+    assert_eq!(best_of(&api, ids[0]), (json!(ids[1]), json!(false)));
+
+    let err = api
+        .call("choose_best", json!({ "photo_id": 999, "best": true }))
+        .unwrap_err();
+    assert_eq!(err.code, ApiErrorCode::NotFound);
+}
+
+#[test]
+fn ranking_weights_are_settings() {
+    let (world, api, ids) = setup(&[0, 1]);
+    set_scores(&world, ids[0], 8_000.0, 0.4); // sharp, badly exposed
+    set_scores(&world, ids[1], 6_000.0, 1.0);
+    api.recompute_series().unwrap();
+    assert_eq!(best_of(&api, ids[0]).0, json!(ids[1]));
+
+    api.call(
+        "update_settings",
+        json!({ "ranking": { "sharpness": 1.0, "exposure": 0.0, "noise": 0.0 } }),
+    )
+    .unwrap();
+    assert_eq!(best_of(&api, ids[0]).0, json!(ids[0]));
+
+    let err = api
+        .call(
+            "update_settings",
+            json!({ "ranking": { "sharpness": 0.0, "exposure": 0.0, "noise": 0.0 } }),
+        )
+        .unwrap_err();
+    assert_eq!(err.code, ApiErrorCode::InvalidArguments);
+    let err = api
+        .call(
+            "update_settings",
+            json!({ "ranking": { "sharpness": -1.0 } }),
+        )
+        .unwrap_err();
+    assert_eq!(err.code, ApiErrorCode::InvalidArguments);
 }

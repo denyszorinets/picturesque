@@ -4,6 +4,7 @@ use std::fmt;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use picturesque_core::ranking::RankWeights;
 use picturesque_core::series::SeriesThresholds;
 use picturesque_core::template::PathTemplate;
 use serde::{Deserialize, Serialize};
@@ -19,7 +20,7 @@ pub const DEFAULT_PATH_TEMPLATE: &str = picturesque_core::template::PRESETS[0].t
 
 /// User settings. Missing fields in stored settings take their defaults,
 /// so new settings can be added without a migration.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(default)]
 #[ts(export)]
 pub struct Settings {
@@ -32,6 +33,40 @@ pub struct Settings {
     pub sidecar_naming: SidecarNaming,
     /// When photos form a series.
     pub series: SeriesSettings,
+    /// How the best photo of a series is chosen.
+    pub ranking: RankingSettings,
+}
+
+/// How much each technical score counts when choosing the best photo of a
+/// series (`docs/features/series.rst`). Only the ratios matter.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, TS)]
+#[serde(default)]
+#[ts(export)]
+pub struct RankingSettings {
+    pub sharpness: f64,
+    pub exposure: f64,
+    pub noise: f64,
+}
+
+impl Default for RankingSettings {
+    fn default() -> Self {
+        // RankWeights::default(), written as f64 so it serializes exactly.
+        Self {
+            sharpness: 0.6,
+            exposure: 0.3,
+            noise: 0.1,
+        }
+    }
+}
+
+impl RankingSettings {
+    pub fn weights(self) -> RankWeights {
+        RankWeights {
+            sharpness: self.sharpness as f32,
+            exposure: self.exposure as f32,
+            noise: self.noise as f32,
+        }
+    }
 }
 
 /// When photos form a series (`docs/features/series.rst`).
@@ -84,12 +119,13 @@ impl Default for Settings {
             path_template: DEFAULT_PATH_TEMPLATE.to_owned(),
             sidecar_naming: SidecarNaming::default(),
             series: SeriesSettings::default(),
+            ranking: RankingSettings::default(),
         }
     }
 }
 
 /// A change to some settings; absent fields are left as they are.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, TS)]
+#[derive(Debug, Clone, Default, PartialEq, Deserialize, TS)]
 #[serde(default, deny_unknown_fields)]
 #[ts(export)]
 pub struct SettingsUpdate {
@@ -101,6 +137,8 @@ pub struct SettingsUpdate {
     pub sidecar_naming: Option<SidecarNaming>,
     #[ts(optional)]
     pub series: Option<SeriesSettings>,
+    #[ts(optional)]
+    pub ranking: Option<RankingSettings>,
 }
 
 /// Why settings could not be read or changed.
@@ -208,6 +246,15 @@ impl SettingsService {
                 )));
             }
             settings.series = series;
+        }
+        if let Some(ranking) = update.ranking {
+            if !ranking.weights().is_valid() {
+                return Err(SettingsError::Invalid(
+                    "Ranking weights must be zero or more, and at least one must be above zero."
+                        .into(),
+                ));
+            }
+            settings.ranking = ranking;
         }
         self.store.save_settings(&settings)?;
         Ok(settings)

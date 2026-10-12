@@ -114,6 +114,8 @@ pub struct PhotoSummary {
     /// The series the photo is in (its first photo's id), if any.
     #[ts(type = "number | null")]
     pub series_id: Option<i64>,
+    /// Whether this is the best photo of its series.
+    pub best_in_series: bool,
 }
 
 /// A page of results.
