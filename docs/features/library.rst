@@ -123,14 +123,17 @@ mid-cull.
 
 .. _features-library-sidecars:
 
+.. _features-library-analysis:
+
 Background analysis
 -------------------
 
 After an import, Picturesque analyzes every photo in the background to
 score its sharpness, exposure and noise
 (:doc:`/reference/quality-scores`) and to hash its visual layout for
-finding similar photos (:doc:`/reference/similarity`). The loupe shows the
-scores under **Quality**. While it works, the toolbar shows
+finding similar photos (:doc:`/reference/similarity`), which groups photos
+into :doc:`series </features/series>`. The loupe shows the scores under
+**Quality**. While it works, the toolbar shows
 **Analyzing 120 / 300**. Photos on screen are analyzed first, so scrolling
 to a day gets its results within seconds. Analysis continues where it left
 off after the app restarts.

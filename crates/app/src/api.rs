@@ -6,7 +6,7 @@
 
 use std::fmt;
 use std::path::PathBuf;
-use std::sync::{Arc, OnceLock};
+use std::sync::Arc;
 
 use serde::Serialize;
 use serde::de::DeserializeOwned;
@@ -15,6 +15,7 @@ use ts_rs::TS;
 
 use crate::analysis::technical::{QualityView, TechnicalAnalyzer};
 use crate::analysis::{AnalysisService, Analyzer, PrioritizeArgs};
+use crate::hooks::EventHooks;
 use crate::import::{Deps, ImportError, ImportService, PlanImportArgs, RunArgs};
 use crate::info;
 use crate::library::{
@@ -30,10 +31,11 @@ use crate::ports::metadata::MetadataReader;
 use crate::ports::pixels::PixelLoader;
 use crate::ports::settings::SettingsStore;
 use crate::ports::sidecars::SidecarStore;
+use crate::series::{EditSeriesArgs, SeriesService};
 use crate::settings::{SettingsError, SettingsService, SettingsUpdate};
 use crate::sidecars::SidecarService;
 use crate::templates::{self, PreviewTemplateArgs};
-use crate::thumbnails::{ImageSize, PrefillAfterImport, ThumbnailError, ThumbnailService};
+use crate::thumbnails::{ImageSize, ThumbnailError, ThumbnailService};
 use picturesque_core::photo::PhotoId;
 
 /// Category of an API failure. Transports map it to their own error form
@@ -115,6 +117,7 @@ pub struct Api {
     catalog: Arc<dyn PhotoCatalog>,
     sidecars: Arc<SidecarService>,
     analysis: Arc<AnalysisService>,
+    series: Arc<SeriesService>,
 }
 
 impl fmt::Debug for Api {
@@ -134,11 +137,7 @@ impl Api {
             ctx.decoder,
             ctx.cache_dir,
         ));
-        let events = Arc::new(PrefillAfterImport {
-            inner: ctx.events,
-            thumbnails: OnceLock::new(),
-            analysis: OnceLock::new(),
-        });
+        let events = Arc::new(EventHooks::new(ctx.events));
         let _ = events.thumbnails.set(Arc::clone(&thumbnails));
         let analysis = Arc::new(AnalysisService::new(
             Arc::clone(&ctx.catalog),
@@ -148,6 +147,12 @@ impl Api {
             Arc::clone(&events) as Arc<dyn EventSink>,
         ));
         let _ = events.analysis.set(Arc::clone(&analysis));
+        let series = Arc::new(SeriesService::new(
+            Arc::clone(&ctx.catalog),
+            Arc::clone(&ctx.settings_store),
+            Arc::clone(&events) as Arc<dyn EventSink>,
+        ));
+        let _ = events.series.set(Arc::clone(&series));
         let catalog = Arc::clone(&ctx.catalog);
         let sidecars = Arc::new(SidecarService::new(
             Arc::clone(&ctx.catalog),
@@ -172,6 +177,7 @@ impl Api {
             catalog,
             sidecars,
             analysis,
+            series,
         })
     }
 
@@ -182,6 +188,12 @@ impl Api {
         self.thumbnails.prefill_in_background();
         self.sidecars.start();
         self.analysis.start(analysis_workers());
+        self.series.start();
+    }
+
+    /// Recomputes series now (tests and tools).
+    pub fn recompute_series(&self) -> Result<usize, ApiError> {
+        self.series.recompute().map_err(catalog_error)
     }
 
     /// Runs all pending analysis on the calling thread (tests and tools).
@@ -274,6 +286,20 @@ impl Api {
             .collect()
     }
 
+    fn require_photo(&self, photo_id: i64) -> Result<(), ApiError> {
+        match self
+            .catalog
+            .photo(PhotoId(photo_id))
+            .map_err(catalog_error)?
+        {
+            Some(_) => Ok(()),
+            None => Err(ApiError::new(
+                ApiErrorCode::NotFound,
+                format!("There is no photo {photo_id}."),
+            )),
+        }
+    }
+
     /// Waits for a running import, if any (used on shutdown and in tests).
     pub fn wait_for_imports(&self) {
         self.imports.wait();
@@ -292,7 +318,12 @@ impl Api {
             }
             "update_settings" => {
                 let update: SettingsUpdate = parse_args(command, args)?;
-                respond(self.settings.update(update).map_err(settings_error)?)
+                let series_changed = update.series.is_some();
+                let settings = self.settings.update(update).map_err(settings_error)?;
+                if series_changed {
+                    self.series.recompute().map_err(catalog_error)?;
+                }
+                respond(settings)
             }
             "template_presets" => {
                 no_args(command, &args)?;
@@ -372,6 +403,20 @@ impl Api {
                 let ids: Vec<PhotoId> = photo_ids.into_iter().map(PhotoId).collect();
                 self.analysis.prioritize(&ids);
                 respond(self.analysis.status())
+            }
+            "photo_series" => {
+                let PhotoArgs { photo_id } = parse_args(command, args)?;
+                self.require_photo(photo_id)?;
+                respond(self.series.view(PhotoId(photo_id)).map_err(catalog_error)?)
+            }
+            "edit_series" => {
+                let EditSeriesArgs { photo_id, edit } = parse_args(command, args)?;
+                self.require_photo(photo_id)?;
+                respond(
+                    self.series
+                        .edit(PhotoId(photo_id), edit.map(Into::into))
+                        .map_err(catalog_error)?,
+                )
             }
             "plan_import" => {
                 let args: PlanImportArgs = parse_args(command, args)?;
@@ -520,7 +565,8 @@ mod tests {
             json!({
                 "library_root": null,
                 "path_template": crate::settings::DEFAULT_PATH_TEMPLATE,
-                "sidecar_naming": "file_extension"
+                "sidecar_naming": "file_extension",
+                "series": { "max_gap_seconds": 30, "max_distance": 16 }
             })
         );
     }

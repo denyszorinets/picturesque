@@ -38,7 +38,8 @@ task that introduces them. The rest is in the schema today
      PHOTO ||--o{ ANALYSIS : has
      PHOTO ||--o| SCORES : has
      PHOTO ||--o| EMBEDDING : has
-     PHOTO }o--o| SERIES : "member of"
+     PHOTO ||--o| SERIES_MEMBER : "member of"
+     PHOTO ||--o| SERIES_EDIT : "corrected by"
      PHOTO ||--o| DECISION : has
      IMPORT_RUN ||--|{ IMPORT_PHOTO : contains
      IMPORT_PHOTO ||--|{ IMPORT_FILE : has
@@ -70,10 +71,13 @@ task that introduces them. The rest is in the schema today
    visual similarity. Until then, similarity uses a perceptual hash stored
    as the ``similarity`` analysis result (:doc:`/reference/similarity`).
 
-``series`` (planned)
-   A group of photos taken close together that look alike. Records the best
-   photo and whether membership was edited by the user, so manual splits and
-   merges survive re-analysis.
+``series_member`` / ``series_edit``
+   Series are derived: ``series_member`` maps each photo in a series to the
+   series (identified by its first photo) and its position, and is
+   rewritten whenever series are recomputed. ``series_edit`` holds the
+   user's corrections (split or join before a photo), which are kept and
+   applied on every run (:doc:`/features/series`). The best photo of a
+   series is planned (:issue:`35`).
 
 ``decision``
    Pick, reject or unflagged; star rating; timestamp of the
@@ -133,6 +137,10 @@ how many have run. Each migration runs in its own transaction.
    * - 6
      - ``0006_analysis.sql``
      - ``analysis`` (result per photo and analyzer, with version)
+   * - 7
+     - ``0007_series.sql``
+     - ``series_member`` (derived series membership) and ``series_edit``
+       (user corrections)
 
 Conventions:
 

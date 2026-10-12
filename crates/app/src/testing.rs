@@ -344,6 +344,8 @@ pub struct MemoryCatalog {
     pub revisions: Mutex<HashMap<PhotoId, (u64, Option<u64>)>>,
     /// (photo, analyzer) → (version, result).
     pub analysis: Mutex<HashMap<(PhotoId, String), (u32, serde_json::Value)>>,
+    pub series_edits: Mutex<HashMap<PhotoId, picturesque_core::series::SeriesEdit>>,
+    pub series: Mutex<Vec<Vec<PhotoId>>>,
 }
 
 impl MemoryCatalog {
@@ -597,6 +599,80 @@ impl PhotoCatalog for MemoryCatalog {
             .collect();
         results.sort_by(|a, b| a.0.cmp(&b.0));
         Ok(results)
+    }
+
+    fn capture_times(&self) -> Result<Vec<(PhotoId, Option<chrono::NaiveDateTime>)>, CatalogError> {
+        Ok(self
+            .photos
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|p| (p.id, p.metadata.captured_at.map(|t| t.local)))
+            .collect())
+    }
+
+    fn analysis_results(
+        &self,
+        analyzer: AnalyzerId,
+    ) -> Result<Vec<(PhotoId, serde_json::Value)>, CatalogError> {
+        let mut results: Vec<_> = self
+            .analysis
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|((_, name), (version, _))| {
+                name == analyzer.name && *version == analyzer.version
+            })
+            .map(|((id, _), (_, value))| (*id, value.clone()))
+            .collect();
+        results.sort_by_key(|(id, _)| *id);
+        Ok(results)
+    }
+
+    fn series_edits(
+        &self,
+    ) -> Result<Vec<(PhotoId, picturesque_core::series::SeriesEdit)>, CatalogError> {
+        let mut edits: Vec<_> = self
+            .series_edits
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|(id, e)| (*id, *e))
+            .collect();
+        edits.sort_by_key(|(id, _)| *id);
+        Ok(edits)
+    }
+
+    fn set_series_edit(
+        &self,
+        id: PhotoId,
+        edit: Option<picturesque_core::series::SeriesEdit>,
+    ) -> Result<(), CatalogError> {
+        let mut edits = self.series_edits.lock().unwrap();
+        match edit {
+            Some(e) => {
+                edits.insert(id, e);
+            }
+            None => {
+                edits.remove(&id);
+            }
+        }
+        Ok(())
+    }
+
+    fn replace_series(&self, series: &[Vec<PhotoId>]) -> Result<(), CatalogError> {
+        *self.series.lock().unwrap() = series.to_vec();
+        Ok(())
+    }
+
+    fn series_of(&self, id: PhotoId) -> Result<Option<(PhotoId, Vec<PhotoId>)>, CatalogError> {
+        Ok(self
+            .series
+            .lock()
+            .unwrap()
+            .iter()
+            .find(|s| s.contains(&id))
+            .map(|s| (s[0], s.clone())))
     }
 
     fn media_sizes(&self) -> Result<StdHashSet<u64>, CatalogError> {

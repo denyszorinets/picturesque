@@ -11,11 +11,12 @@ use picturesque_core::metadata::{
     Camera, CaptureMetadata, CaptureTime, Exposure, ExposureTime, GeoPoint, Orientation, Place,
 };
 use picturesque_core::photo::{Asset, NewPhoto, Photo, PhotoAssets, PhotoId};
+use picturesque_core::series::SeriesEdit;
 use rusqlite::{ErrorCode, OptionalExtension, Row, params};
 
 use super::{SqliteCatalog, storage};
 
-const TIME_FORMAT: &str = "%Y-%m-%dT%H:%M:%S%.f";
+pub(super) const TIME_FORMAT: &str = "%Y-%m-%dT%H:%M:%S%.f";
 
 impl PhotoCatalog for SqliteCatalog {
     fn insert_photo(&self, photo: &NewPhoto) -> Result<PhotoId, CatalogError> {
@@ -294,6 +295,33 @@ impl PhotoCatalog for SqliteCatalog {
 
     fn analysis(&self, id: PhotoId) -> Result<Vec<(String, u32, serde_json::Value)>, CatalogError> {
         self.load_analysis(id)
+    }
+
+    fn capture_times(&self) -> Result<Vec<(PhotoId, Option<NaiveDateTime>)>, CatalogError> {
+        self.load_capture_times()
+    }
+
+    fn analysis_results(
+        &self,
+        analyzer: AnalyzerId,
+    ) -> Result<Vec<(PhotoId, serde_json::Value)>, CatalogError> {
+        self.load_analysis_results(analyzer)
+    }
+
+    fn series_edits(&self) -> Result<Vec<(PhotoId, SeriesEdit)>, CatalogError> {
+        self.load_series_edits()
+    }
+
+    fn set_series_edit(&self, id: PhotoId, edit: Option<SeriesEdit>) -> Result<(), CatalogError> {
+        self.save_series_edit(id, edit)
+    }
+
+    fn replace_series(&self, series: &[Vec<PhotoId>]) -> Result<(), CatalogError> {
+        self.save_series(series)
+    }
+
+    fn series_of(&self, id: PhotoId) -> Result<Option<(PhotoId, Vec<PhotoId>)>, CatalogError> {
+        self.load_series_of(id)
     }
 
     fn photo_count(&self) -> Result<u64, CatalogError> {

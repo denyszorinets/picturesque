@@ -6,6 +6,7 @@
     templatePresets,
     updateSettings,
     type Settings,
+    type SettingsUpdate,
     type TemplatePresetView,
     type TemplatePreview,
   } from "../api";
@@ -23,6 +24,8 @@
   let libraryRoot = $state("");
   let template = $state("");
   let sidecarNaming = $state<Settings["sidecar_naming"]>("file_extension");
+  let maxGap = $state(30);
+  let maxDistance = $state(16);
   let preview = $state<TemplatePreview | null>(null);
   let error = $state<string | null>(null);
   let notice = $state<string | null>(null);
@@ -31,11 +34,17 @@
   const presetId = $derived(
     presets.find((p) => p.template === template.trim())?.id ?? "custom",
   );
+  const seriesChanged = $derived(
+    saved !== null &&
+      (maxGap !== saved.series.max_gap_seconds ||
+        maxDistance !== saved.series.max_distance),
+  );
   const dirty = $derived(
     saved !== null &&
       (libraryRoot.trim() !== (saved.library_root ?? "") ||
         template.trim() !== saved.path_template ||
-        sidecarNaming !== saved.sidecar_naming),
+        sidecarNaming !== saved.sidecar_naming ||
+        seriesChanged),
   );
 
   $effect(() => {
@@ -65,6 +74,8 @@
     libraryRoot = settings.library_root ?? "";
     template = settings.path_template;
     sidecarNaming = settings.sidecar_naming;
+    maxGap = settings.series.max_gap_seconds;
+    maxDistance = settings.series.max_distance;
     onchange?.(settings);
   }
 
@@ -79,11 +90,9 @@
     error = null;
     notice = null;
     try {
-      const update: {
-        library_root?: string;
-        path_template?: string;
-        sidecar_naming?: Settings["sidecar_naming"];
-      } = {};
+      const update: SettingsUpdate = {};
+      if (seriesChanged)
+        update.series = { max_gap_seconds: maxGap, max_distance: maxDistance };
       if (sidecarNaming !== saved.sidecar_naming)
         update.sidecar_naming = sidecarNaming;
       if (libraryRoot.trim() !== (saved.library_root ?? ""))
@@ -171,6 +180,35 @@
     </p>
   </div>
 
+  <fieldset class="field series">
+    <legend class="label">Series</legend>
+    <label class="inline">
+      Longest pause between shots
+      <input
+        type="number"
+        min="1"
+        max="3600"
+        bind:value={maxGap}
+        data-testid="series-max-gap"
+      />
+      seconds
+    </label>
+    <label class="inline">
+      Similarity limit
+      <input
+        type="number"
+        min="0"
+        max="32"
+        bind:value={maxDistance}
+        data-testid="series-max-distance"
+      />
+      bits (lower is stricter)
+    </label>
+    <p class="hint muted">
+      Photos taken within this pause that look alike form a series.
+    </p>
+  </fieldset>
+
   <div class="actions">
     <button
       class="primary"
@@ -230,6 +268,23 @@
     flex-direction: column;
     gap: 0.1rem;
     overflow-wrap: anywhere;
+  }
+
+  .series {
+    border: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .inline {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+  }
+
+  .inline input {
+    width: 5rem;
   }
 
   .actions {

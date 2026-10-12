@@ -4,6 +4,7 @@ use std::fmt;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use picturesque_core::series::SeriesThresholds;
 use picturesque_core::template::PathTemplate;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -29,6 +30,39 @@ pub struct Settings {
     pub path_template: String,
     /// How new XMP sidecars are named.
     pub sidecar_naming: SidecarNaming,
+    /// When photos form a series.
+    pub series: SeriesSettings,
+}
+
+/// When photos form a series (`docs/features/series.rst`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(default)]
+#[ts(export)]
+pub struct SeriesSettings {
+    /// Longest pause between consecutive shots of a series, 1–3600 s.
+    pub max_gap_seconds: u32,
+    /// Most perceptual-hash bits a photo may differ from the series'
+    /// latest photos, 0–32.
+    pub max_distance: u32,
+}
+
+impl Default for SeriesSettings {
+    fn default() -> Self {
+        let d = SeriesThresholds::default();
+        Self {
+            max_gap_seconds: d.max_gap_seconds,
+            max_distance: d.max_distance,
+        }
+    }
+}
+
+impl SeriesSettings {
+    pub fn thresholds(self) -> SeriesThresholds {
+        SeriesThresholds {
+            max_gap_seconds: self.max_gap_seconds,
+            max_distance: self.max_distance,
+        }
+    }
 }
 
 /// How new XMP sidecars are named. Existing sidecars are always updated in place.
@@ -49,6 +83,7 @@ impl Default for Settings {
             library_root: None,
             path_template: DEFAULT_PATH_TEMPLATE.to_owned(),
             sidecar_naming: SidecarNaming::default(),
+            series: SeriesSettings::default(),
         }
     }
 }
@@ -64,6 +99,8 @@ pub struct SettingsUpdate {
     pub path_template: Option<String>,
     #[ts(optional)]
     pub sidecar_naming: Option<SidecarNaming>,
+    #[ts(optional)]
+    pub series: Option<SeriesSettings>,
 }
 
 /// Why settings could not be read or changed.
@@ -156,6 +193,21 @@ impl SettingsService {
         }
         if let Some(naming) = update.sidecar_naming {
             settings.sidecar_naming = naming;
+        }
+        if let Some(series) = update.series {
+            if !(1..=3600).contains(&series.max_gap_seconds) {
+                return Err(SettingsError::Invalid(format!(
+                    "The longest pause in a series must be 1–3600 seconds, got {}.",
+                    series.max_gap_seconds
+                )));
+            }
+            if series.max_distance > 32 {
+                return Err(SettingsError::Invalid(format!(
+                    "The similarity limit for series must be 0–32, got {}.",
+                    series.max_distance
+                )));
+            }
+            settings.series = series;
         }
         self.store.save_settings(&settings)?;
         Ok(settings)
@@ -406,5 +458,66 @@ pub(crate) mod tests {
         let settings: Settings = serde_json::from_str("{}").unwrap();
 
         assert_eq!(settings, Settings::default());
+    }
+
+    #[test]
+    fn saves_valid_series_thresholds_and_rejects_others() {
+        let (service, store) = service(&[]);
+        let series = SeriesSettings {
+            max_gap_seconds: 90,
+            max_distance: 12,
+        };
+
+        let saved = service
+            .update(SettingsUpdate {
+                series: Some(series),
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(saved.series, series);
+        assert_eq!(
+            store
+                .load_settings()
+                .unwrap()
+                .series
+                .thresholds()
+                .max_gap_seconds,
+            90
+        );
+
+        for bad in [
+            SeriesSettings {
+                max_gap_seconds: 0,
+                max_distance: 10,
+            },
+            SeriesSettings {
+                max_gap_seconds: 3601,
+                max_distance: 10,
+            },
+            SeriesSettings {
+                max_gap_seconds: 30,
+                max_distance: 33,
+            },
+        ] {
+            let err = service
+                .update(SettingsUpdate {
+                    series: Some(bad),
+                    ..Default::default()
+                })
+                .unwrap_err();
+            assert!(matches!(err, SettingsError::Invalid(_)), "{bad:?}");
+        }
+        assert_eq!(store.load_settings().unwrap().series, series);
+    }
+
+    #[test]
+    fn partial_series_settings_take_defaults() {
+        let settings: Settings =
+            serde_json::from_str(r#"{"series": {"max_gap_seconds": 5}}"#).unwrap();
+        assert_eq!(settings.series.max_gap_seconds, 5);
+        assert_eq!(
+            settings.series.max_distance,
+            SeriesSettings::default().max_distance
+        );
     }
 }

@@ -19,4 +19,8 @@ width: number | null, height: number | null, has_raw: boolean,
 /**
  * The file the grid shows, relative to the library folder.
  */
-file_name: string, };
+file_name: string, 
+/**
+ * The series the photo is in (its first photo's id), if any.
+ */
+series_id: number | null, };
