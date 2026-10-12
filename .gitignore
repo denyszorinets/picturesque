@@ -43,3 +43,8 @@ docs/.venv/
 # Playwright output
 ui/test-results/
 ui/playwright-report/
+
+# Spike corpora and build output
+spikes/*/corpus/
+spikes/*/target/
+spikes/*/stderr.log
