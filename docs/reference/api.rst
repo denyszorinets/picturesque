@@ -68,7 +68,10 @@ Commands
    rating above 5 (``invalid_arguments``) changes nothing.
 
 ``photo_facets``
-   No arguments. The values present in the library with photo counts:
+   Optional ``{ "filter": PhotoQuery }``. With a filter, ``total``,
+   ``first_day``, ``last_day`` and ``days`` count only matching photos
+   (they drive the timeline layout); the option lists below always cover
+   the whole library. The values present in the library with photo counts:
    ``days`` (newest first), ``cameras`` (with display labels), ``lenses``,
    ``places``, ``flags``, ``ratings`` (counts for 0–5 stars), plus
    ``total``, ``first_day`` and ``last_day``.

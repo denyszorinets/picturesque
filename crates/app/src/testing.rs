@@ -414,7 +414,10 @@ impl PhotoCatalog for MemoryCatalog {
         ))
     }
 
-    fn facets(&self) -> Result<crate::library::PhotoFacets, CatalogError> {
+    fn facets(
+        &self,
+        _filter: Option<&crate::library::PhotoQuery>,
+    ) -> Result<crate::library::PhotoFacets, CatalogError> {
         Err(CatalogError::Storage(
             "facets are tested against SQLite".into(),
         ))

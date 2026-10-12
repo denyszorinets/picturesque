@@ -228,6 +228,16 @@ pub struct PhotoArgs {
     pub photo_id: i64,
 }
 
+/// Arguments of `photo_facets`.
+#[derive(Debug, Clone, Default, Deserialize, TS)]
+#[serde(default, deny_unknown_fields)]
+#[ts(export)]
+pub struct FacetsArgs {
+    /// Count `total` and `days` among photos matching this filter.
+    #[ts(optional)]
+    pub filter: Option<PhotoQuery>,
+}
+
 /// A change to one photo's decision; absent fields stay as they are.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, TS)]
 #[serde(deny_unknown_fields)]

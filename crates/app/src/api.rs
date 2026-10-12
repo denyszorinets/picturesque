@@ -15,7 +15,9 @@ use ts_rs::TS;
 
 use crate::import::{Deps, ImportError, ImportService, PlanImportArgs, RunArgs};
 use crate::info;
-use crate::library::{DecisionView, PhotoArgs, PhotoDetail, PhotoQuery, SetDecisionsArgs};
+use crate::library::{
+    DecisionView, FacetsArgs, PhotoArgs, PhotoDetail, PhotoQuery, SetDecisionsArgs,
+};
 use crate::ports::catalog::PhotoCatalog;
 use crate::ports::events::EventSink;
 use crate::ports::fs::FileSystem;
@@ -294,8 +296,20 @@ impl Api {
                 respond(self.set_decisions(&changes)?)
             }
             "photo_facets" => {
-                no_args(command, &args)?;
-                respond(self.catalog.facets().map_err(catalog_error)?)
+                let FacetsArgs { filter } = if args.is_null() {
+                    FacetsArgs::default()
+                } else {
+                    parse_args(command, args)?
+                };
+                if let Some(f) = &filter {
+                    f.validate()
+                        .map_err(|m| ApiError::new(ApiErrorCode::InvalidArguments, m))?;
+                }
+                respond(
+                    self.catalog
+                        .facets(filter.as_ref())
+                        .map_err(catalog_error)?,
+                )
             }
             "plan_import" => {
                 let args: PlanImportArgs = parse_args(command, args)?;
