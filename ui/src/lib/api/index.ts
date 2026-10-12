@@ -6,7 +6,7 @@ import type { Settings } from "./generated/Settings";
 import type { SettingsUpdate } from "./generated/SettingsUpdate";
 import type { TemplatePresetView } from "./generated/TemplatePresetView";
 import type { TemplatePreview } from "./generated/TemplatePreview";
-import { selectTransport } from "./transport";
+import { selectTransport, type ImageSize } from "./transport";
 
 export { ApiError } from "./error";
 export type { AppEvent } from "./generated/AppEvent";
@@ -20,6 +20,7 @@ export type { TemplatePreview } from "./generated/TemplatePreview";
 export type { PlannedPhotoView } from "./generated/PlannedPhotoView";
 export type { PhotoStatus } from "./generated/PhotoStatus";
 export { canPickFolders, pickFolders } from "./dialogs";
+export type { ImageSize } from "./transport";
 
 const transport = selectTransport();
 
@@ -77,4 +78,9 @@ export function cancelImport(runId: number): Promise<ImportStatus> {
 /** Subscribes to backend events; returns an unsubscribe function. */
 export function onAppEvent(handler: (event: AppEvent) => void): () => void {
   return transport.subscribe(handler);
+}
+
+/** URL of a photo's cached image (`grid`: 512 px, `preview`: 2048 px). */
+export function imageUrl(photoId: number, size: ImageSize): string {
+  return transport.imageUrl(photoId, size);
 }

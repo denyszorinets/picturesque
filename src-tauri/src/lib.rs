@@ -16,6 +16,7 @@ use picturesque_infra::metadata::ExifMetadataReader;
 use tauri::{AppHandle, Emitter, Manager};
 
 mod commands;
+mod images;
 
 /// Name of the Tauri event carrying [`AppEvent`]s.
 pub const EVENT_NAME: &str = "app-event";
@@ -32,6 +33,19 @@ impl EventSink for TauriEvents {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .register_asynchronous_uri_scheme_protocol("picturesque", |ctx, request, responder| {
+            let api = ctx.app_handle().state::<Arc<Api>>().inner().clone();
+            let path = request.uri().path().to_owned();
+            let etag = request
+                .headers()
+                .get(tauri::http::header::IF_NONE_MATCH)
+                .and_then(|v| v.to_str().ok())
+                .map(str::to_owned);
+            // Rendering may take a while on first request; keep the web view responsive.
+            tauri::async_runtime::spawn_blocking(move || {
+                responder.respond(images::image_response(&api, &path, etag.as_deref()));
+            });
+        })
         .setup(|app| {
             let data_dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&data_dir)?;

@@ -14,7 +14,13 @@ use serde_json::{Value, json};
 use tower::ServiceExt;
 
 fn api() -> Arc<Api> {
-    let catalog = Arc::new(SqliteCatalog::open_in_memory().expect("catalog"));
+    api_with(
+        Arc::new(SqliteCatalog::open_in_memory().expect("catalog")),
+        std::env::temp_dir().join("picturesque-devserver-test-cache"),
+    )
+}
+
+fn api_with(catalog: Arc<SqliteCatalog>, cache_dir: std::path::PathBuf) -> Arc<Api> {
     Arc::new(
         Api::new(AppContext {
             settings_store: catalog.clone(),
@@ -25,7 +31,7 @@ fn api() -> Arc<Api> {
             geocoder: Arc::new(GeoNamesGeocoder::default()),
             events: Arc::new(EventBus::default()),
             decoder: Arc::new(VipsDecoder),
-            cache_dir: std::env::temp_dir().join("picturesque-devserver-test-cache"),
+            cache_dir,
         })
         .expect("api"),
     )
@@ -156,4 +162,113 @@ async fn events_are_streamed_as_server_sent_events() {
     let event: Value = serde_json::from_str(text.trim_start_matches("data: ").trim()).unwrap();
     assert_eq!(event["type"], "import_progress");
     assert_eq!(event["run_id"], 7);
+}
+
+mod images {
+    use std::sync::Arc;
+
+    use axum::body::Body;
+    use axum::http::{Request, StatusCode, header};
+    use picturesque_app::ports::catalog::PhotoCatalog;
+    use picturesque_app::ports::fs::FileSystem;
+    use picturesque_app::ports::settings::SettingsStore;
+    use picturesque_app::settings::Settings;
+    use picturesque_core::media::MediaFormat;
+    use picturesque_core::metadata::CaptureMetadata;
+    use picturesque_core::photo::{Asset, NewPhoto, PhotoAssets};
+    use picturesque_devserver::EventBus;
+    use picturesque_infra::catalog::SqliteCatalog;
+    use picturesque_infra::fs::StdFileSystem;
+    use tower::ServiceExt;
+
+    /// A library with one 40×30 JPEG photo; returns the router and photo id.
+    fn library(dir: &std::path::Path) -> (axum::Router, i64) {
+        let lib = dir.join("lib");
+        std::fs::create_dir_all(&lib).unwrap();
+        image::DynamicImage::new_rgb8(40, 30)
+            .save(lib.join("a.jpg"))
+            .unwrap();
+        let catalog = Arc::new(SqliteCatalog::open_in_memory().unwrap());
+        catalog
+            .save_settings(&Settings {
+                library_root: Some(lib.clone()),
+                ..Default::default()
+            })
+            .unwrap();
+        let (hash, size) = StdFileSystem.hash_file(&lib.join("a.jpg")).unwrap();
+        let id = catalog
+            .insert_photo(&NewPhoto {
+                metadata: CaptureMetadata::default(),
+                assets: PhotoAssets::new(vec![Asset {
+                    format: MediaFormat::Jpeg,
+                    path: "a.jpg".into(),
+                    size,
+                    hash,
+                }])
+                .unwrap(),
+            })
+            .unwrap();
+        let api = super::api_with(catalog, dir.join("cache"));
+        (
+            picturesque_devserver::router(api, EventBus::default()),
+            id.0,
+        )
+    }
+
+    #[tokio::test]
+    async fn serves_cached_jpegs_with_etag_revalidation() {
+        let dir = tempfile::tempdir().unwrap();
+        let (router, id) = library(dir.path());
+
+        let response = router
+            .clone()
+            .oneshot(
+                Request::get(format!("/api/images/grid/{id}"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(response.headers()[header::CONTENT_TYPE], "image/jpeg");
+        let etag = response.headers()[header::ETAG]
+            .to_str()
+            .unwrap()
+            .to_owned();
+        let body = http_body_util::BodyExt::collect(response.into_body())
+            .await
+            .unwrap()
+            .to_bytes();
+        assert_eq!(image::load_from_memory(&body).unwrap().width(), 40);
+
+        let again = router
+            .oneshot(
+                Request::get(format!("/api/images/grid/{id}"))
+                    .header(header::IF_NONE_MATCH, &etag)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(again.status(), StatusCode::NOT_MODIFIED);
+    }
+
+    #[tokio::test]
+    async fn rejects_unknown_photos_and_sizes() {
+        let dir = tempfile::tempdir().unwrap();
+        let (router, _) = library(dir.path());
+        let status = |uri: &'static str| {
+            let router = router.clone();
+            async move {
+                router
+                    .oneshot(Request::get(uri).body(Body::empty()).unwrap())
+                    .await
+                    .unwrap()
+                    .status()
+            }
+        };
+
+        assert_eq!(status("/api/images/grid/999").await, StatusCode::NOT_FOUND);
+        assert_eq!(status("/api/images/huge/1").await, StatusCode::BAD_REQUEST);
+    }
 }

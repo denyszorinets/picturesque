@@ -56,10 +56,13 @@ The server mirrors the Tauri command API exactly:
         - HTTP status
       * - ``invalid_arguments``
         - 400
-      * - ``unknown_command``
+      * - ``unknown_command``, ``not_found``
         - 404
       * - ``internal``
         - 500
+
+``GET /api/images/{size}/{photo_id}``
+   A photo's cached JPEG (see :doc:`/reference/api`).
 
 ``GET /api/events``
    Server-sent events: each backend event (for example import progress) is

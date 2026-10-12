@@ -1,4 +1,4 @@
-import { invoke, isTauri } from "@tauri-apps/api/core";
+import { convertFileSrc, invoke, isTauri } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { ApiError } from "./error";
 import type { AppEvent } from "./generated/AppEvent";
@@ -8,7 +8,12 @@ export interface Transport {
   call<T>(command: string, args?: unknown): Promise<T>;
   /** Calls `handler` for every backend event; returns a function that stops listening. */
   subscribe(handler: (event: AppEvent) => void): () => void;
+  /** URL of a photo's cached image, usable as an `<img src>`. */
+  imageUrl(photoId: number, size: ImageSize): string;
 }
+
+/** Cached image sizes (see `picturesque_app::thumbnails::ImageSize`). */
+export type ImageSize = "grid" | "preview";
 
 /** Name of the Tauri event carrying backend events (see src-tauri/src/lib.rs). */
 export const TAURI_EVENT = "app-event";
@@ -35,6 +40,10 @@ export const tauriTransport: Transport = {
       stopped = true;
       stop?.();
     };
+  },
+  imageUrl(photoId, size) {
+    // The `picturesque://` protocol (src-tauri/src/images.rs).
+    return convertFileSrc(`${size}/${photoId}`, "picturesque");
   },
 };
 
@@ -84,6 +93,9 @@ export function httpTransport(
         }
       };
       return () => source.close();
+    },
+    imageUrl(photoId, size) {
+      return `${baseUrl}/api/images/${size}/${photoId}`;
     },
   };
 }

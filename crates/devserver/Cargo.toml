@@ -17,6 +17,9 @@ tokio.workspace = true
 futures-util.workspace = true
 
 [dev-dependencies]
+image.workspace = true
+picturesque-core.workspace = true
+tempfile.workspace = true
 http-body-util.workspace = true
 tower.workspace = true
 

@@ -119,6 +119,17 @@ describe("httpTransport events", () => {
   });
 });
 
+describe("imageUrl", () => {
+  it("points at the development server's image route", () => {
+    expect(httpTransport(fetch, "").imageUrl(12, "grid")).toBe(
+      "/api/images/grid/12",
+    );
+    expect(httpTransport(fetch, "http://x").imageUrl(3, "preview")).toBe(
+      "http://x/api/images/preview/3",
+    );
+  });
+});
+
 describe("selectTransport", () => {
   it("uses Tauri IPC inside the desktop shell", () => {
     expect(selectTransport(true)).toBe(tauriTransport);

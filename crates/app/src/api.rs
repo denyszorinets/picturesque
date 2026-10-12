@@ -36,6 +36,8 @@ use picturesque_core::photo::PhotoId;
 pub enum ApiErrorCode {
     UnknownCommand,
     InvalidArguments,
+    /// The thing asked for (for example a photo) does not exist.
+    NotFound,
     Internal,
 }
 
@@ -140,13 +142,29 @@ impl Api {
         self.thumbnails.prefill_in_background();
     }
 
+    /// Resolves an image request path `{size}/{photo_id}` (as used by the
+    /// `picturesque://` protocol and `/api/images/`) to the cached file.
+    pub fn image_request(&self, path: &str) -> Result<PathBuf, ApiError> {
+        let invalid = || {
+            ApiError::new(
+                ApiErrorCode::InvalidArguments,
+                format!("invalid image path `{path}`"),
+            )
+        };
+        let (size, id) = path.trim_matches('/').split_once('/').ok_or_else(invalid)?;
+        let size = ImageSize::from_name(size).ok_or_else(invalid)?;
+        let id: i64 = id.parse().map_err(|_| invalid())?;
+        self.image_path(id, size)
+    }
+
     /// Path of a photo's cached image, generating it if needed. Images are
     /// served as files by each transport rather than through JSON.
     pub fn image_path(&self, photo_id: i64, size: ImageSize) -> Result<PathBuf, ApiError> {
         self.thumbnails
             .image(PhotoId(photo_id), size)
             .map_err(|e| match e {
-                ThumbnailError::NotFound(_) | ThumbnailError::NoLibrary => {
+                ThumbnailError::NotFound(_) => ApiError::new(ApiErrorCode::NotFound, e.to_string()),
+                ThumbnailError::NoLibrary => {
                     ApiError::new(ApiErrorCode::InvalidArguments, e.to_string())
                 }
                 ThumbnailError::Decode(_) | ThumbnailError::Storage(_) => {
