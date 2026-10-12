@@ -9,6 +9,8 @@ export default defineConfig(({ mode }) => ({
     port: 5173,
     strictPort: true,
     host: "127.0.0.1",
+    // In a browser, commands go to the development server (ADR-0010).
+    proxy: { "/api": "http://127.0.0.1:5174" },
   },
   build: {
     target: "es2022",

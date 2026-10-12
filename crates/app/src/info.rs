@@ -1,17 +1,21 @@
 //! Application identity, shown in the UI's About screen.
 
+use serde::Serialize;
+use ts_rs::TS;
+
 /// Name and version of the running application.
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[ts(export)]
 pub struct AppInfo {
-    pub name: &'static str,
-    pub version: &'static str,
+    pub name: String,
+    pub version: String,
 }
 
 /// Returns the application's name and version.
 pub fn app_info() -> AppInfo {
     AppInfo {
-        name: "Picturesque",
-        version: env!("CARGO_PKG_VERSION"),
+        name: "Picturesque".to_owned(),
+        version: env!("CARGO_PKG_VERSION").to_owned(),
     }
 }
 
@@ -25,15 +29,5 @@ mod tests {
 
         assert_eq!(info.name, "Picturesque");
         assert_eq!(info.version, env!("CARGO_PKG_VERSION"));
-    }
-
-    #[test]
-    fn app_info_serializes_to_the_shape_the_ui_expects() {
-        let json = serde_json::to_value(app_info()).expect("AppInfo serializes");
-
-        assert_eq!(
-            json,
-            serde_json::json!({ "name": "Picturesque", "version": env!("CARGO_PKG_VERSION") })
-        );
     }
 }

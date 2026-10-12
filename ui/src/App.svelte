@@ -4,6 +4,8 @@
   let info = $state<AppInfo | null>(null);
   let error = $state<string | null>(null);
 
+  const versionLabel = (i: AppInfo) => `${i.name} ${i.version}`;
+
   $effect(() => {
     appInfo()
       .then((result) => (info = result))
@@ -14,10 +16,7 @@
 <main>
   <h1>Picturesque</h1>
   {#if info}
-    <p class="version" data-testid="app-version">
-      {info.name}
-      {info.version}
-    </p>
+    <p class="version" data-testid="app-version">{versionLabel(info)}</p>
   {:else if error}
     <p class="error" role="alert">Backend unavailable: {error}</p>
   {:else}
