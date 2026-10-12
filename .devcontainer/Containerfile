@@ -40,7 +40,13 @@ RUN dnf install -y \
         libheif-devel \
         libheif-ffmpeg \
         libheif-tools \
-        LibRaw-devel && \
+        LibRaw-devel
+
+# HEVC decoder for HEIC (iPhone) photos. Fedora ships none for patent
+# reasons; RPM Fusion's libheif-freeworld adds the libde265 plugin (ADR-0005).
+RUN dnf install -y \
+        https://mirrors.rpmfusion.org/free/fedora/rpmfusion-free-release-44.noarch.rpm && \
+    dnf install -y libheif-freeworld && \
     dnf clean all
 
 RUN curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh | bash

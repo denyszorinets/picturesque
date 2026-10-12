@@ -15,8 +15,13 @@ needed. Outside it you need:
   Windows, Xcode command-line tools on macOS).
 - `uv <https://docs.astral.sh/uv/>`_ for the documentation site.
 
-Later milestones add libvips and LibRaw; this page lists them as they are
-introduced.
+- libvips (8.18 or newer, with HEIF support), LibRaw (0.22 or newer) and
+  libheif development packages
+  (:doc:`ADR-0005 </architecture/decisions/0005-image-decoding-stack>`).
+- An HEVC decoder plugin for libheif (libde265), needed to read HEIC photos.
+  Many distributions omit it for patent reasons; on Fedora, install
+  ``libheif-freeworld`` from RPM Fusion. Check with
+  ``heif-dec --list-decoders``: libde265 must appear under *HEIC decoders*.
 
 After cloning, install the front-end dependencies once:
 
