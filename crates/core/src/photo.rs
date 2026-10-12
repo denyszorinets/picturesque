@@ -147,6 +147,13 @@ impl From<PhotoAssets> for Vec<Asset> {
     }
 }
 
+/// A photo not yet stored in the catalog.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct NewPhoto {
+    pub metadata: CaptureMetadata,
+    pub assets: PhotoAssets,
+}
+
 /// A photo in the catalog.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Photo {
