@@ -50,7 +50,8 @@ Commands
    A ``PhotoSummary`` has ``id``, ``captured_at``, ``day``
    (``YYYY-MM-DD``, for grouping), ``camera``, ``lens``, ``city``,
    ``country``, ``flag``, ``rating``, displayed ``width``/``height``,
-   ``has_raw`` and ``file_name``.
+   ``has_raw``, ``file_name`` and ``series_id`` (the first photo of its
+   series, or ``null``).
 
 ``get_photo``
    ``{ "photo_id": 7 }``. A ``PhotoDetail``: capture time and UTC offset,
@@ -87,6 +88,20 @@ Commands
    ``{ "photo_ids": [7, 8, 9] }``. Analyzes these photos next; the library
    sends the photos on screen. Unknown or finished photos are ignored.
    Returns the ``analysis_status``.
+
+``photo_series``
+   ``{ "photo_id": 7 }``. The photo's series:
+   ``{ "photo_id": 7, "series_id": 5, "photo_ids": [5, 6, 7], "edit": null }``.
+   ``series_id`` is the first photo's id (``null``, with no ``photo_ids``,
+   when the photo is in no series); ``edit`` is the user's correction before
+   this photo. Unknown photos are ``not_found``.
+
+``edit_series``
+   ``{ "photo_id": 7, "edit": "split" }``. Sets the correction before a
+   photo: ``split`` (it starts a new series), ``join`` (it joins the series
+   of the photo before it) or ``null`` (automatic). Series are recomputed
+   immediately; returns the photo's ``photo_series``
+   (:doc:`/features/series`).
 
 ``plan_import``
    ``{ "sources": ["/absolute/folder", ...] }``. Starts planning in the
@@ -173,6 +188,10 @@ events from ``GET /api/events``.
 
 ``analysis_progress``
    The ``analysis_status``, sent after each analyzed photo.
+
+``series_changed``
+   ``{ "series": 12, "photos": 57 }``: series membership changed (after
+   analysis, an import, an edit or a settings change).
 
    .. code-block:: json
 

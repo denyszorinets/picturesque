@@ -14,9 +14,7 @@ use picturesque_core::photo::{Photo, PhotoId};
 use serde::Deserialize;
 use ts_rs::TS;
 
-use crate::import::model::ImportState;
 use crate::ports::catalog::{CatalogError, PhotoCatalog};
-use crate::ports::events::{AppEvent, EventSink};
 use crate::ports::fs::FileSystem;
 use crate::ports::images::ImageDecoder;
 use crate::ports::settings::SettingsStore;
@@ -256,37 +254,6 @@ impl ThumbnailService {
             }
         });
         done.into_inner()
-    }
-}
-
-/// Forwards events; when an import completes, starts a thumbnail prefill
-/// and wakes the analysis workers.
-pub struct PrefillAfterImport {
-    pub inner: Arc<dyn EventSink>,
-    pub thumbnails: std::sync::OnceLock<Arc<ThumbnailService>>,
-    pub analysis: std::sync::OnceLock<Arc<crate::analysis::AnalysisService>>,
-}
-
-impl std::fmt::Debug for PrefillAfterImport {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("PrefillAfterImport").finish_non_exhaustive()
-    }
-}
-
-impl EventSink for PrefillAfterImport {
-    fn emit(&self, event: &AppEvent) {
-        self.inner.emit(event);
-        let AppEvent::ImportProgress(status) = event else {
-            return;
-        };
-        if status.state == ImportState::Completed {
-            if let Some(thumbnails) = self.thumbnails.get() {
-                thumbnails.prefill_in_background();
-            }
-            if let Some(analysis) = self.analysis.get() {
-                analysis.wake();
-            }
-        }
     }
 }
 

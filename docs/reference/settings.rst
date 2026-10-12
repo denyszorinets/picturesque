@@ -50,6 +50,22 @@ Existing sidecars are always updated where they are.
 :Values: ``file_extension`` writes ``IMG_0042.CR3.xmp`` (darktable,
    digiKam); ``base_name`` writes ``IMG_0042.xmp`` (Lightroom, Bridge).
 
+.. _reference-settings-series:
+
+``series``
+----------
+
+When photos form a series (:doc:`/features/series`).
+
+:Type: object with ``max_gap_seconds`` and ``max_distance``
+:Default: ``{ "max_gap_seconds": 30, "max_distance": 16 }``
+:Values: ``max_gap_seconds``: the longest pause between consecutive shots
+   of a series, 1–3600. ``max_distance``: the most perceptual-hash bits a
+   photo may differ from the series' latest photos, 0–32; lower is
+   stricter (:doc:`similarity`).
+
+Changing it regroups series immediately.
+
 Where settings are stored
 -------------------------
 
@@ -64,7 +80,8 @@ API
    .. code-block:: json
 
       { "library_root": null, "path_template": "{year|Undated}/{date}/{name}.{ext}",
-        "sidecar_naming": "file_extension" }
+        "sidecar_naming": "file_extension",
+        "series": { "max_gap_seconds": 30, "max_distance": 16 } }
 
 ``update_settings``
    Arguments: any subset of the settings. Unknown fields are rejected.

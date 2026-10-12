@@ -111,6 +111,9 @@ pub struct PhotoSummary {
     pub has_raw: bool,
     /// The file the grid shows, relative to the library folder.
     pub file_name: String,
+    /// The series the photo is in (its first photo's id), if any.
+    #[ts(type = "number | null")]
+    pub series_id: Option<i64>,
 }
 
 /// A page of results.

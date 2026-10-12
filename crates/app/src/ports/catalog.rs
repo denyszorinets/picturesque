@@ -6,6 +6,7 @@ use std::fmt;
 use picturesque_core::decision::Decision;
 use picturesque_core::hash::ContentHash;
 use picturesque_core::photo::{NewPhoto, Photo, PhotoId};
+use picturesque_core::series::SeriesEdit;
 
 use crate::library::{PhotoFacets, PhotoPage, PhotoQuery};
 
@@ -122,6 +123,28 @@ pub trait PhotoCatalog: Send + Sync {
 
     /// A photo's current results, by analyzer name.
     fn analysis(&self, id: PhotoId) -> Result<Vec<(String, u32, serde_json::Value)>, CatalogError>;
+
+    /// Every photo's id and local capture time.
+    fn capture_times(&self) -> Result<Vec<(PhotoId, Option<chrono::NaiveDateTime>)>, CatalogError>;
+
+    /// All current results of one analyzer (at its version).
+    fn analysis_results(
+        &self,
+        analyzer: AnalyzerId,
+    ) -> Result<Vec<(PhotoId, serde_json::Value)>, CatalogError>;
+
+    /// The user's series corrections.
+    fn series_edits(&self) -> Result<Vec<(PhotoId, SeriesEdit)>, CatalogError>;
+
+    /// Sets (or with `None` removes) the correction before a photo.
+    fn set_series_edit(&self, id: PhotoId, edit: Option<SeriesEdit>) -> Result<(), CatalogError>;
+
+    /// Replaces all series. Each series lists its photos in order; its id
+    /// is its first photo's id.
+    fn replace_series(&self, series: &[Vec<PhotoId>]) -> Result<(), CatalogError>;
+
+    /// The series a photo belongs to: its id and members in order.
+    fn series_of(&self, id: PhotoId) -> Result<Option<(PhotoId, Vec<PhotoId>)>, CatalogError>;
 
     /// Sizes of all catalogued RAW and image files. A new file can only be
     /// a duplicate if its size is in this set, so only those are hashed.

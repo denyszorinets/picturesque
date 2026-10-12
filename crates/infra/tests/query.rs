@@ -526,3 +526,107 @@ fn queries_over_ten_thousand_photos_are_fast() {
         start.elapsed()
     );
 }
+
+#[test]
+fn series_are_stored_replaced_and_shown_in_summaries() {
+    use chrono::NaiveDate;
+    use picturesque_core::series::SeriesEdit;
+
+    let c = sample();
+    let (p1, p2, p3, p5) = (PhotoId(1), PhotoId(2), PhotoId(3), PhotoId(5));
+
+    let times = c.capture_times().unwrap();
+    assert_eq!(times.len(), 6);
+    assert_eq!(
+        times[0],
+        (
+            p1,
+            Some(
+                NaiveDate::from_ymd_opt(2026, 10, 12)
+                    .unwrap()
+                    .and_hms_opt(14, 30, 0)
+                    .unwrap()
+            )
+        )
+    );
+    assert_eq!(times[3], (PhotoId(4), None));
+
+    c.replace_series(&[vec![p2, p1], vec![p3, p5]]).unwrap();
+    assert_eq!(c.series_of(p1).unwrap(), Some((p2, vec![p2, p1])));
+    assert_eq!(c.series_of(PhotoId(4)).unwrap(), None);
+    let page = c.query(&PhotoQuery::default()).unwrap();
+    let series: Vec<(i64, Option<i64>)> = page.photos.iter().map(|p| (p.id, p.series_id)).collect();
+    assert_eq!(
+        series,
+        [
+            (1, Some(2)),
+            (2, Some(2)),
+            (3, Some(3)),
+            (5, Some(3)),
+            (6, None),
+            (4, None)
+        ]
+    );
+
+    // Replacing drops old membership.
+    c.replace_series(&[vec![p1, p2, p3]]).unwrap();
+    assert_eq!(c.series_of(p5).unwrap(), None);
+    assert_eq!(c.series_of(p3).unwrap(), Some((p1, vec![p1, p2, p3])));
+    c.replace_series(&[]).unwrap();
+    assert_eq!(c.series_of(p1).unwrap(), None);
+
+    // Edits are kept separately and can be changed or removed.
+    c.set_series_edit(p3, Some(SeriesEdit::Split)).unwrap();
+    c.set_series_edit(p1, Some(SeriesEdit::Join)).unwrap();
+    c.set_series_edit(p3, Some(SeriesEdit::Join)).unwrap();
+    assert_eq!(
+        c.series_edits().unwrap(),
+        [(p1, SeriesEdit::Join), (p3, SeriesEdit::Join)]
+    );
+    c.set_series_edit(p1, None).unwrap();
+    assert_eq!(c.series_edits().unwrap(), [(p3, SeriesEdit::Join)]);
+    assert!(
+        c.set_series_edit(PhotoId(99), Some(SeriesEdit::Split))
+            .is_err()
+    );
+}
+
+#[test]
+fn analysis_results_are_listed_per_analyzer_version() {
+    use picturesque_app::ports::catalog::AnalyzerId;
+    use serde_json::json;
+
+    let c = sample();
+    let v1 = AnalyzerId {
+        name: "similarity",
+        version: 1,
+    };
+    let v2 = AnalyzerId {
+        name: "similarity",
+        version: 2,
+    };
+    c.store_analysis(PhotoId(2), v1, &json!({ "phash": "00" }))
+        .unwrap();
+    c.store_analysis(PhotoId(1), v1, &json!({ "phash": "01" }))
+        .unwrap();
+    c.store_analysis(PhotoId(3), v2, &json!({ "phash": "02" }))
+        .unwrap();
+    c.store_analysis(
+        PhotoId(1),
+        AnalyzerId {
+            name: "technical",
+            version: 1,
+        },
+        &json!({}),
+    )
+    .unwrap();
+
+    assert_eq!(
+        c.analysis_results(v1).unwrap(),
+        [
+            (PhotoId(1), json!({ "phash": "01" })),
+            (PhotoId(2), json!({ "phash": "00" }))
+        ]
+    );
+    assert_eq!(c.analysis_results(v2).unwrap().len(), 1);
+}

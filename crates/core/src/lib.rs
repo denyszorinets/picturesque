@@ -13,5 +13,6 @@ pub mod metadata;
 pub mod photo;
 pub mod pixels;
 pub mod quality;
+pub mod series;
 pub mod similarity;
 pub mod template;

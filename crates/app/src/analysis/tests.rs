@@ -263,7 +263,7 @@ fn background_workers_analyze_new_photos_when_woken_and_report_progress() {
         .iter()
         .filter_map(|e| match e {
             AppEvent::AnalysisProgress(s) => Some(*s),
-            AppEvent::ImportProgress(_) => None,
+            _ => None,
         })
         .collect();
     assert_eq!(progress.len(), 4);

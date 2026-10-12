@@ -180,7 +180,8 @@ fn query_page(conn: &Connection, query: &PhotoQuery) -> Result<PhotoPage, Catalo
                 coalesce(d.flag, 'unflagged'), coalesce(d.rating, 0), p.width, p.height, p.orientation,
                 EXISTS (SELECT 1 FROM asset a WHERE a.photo_id = p.id AND a.role = 'raw'),
                 (SELECT a.path FROM asset a WHERE a.photo_id = p.id AND a.role <> 'sidecar'
-                 ORDER BY a.role = 'raw' LIMIT 1)
+                 ORDER BY a.role = 'raw' LIMIT 1),
+                (SELECT sm.series_id FROM series_member sm WHERE sm.photo_id = p.id)
          {FROM} {} ORDER BY {} LIMIT ?",
         where_sql(&clauses),
         order_by(sort)
@@ -216,6 +217,7 @@ fn query_page(conn: &Connection, query: &PhotoQuery) -> Result<PhotoPage, Catalo
                 height,
                 has_raw: row.get(12)?,
                 file_name: path.rsplit('/').next().unwrap_or_default().to_owned(),
+                series_id: row.get(14)?,
             })
         })
         .map_err(storage)?

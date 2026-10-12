@@ -5,6 +5,7 @@ mod imports;
 mod migrations;
 mod photos;
 mod query;
+mod series;
 mod settings;
 
 use std::path::Path;

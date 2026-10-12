@@ -7,11 +7,13 @@
 
 pub mod analysis;
 pub mod api;
+pub mod hooks;
 pub mod import;
 pub mod info;
 pub mod library;
 pub mod ports;
 pub mod scan;
+pub mod series;
 pub mod settings;
 pub mod sidecars;
 pub mod templates;

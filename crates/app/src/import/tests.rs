@@ -265,7 +265,7 @@ fn reports_progress_and_completion_as_events() {
         .iter()
         .filter_map(|e| match e {
             AppEvent::ImportProgress(s) => Some(s),
-            AppEvent::AnalysisProgress(_) => None,
+            _ => None,
         })
         .collect();
     assert!(statuses.iter().any(|s| s.state == ImportState::Planning));
