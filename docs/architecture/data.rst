@@ -67,8 +67,8 @@ task that introduces them. The rest is in the schema today
    photo and whether membership was edited by the user, so manual splits and
    merges survive re-analysis.
 
-``decision`` (planned)
-   Pick, reject or unflagged; star rating; colour label; timestamp of the
+``decision``
+   Pick, reject or unflagged; star rating; timestamp of the
    last change and of the last sidecar write.
 
 ``import_run`` / ``import_photo`` / ``import_file``
@@ -113,6 +113,10 @@ how many have run. Each migration runs in its own transaction.
      - ``0003_imports.sql``
      - ``import_run``, ``import_photo``, ``import_file``
        (:doc:`/features/import`)
+   * - 4
+     - ``0004_decisions.sql``
+     - ``decision`` (flag, rating, when the sidecar was last written);
+       indexes for browsing by date, camera, lens and place
 
 Conventions:
 
@@ -121,6 +125,11 @@ Conventions:
 - Asset paths are relative to the Clean library root and always use
   ``/``, so a library on an external drive reads the same on every
   operating system.
+- A photo without a ``decision`` row is unflagged and unrated; queries
+  use ``LEFT JOIN`` with defaults.
+- Browsing queries page with keyset cursors on
+  ``(captured_local, id)``; over 10,000 photos a filtered page takes well
+  under 50 ms (tested).
 - A unique partial index on ``asset.hash`` (excluding sidecars) enforces
   that each RAW or image content is catalogued once.
 

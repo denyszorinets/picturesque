@@ -15,6 +15,7 @@ use ts_rs::TS;
 
 use crate::import::{Deps, ImportError, ImportService, PlanImportArgs, RunArgs};
 use crate::info;
+use crate::library::PhotoQuery;
 use crate::ports::catalog::PhotoCatalog;
 use crate::ports::events::EventSink;
 use crate::ports::fs::FileSystem;
@@ -96,11 +97,17 @@ impl fmt::Debug for AppContext {
 ///
 /// `call` is synchronous; transports run it on a blocking thread so use
 /// cases can do file and database I/O directly.
-#[derive(Debug)]
 pub struct Api {
     settings: SettingsService,
     imports: ImportService,
     thumbnails: Arc<ThumbnailService>,
+    catalog: Arc<dyn PhotoCatalog>,
+}
+
+impl fmt::Debug for Api {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Api").finish_non_exhaustive()
+    }
 }
 
 impl Api {
@@ -119,6 +126,7 @@ impl Api {
             thumbnails: OnceLock::new(),
         });
         let _ = events.thumbnails.set(Arc::clone(&thumbnails));
+        let catalog = Arc::clone(&ctx.catalog);
         let imports = ImportService::new(Deps {
             settings: Arc::clone(&ctx.settings_store),
             catalog: ctx.catalog,
@@ -133,6 +141,7 @@ impl Api {
             settings: SettingsService::new(ctx.settings_store, ctx.fs),
             imports,
             thumbnails,
+            catalog,
         })
     }
 
@@ -201,6 +210,24 @@ impl Api {
                 let args: PreviewTemplateArgs = parse_args(command, args)?;
                 respond(templates::preview(&args.template))
             }
+            "query_photos" => {
+                let query: PhotoQuery = parse_args(
+                    command,
+                    if args.is_null() {
+                        Value::Object(Default::default())
+                    } else {
+                        args
+                    },
+                )?;
+                query
+                    .validate()
+                    .map_err(|m| ApiError::new(ApiErrorCode::InvalidArguments, m))?;
+                respond(self.catalog.query(&query).map_err(catalog_error)?)
+            }
+            "photo_facets" => {
+                no_args(command, &args)?;
+                respond(self.catalog.facets().map_err(catalog_error)?)
+            }
             "plan_import" => {
                 let args: PlanImportArgs = parse_args(command, args)?;
                 let run_id = self.imports.plan(args.sources).map_err(import_error)?;
@@ -230,6 +257,10 @@ impl Api {
             )),
         }
     }
+}
+
+fn catalog_error(e: crate::ports::catalog::CatalogError) -> ApiError {
+    ApiError::internal(e.to_string())
 }
 
 fn import_error(e: ImportError) -> ApiError {
