@@ -15,11 +15,14 @@ use picturesque_app::settings::Settings;
 use picturesque_infra::catalog::SqliteCatalog;
 use picturesque_infra::fs::StdFileSystem;
 use picturesque_infra::geocode::GeoNamesGeocoder;
+use picturesque_infra::images::VipsDecoder;
 use picturesque_infra::metadata::ExifMetadataReader;
 use serde_json::{Value, json};
 use support::{ExifValue::*, write_jpeg};
 
 fn api(catalog: &Arc<SqliteCatalog>) -> Api {
+    let cache_dir =
+        std::env::temp_dir().join(format!("picturesque-test-cache-{}", std::process::id()));
     Api::new(AppContext {
         settings_store: catalog.clone(),
         catalog: catalog.clone(),
@@ -28,6 +31,8 @@ fn api(catalog: &Arc<SqliteCatalog>) -> Api {
         metadata: Arc::new(ExifMetadataReader),
         geocoder: Arc::new(GeoNamesGeocoder::default()),
         events: Arc::new(NoEvents),
+        decoder: Arc::new(VipsDecoder),
+        cache_dir,
     })
     .unwrap()
 }
@@ -106,6 +111,17 @@ fn imports_real_files_into_a_real_library() {
         .collect();
     assert!(leftovers.is_empty());
     assert_eq!(catalog.photo_count().unwrap(), 2);
+
+    // Thumbnails are rendered from the library copy and cached.
+    let thumb = api
+        .image_path(1, picturesque_app::thumbnails::ImageSize::Grid)
+        .unwrap();
+    assert_eq!(image::image_dimensions(&thumb).unwrap(), (16, 12));
+    assert_eq!(
+        api.image_path(1, picturesque_app::thumbnails::ImageSize::Grid)
+            .unwrap(),
+        thumb
+    );
 
     // Importing the same card again finds only duplicates.
     let again = call(&api, "plan_import", json!({ "sources": [src] }));

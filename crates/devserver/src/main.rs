@@ -14,6 +14,7 @@ use picturesque_devserver::EventBus;
 use picturesque_infra::catalog::SqliteCatalog;
 use picturesque_infra::fs::StdFileSystem;
 use picturesque_infra::geocode::GeoNamesGeocoder;
+use picturesque_infra::images::VipsDecoder;
 use picturesque_infra::metadata::ExifMetadataReader;
 
 const DEFAULT_ADDR: &str = "127.0.0.1:5174";
@@ -56,8 +57,12 @@ async fn serve() -> Result<(), String> {
         metadata: Arc::new(ExifMetadataReader),
         geocoder: Arc::new(GeoNamesGeocoder::default()),
         events: Arc::new(events.clone()),
+        decoder: Arc::new(VipsDecoder),
+        cache_dir: data_dir.join("cache"),
     })
     .map_err(|e| e.message)?;
+
+    api.start_background_work();
 
     let listener = tokio::net::TcpListener::bind(addr)
         .await

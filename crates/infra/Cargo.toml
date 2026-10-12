@@ -20,6 +20,7 @@ rawler.workspace = true
 imagesize.workspace = true
 flate2.workspace = true
 blake3.workspace = true
+libvips.workspace = true
 
 [dev-dependencies]
 image.workspace = true

@@ -39,6 +39,13 @@ pub trait PhotoCatalog: Send + Sync {
 
     fn photo_count(&self) -> Result<u64, CatalogError>;
 
+    /// Every photo, oldest capture first.
+    fn all_photos(&self) -> Result<Vec<Photo>, CatalogError>;
+
+    /// Records a photo's stored pixel dimensions (before orientation), for
+    /// formats whose size is only known after decoding.
+    fn set_dimensions(&self, id: PhotoId, width: u32, height: u32) -> Result<(), CatalogError>;
+
     /// Sizes of all catalogued RAW and image files. A new file can only be
     /// a duplicate if its size is in this set, so only those are hashed.
     fn media_sizes(&self) -> Result<HashSet<u64>, CatalogError>;

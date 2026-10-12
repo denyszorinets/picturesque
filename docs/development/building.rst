@@ -22,6 +22,14 @@ needed. Outside it you need:
   Many distributions omit it for patent reasons; on Fedora, install
   ``libheif-freeworld`` from RPM Fusion. Check with
   ``heif-dec --list-decoders``: libde265 must appear under *HEIC decoders*.
+  On macOS: ``brew install vips libraw libheif`` and
+  ``export LIBRARY_PATH=$(brew --prefix)/lib``.
+
+.. warning::
+
+   Building the full workspace on Windows is not set up yet: it needs
+   libvips and LibRaw import libraries. ``picturesque-core`` and
+   ``picturesque-app`` build and test on Windows.
 
 After cloning, install the front-end dependencies once:
 

@@ -8,6 +8,7 @@ use picturesque_devserver::EventBus;
 use picturesque_infra::catalog::SqliteCatalog;
 use picturesque_infra::fs::StdFileSystem;
 use picturesque_infra::geocode::GeoNamesGeocoder;
+use picturesque_infra::images::VipsDecoder;
 use picturesque_infra::metadata::ExifMetadataReader;
 use serde_json::{Value, json};
 use tower::ServiceExt;
@@ -23,6 +24,8 @@ fn api() -> Arc<Api> {
             metadata: Arc::new(ExifMetadataReader),
             geocoder: Arc::new(GeoNamesGeocoder::default()),
             events: Arc::new(EventBus::default()),
+            decoder: Arc::new(VipsDecoder),
+            cache_dir: std::env::temp_dir().join("picturesque-devserver-test-cache"),
         })
         .expect("api"),
     )

@@ -38,25 +38,7 @@ with values from each photo.
 Where settings are stored
 -------------------------
 
-In the catalog database, ``catalog.sqlite``, in the application data
-folder:
-
-.. list-table::
-   :header-rows: 1
-
-   * - Platform
-     - Folder
-   * - Linux
-     - ``~/.local/share/io.github.denyszorinets.picturesque/``
-       (``$XDG_DATA_HOME`` if set)
-   * - macOS
-     - ``~/Library/Application Support/io.github.denyszorinets.picturesque/``
-   * - Windows
-     - ``%APPDATA%\io.github.denyszorinets.picturesque\``
-
-The development server uses ``target/devserver-data/`` instead, or the
-folder in ``PICTURESQUE_DATA_DIR``
-(:doc:`/development/ui-in-browser`).
+In the catalog database; see :doc:`data-locations`.
 
 API
 ---
