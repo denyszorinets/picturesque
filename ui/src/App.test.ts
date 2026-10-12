@@ -13,6 +13,20 @@ vi.mock("./lib/api", async (importOriginal) => {
     templatePresets: () => Promise.resolve([]),
     previewTemplate: () => Promise.resolve({ error: null, examples: [] }),
     onAppEvent: () => () => {},
+    photoFacets: () =>
+      Promise.resolve({
+        total: 0,
+        first_day: null,
+        last_day: null,
+        days: [],
+        cameras: [],
+        lenses: [],
+        places: [],
+        flags: [],
+        ratings: [0, 0, 0, 0, 0, 0],
+      }),
+    queryPhotos: () =>
+      Promise.resolve({ photos: [], next_cursor: null, total: 0 }),
     canPickFolders: () => false,
   };
 });
@@ -35,8 +49,9 @@ describe("App", () => {
       "v0.1.0",
     );
     expect(
-      await screen.findByRole("heading", { name: "Import" }),
+      await screen.findByRole("button", { name: "Library" }),
     ).toBeInTheDocument();
+    expect(await screen.findByText("No photos yet")).toBeInTheDocument();
   });
 
   it("shows an error when the backend is unavailable", async () => {

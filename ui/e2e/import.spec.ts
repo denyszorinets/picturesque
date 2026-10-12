@@ -22,6 +22,10 @@ test("imports a folder into the library through the UI", async ({ page }) => {
   const backup = folder({ "copy-of-1.JPG": jpeg(1) });
 
   await page.goto("/");
+  await page
+    .getByRole("navigation")
+    .getByRole("button", { name: "Import" })
+    .click();
 
   // Settings: library folder and a template, with live preview.
   await page.getByTestId("library-root").fill(library);
@@ -65,6 +69,10 @@ test("imports a folder into the library through the UI", async ({ page }) => {
 
 test("explains problems from the backend", async ({ page }) => {
   await page.goto("/");
+  await page
+    .getByRole("navigation")
+    .getByRole("button", { name: "Import" })
+    .click();
 
   await page.getByTestId("library-root").fill("/definitely/not/here");
   await page.getByTestId("save-settings").click();
