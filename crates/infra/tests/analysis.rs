@@ -110,3 +110,43 @@ fn scores_separate_sharp_from_blurred_photos() {
         json!({ "analyzed": 2, "total": 2, "running": false })
     );
 }
+
+#[test]
+fn every_exif_orientation_of_a_photo_hashes_as_a_near_duplicate() {
+    use picturesque_app::analysis::similarity::SimilarityAnalyzer;
+    use picturesque_app::ports::images::ImageDecoder;
+    use picturesque_app::ports::metadata::MetadataReader;
+    use picturesque_app::ports::pixels::PixelLoader;
+    use picturesque_core::similarity::Signature;
+
+    let dir = tempfile::tempdir().unwrap();
+    let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
+    let hash = |source: &Path| {
+        let orientation = ExifMetadataReader
+            .read(source, MediaFormat::Jpeg)
+            .unwrap()
+            .orientation;
+        let preview = dir.path().join("preview.jpg");
+        VipsDecoder
+            .render(source, MediaFormat::Jpeg, orientation, 2048, &preview)
+            .unwrap();
+        Signature::of(&VipsPixels.load(&preview, 1024).unwrap())
+    };
+
+    let upright = hash(&fixtures.join("orient_1.jpg"));
+    for n in 2..=8 {
+        let other = hash(&fixtures.join(format!("orient_{n}.jpg")));
+        assert!(
+            upright.is_near_duplicate(&other),
+            "orientation {n}: {} bits",
+            upright.distance(&other)
+        );
+    }
+
+    let unrelated = dir.path().join("scene.jpg");
+    scene().save(&unrelated).unwrap();
+    assert!(!upright.is_near_duplicate(&hash(&unrelated)));
+
+    let stored = serde_json::to_value(upright).unwrap();
+    assert_eq!(SimilarityAnalyzer::signature(&stored), Some(upright));
+}

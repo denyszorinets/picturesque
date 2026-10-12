@@ -21,11 +21,15 @@ use crate::ports::events::{AppEvent, EventSink};
 use crate::ports::pixels::PixelLoader;
 use crate::thumbnails::{ImageSize, ThumbnailService};
 
+pub mod similarity;
 pub mod technical;
 
 /// The analyzers the app runs.
 pub fn default_analyzers() -> Vec<Arc<dyn Analyzer>> {
-    vec![Arc::new(technical::TechnicalAnalyzer)]
+    vec![
+        Arc::new(technical::TechnicalAnalyzer),
+        Arc::new(similarity::SimilarityAnalyzer),
+    ]
 }
 
 /// Longest edge of the pixels analyzers receive.
