@@ -67,7 +67,8 @@ task that introduces them. The rest is in the schema today
 
 ``embedding`` (planned)
    CLIP image embedding and model version. Used for semantic search and
-   visual similarity.
+   visual similarity. Until then, similarity uses a perceptual hash stored
+   as the ``similarity`` analysis result (:doc:`/reference/similarity`).
 
 ``series`` (planned)
    A group of photos taken close together that look alike. Records the best
