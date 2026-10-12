@@ -2925,9 +2925,12 @@ dependencies = [
  "axum",
  "futures-util",
  "http-body-util",
+ "image",
  "picturesque-app",
+ "picturesque-core",
  "picturesque-infra",
  "serde_json",
+ "tempfile",
  "tokio",
  "tower",
 ]

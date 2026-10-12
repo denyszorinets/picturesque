@@ -8,7 +8,8 @@ through the ``api`` Tauri command; in development, through
 are generated into ``ui/src/lib/api/generated/``.
 
 Errors are ``{ "code": ..., "message": ... }`` with ``code`` one of
-``invalid_arguments``, ``unknown_command`` and ``internal``. Messages are
+``invalid_arguments``, ``unknown_command``, ``not_found`` and
+``internal``. Messages are
 written to be shown to users.
 
 Commands
@@ -75,6 +76,30 @@ Import states
    * - ``failed``
      - The run could not continue (for example the library folder
        disappeared); the error says why. Can be started again.
+
+Images
+------
+
+Photo images are served as JPEG files, not JSON, so they can be used
+directly as ``<img src>``:
+
+.. list-table::
+   :header-rows: 1
+
+   * - Where
+     - URL
+   * - Desktop app
+     - ``picturesque://localhost/{size}%2F{photo_id}`` (``http://picturesque.localhost/...``
+       on Windows); built with ``convertFileSrc`` by ``imageUrl()`` in
+       ``ui/src/lib/api``
+   * - Development server
+     - ``GET /api/images/{size}/{photo_id}``
+
+``size`` is ``grid`` (longest edge 512 px) or ``preview`` (2048 px).
+Images are generated on first request and cached
+(:doc:`data-locations`). Responses carry an ``ETag``; a request with a
+matching ``If-None-Match`` gets ``304 Not Modified``. An unknown photo is
+``404``, a malformed path ``400``.
 
 Events
 ------

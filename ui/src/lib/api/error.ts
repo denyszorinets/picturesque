@@ -24,6 +24,7 @@ export class ApiError extends Error {
 const CODES: readonly string[] = [
   "unknown_command",
   "invalid_arguments",
+  "not_found",
   "internal",
 ];
 

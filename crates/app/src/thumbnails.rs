@@ -49,6 +49,12 @@ impl ImageSize {
             Self::Preview => "preview",
         }
     }
+
+    pub fn from_name(name: &str) -> Option<Self> {
+        [Self::Grid, Self::Preview]
+            .into_iter()
+            .find(|s| s.name() == name)
+    }
 }
 
 /// Why an image could not be provided.

@@ -4,4 +4,4 @@
  * Category of an API failure. Transports map it to their own error form
  * (for example an HTTP status code).
  */
-export type ApiErrorCode = "unknown_command" | "invalid_arguments" | "internal";
+export type ApiErrorCode = "unknown_command" | "invalid_arguments" | "not_found" | "internal";

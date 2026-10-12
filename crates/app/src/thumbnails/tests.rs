@@ -255,3 +255,39 @@ fn a_completed_import_starts_a_prefill() {
     }
     let _ = Arc::clone(&world.decoder);
 }
+
+#[test]
+fn image_requests_are_parsed_and_validated() {
+    let world = world(FakeDecoder::default());
+    let id = add(
+        &world,
+        CaptureMetadata::default(),
+        vec![asset("2026/IMG_2.CR3", b"raw-2")],
+    );
+    let api = Api::new(world.context()).unwrap();
+
+    assert!(
+        api.image_request(&format!("grid/{}", id.0))
+            .unwrap()
+            .starts_with("/cache/v1/grid")
+    );
+    assert!(
+        api.image_request(&format!("/preview/{}/", id.0))
+            .unwrap()
+            .starts_with("/cache/v1/preview")
+    );
+    use crate::api::ApiErrorCode::*;
+    assert_eq!(
+        api.image_request("huge/1").unwrap_err().code,
+        InvalidArguments
+    );
+    assert_eq!(
+        api.image_request("grid/abc").unwrap_err().code,
+        InvalidArguments
+    );
+    assert_eq!(
+        api.image_request("grid").unwrap_err().code,
+        InvalidArguments
+    );
+    assert_eq!(api.image_request("grid/999").unwrap_err().code, NotFound);
+}
