@@ -38,5 +38,9 @@ html_theme_options = {
 
 # The repository is private until it is published; anonymous link checks
 # against it would return 404.
-linkcheck_ignore = [rf"{REPO_URL}(/.*)?"]
+linkcheck_ignore = [
+    rf"{REPO_URL}(/.*)?",
+    # Local development servers mentioned in the docs.
+    r"https?://(127\.0\.0\.1|localhost)(:\d+)?(/.*)?",
+]
 linkcheck_timeout = 15

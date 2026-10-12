@@ -39,6 +39,7 @@ Workspace layout
    crates/core/          picturesque-core   domain, no I/O
    crates/app/           picturesque-app    use cases and ports
    crates/infra/         picturesque-infra  adapters (SQLite, decoding, ...)
+   crates/devserver/     picturesque-devserver  development HTTP transport
    src-tauri/            picturesque-desktop  Tauri 2 shell
    ui/                   Svelte 5 + TypeScript front end (Vite)
    package.json          npm workspace root; holds the Tauri CLI
@@ -69,13 +70,22 @@ The :repo:`Makefile` is the entry point for everyday tasks.
    * - ``make doc``
      - Build Rust API docs; warnings are errors.
    * - ``make ui-deps``
-     - Install front-end dependencies from ``package-lock.json``.
+     - Install front-end dependencies from ``package-lock.json`` and the
+       Chromium build Playwright uses.
    * - ``make ui-check``
      - Front end: ``svelte-check`` (warnings fail), ESLint, Prettier check
        and Vitest.
    * - ``make check``
      - ``format-check``, ``lint``, ``test``, ``build`` and ``ui-check``.
        Run before every commit; CI runs the same target.
+   * - ``make dev-web``
+     - Run the UI in a browser against the development server
+       (:doc:`ui-in-browser`). Works in the devcontainer.
+   * - ``make e2e``
+     - Playwright end-to-end tests in headless Chromium.
+   * - ``make bindings-check``
+     - Run the tests (which regenerate the TypeScript API types) and fail
+       if ``ui/src/lib/api/generated/`` changed.
    * - ``make app-dev``
      - Run the desktop app with hot reload (``tauri dev``). Needs a
        display, so it does not work in the devcontainer.
@@ -99,7 +109,9 @@ Front end
 The UI lives in ``ui/`` and is a plain Vite single-page app (no SvelteKit).
 Code reaches the backend only through ``ui/src/lib/api``; components never
 call Tauri directly, so the same UI runs in a browser against the
-development server (:issue:`8`).
+development server (:doc:`ui-in-browser`). API types come from
+``ui/src/lib/api/generated/``, generated from Rust
+(:ref:`see Command API <architecture-components-command-api>`).
 
 Front-end commands run from the repository root through the npm workspace:
 

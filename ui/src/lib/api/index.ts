@@ -1,9 +1,12 @@
-import { invoke } from "@tauri-apps/api/core";
-import type { AppInfo } from "./types";
+import type { AppInfo } from "./generated/AppInfo";
+import { selectTransport } from "./transport";
 
-export type { AppInfo } from "./types";
+export { ApiError } from "./error";
+export type { AppInfo } from "./generated/AppInfo";
+
+const transport = selectTransport();
 
 /** Returns the backend application's name and version. */
 export function appInfo(): Promise<AppInfo> {
-  return invoke<AppInfo>("app_info");
+  return transport.call<AppInfo>("app_info");
 }

@@ -68,6 +68,30 @@ Front end
    inside the desktop app and HTTP otherwise. Views: import, timeline grid
    with series frames, loupe, compare, filters, settings.
 
+.. _architecture-components-command-api:
+
+Command API
+-----------
+
+The UI calls the backend by command name with JSON arguments.
+``picturesque_app::api::Api::call`` dispatches every command, so both
+transports are thin adapters around one function:
+
+- The desktop shell registers a single Tauri command, ``api``, taking
+  ``command`` and ``args``.
+- The development server exposes ``POST /api/commands/{name}``
+  (:doc:`/development/ui-in-browser`).
+
+``Api::call`` is synchronous; adapters run it on a blocking thread, so use
+cases can do file and database I/O without depending on an async runtime.
+Failures are an ``ApiError`` with a ``code`` (``unknown_command``,
+``invalid_arguments``, ``internal``) and a ``message``.
+
+Types that cross the boundary derive ``ts_rs::TS``. Running the Rust tests
+writes TypeScript definitions to ``ui/src/lib/api/generated/``, which are
+committed; ``make bindings-check`` fails when they are out of date. The UI
+never hand-writes these types.
+
 Boundaries
 ----------
 
