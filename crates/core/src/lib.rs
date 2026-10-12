@@ -10,3 +10,4 @@ pub mod hash;
 pub mod media;
 pub mod metadata;
 pub mod photo;
+pub mod template;

@@ -208,7 +208,7 @@ mod tests {
 
         assert_eq!(
             result,
-            json!({ "library_root": null, "path_template": "{year}/{date}/{name}.{ext}" })
+            json!({ "library_root": null, "path_template": crate::settings::DEFAULT_PATH_TEMPLATE })
         );
     }
 

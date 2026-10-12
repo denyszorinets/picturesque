@@ -4,6 +4,7 @@ use std::fmt;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use picturesque_core::template::PathTemplate;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
@@ -11,9 +12,9 @@ use crate::ports::catalog::CatalogError;
 use crate::ports::fs::FileSystem;
 use crate::ports::settings::SettingsStore;
 
-/// Folder structure used until the user picks another template:
-/// `2026/2026-10-12/IMG_0042.CR3`.
-pub const DEFAULT_PATH_TEMPLATE: &str = "{year}/{date}/{name}.{ext}";
+/// Folder structure used until the user picks another template (the first
+/// preset): `2026/2026-10-12/IMG_0042.CR3`.
+pub const DEFAULT_PATH_TEMPLATE: &str = picturesque_core::template::PRESETS[0].template;
 
 /// User settings. Missing fields in stored settings take their defaults,
 /// so new settings can be added without a migration.
@@ -114,13 +115,9 @@ impl SettingsService {
             settings.library_root = Some(root);
         }
         if let Some(template) = update.path_template {
-            let template = template.trim();
-            if template.is_empty() {
-                return Err(SettingsError::Invalid(
-                    "The path template cannot be empty. Try the default, `{year}/{date}/{name}.{ext}`.".into(),
-                ));
-            }
-            settings.path_template = template.to_owned();
+            let parsed = PathTemplate::parse(&template)
+                .map_err(|e| SettingsError::Invalid(e.to_string()))?;
+            settings.path_template = parsed.as_str().to_owned();
         }
         self.store.save_settings(&settings)?;
         Ok(settings)
@@ -274,6 +271,28 @@ pub(crate) mod tests {
 
         assert_eq!(settings.library_root, Some(abs("photos")));
         assert_eq!(settings.path_template, "{year}/{name}.{ext}");
+    }
+
+    #[test]
+    fn rejects_an_invalid_template_with_the_parser_message() {
+        let (service, _) = service(&[]);
+
+        let err = service
+            .update(SettingsUpdate {
+                path_template: Some("{year}/{name}".into()),
+                ..Default::default()
+            })
+            .unwrap_err();
+
+        assert!(
+            matches!(&err, SettingsError::Invalid(m) if m.contains(".{ext}")),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn default_template_is_valid() {
+        assert!(PathTemplate::parse(DEFAULT_PATH_TEMPLATE).is_ok());
     }
 
     #[test]

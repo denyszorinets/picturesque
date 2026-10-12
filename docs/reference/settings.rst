@@ -29,10 +29,11 @@ How photos are arranged inside the library. Tokens in braces are replaced
 with values from each photo.
 
 :Type: text
-:Default: ``{year}/{date}/{name}.{ext}``, for example
+:Default: ``{year|Undated}/{date}/{name}.{ext}``, for example
    ``2026/2026-10-12/IMG_0042.CR3``
-:Validation: must not be empty. The available tokens are defined by the
-   path template engine (:issue:`18`).
+:Validation: must be a valid template; see :doc:`path-templates` for the
+   tokens and rules. An invalid template is rejected with a message naming
+   the problem.
 
 Where settings are stored
 -------------------------
@@ -65,7 +66,7 @@ API
 
    .. code-block:: json
 
-      { "library_root": null, "path_template": "{year}/{date}/{name}.{ext}" }
+      { "library_root": null, "path_template": "{year|Undated}/{date}/{name}.{ext}" }
 
 ``update_settings``
    Arguments: any subset of the settings. Unknown fields are rejected.
