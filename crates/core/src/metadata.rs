@@ -247,6 +247,33 @@ pub struct CaptureMetadata {
 }
 
 impl CaptureMetadata {
+    /// Fills fields that are missing here from `other`, field by field.
+    /// Used for RAW+JPEG pairs: the RAW is read first, and the JPEG can
+    /// supply what the RAW lacks (for example GPS added by a phone app).
+    pub fn fill_missing_from(&mut self, other: &CaptureMetadata) {
+        fn fill<T: Clone>(slot: &mut Option<T>, other: &Option<T>) {
+            if slot.is_none() {
+                slot.clone_from(other);
+            }
+        }
+        fill(&mut self.captured_at, &other.captured_at);
+        fill(&mut self.camera, &other.camera);
+        fill(&mut self.lens, &other.lens);
+        fill(&mut self.exposure.iso, &other.exposure.iso);
+        fill(&mut self.exposure.f_number, &other.exposure.f_number);
+        fill(
+            &mut self.exposure.exposure_time,
+            &other.exposure.exposure_time,
+        );
+        fill(
+            &mut self.exposure.focal_length_mm,
+            &other.exposure.focal_length_mm,
+        );
+        fill(&mut self.gps, &other.gps);
+        fill(&mut self.place, &other.place);
+        fill(&mut self.dimensions, &other.dimensions);
+    }
+
     /// Dimensions as displayed, after orientation.
     pub fn display_dimensions(&self) -> Option<(u32, u32)> {
         let (w, h) = self.dimensions?;
@@ -348,6 +375,38 @@ mod tests {
 
         meta.orientation = Orientation::Rotate90;
         assert_eq!(meta.display_dimensions(), Some((4000, 6000)));
+    }
+
+    #[test]
+    fn fill_missing_keeps_existing_values_and_adds_missing_ones() {
+        let mut raw = CaptureMetadata {
+            camera: Some(Camera::new("Canon", "EOS R5")),
+            exposure: Exposure {
+                iso: Some(100),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let jpeg = CaptureMetadata {
+            camera: Some(Camera::new("Other", "Thing")),
+            exposure: Exposure {
+                iso: Some(800),
+                f_number: Some(2.8),
+                ..Default::default()
+            },
+            gps: GeoPoint::new(1.0, 2.0),
+            orientation: Orientation::Rotate90,
+            ..Default::default()
+        };
+
+        raw.fill_missing_from(&jpeg);
+
+        assert_eq!(raw.camera, Some(Camera::new("Canon", "EOS R5")));
+        assert_eq!(raw.exposure.iso, Some(100));
+        assert_eq!(raw.exposure.f_number, Some(2.8));
+        assert_eq!(raw.gps, GeoPoint::new(1.0, 2.0));
+        // Orientation always has a value, so it is never taken from the other file.
+        assert_eq!(raw.orientation, Orientation::Normal);
     }
 
     #[test]

@@ -3,4 +3,5 @@
 
 pub mod catalog;
 pub mod fs;
+pub mod metadata;
 pub mod settings;

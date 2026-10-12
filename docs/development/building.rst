@@ -136,3 +136,18 @@ Dependency versions
   ``npm install --before=<date two weeks ago> ...``.
 - The ``@tauri-apps/api`` and ``@tauri-apps/cli`` npm packages must have
   the same major and minor version as the ``tauri`` crate.
+
+RAW corpus tests
+----------------
+
+Some infrastructure tests run against real camera files from
+raw.pixls.us (16 cameras, about 630 MB). They are ignored by default.
+Fetch the corpus once, then run them explicitly:
+
+.. code-block:: bash
+
+   python3 -I spikes/decoding/scripts/fetch_corpus.py
+   cargo test -p picturesque-infra -- --ignored
+
+Small fixtures that are committed (for example ``exif.heic``) are
+described in ``crates/infra/tests/fixtures/README.md``.
