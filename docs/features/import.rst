@@ -1,10 +1,9 @@
 Import
 ======
 
-.. note::
-
-   The import screen arrives with :issue:`20`. Everything below already
-   works through the API (:doc:`/reference/api`).
+For a step-by-step walkthrough of the import screen, see
+:doc:`/getting-started/first-import`. The same operations are available
+to developers through the API (:doc:`/reference/api`).
 
 Import copies photos from your existing folders (**sources**) into the
 Clean library, organized by a path template. Sources are never modified
@@ -15,7 +14,8 @@ Clean library, organized by a path template. Sources are never modified
 How an import works
 -------------------
 
-1. **Plan.** Choose one or more source folders. Picturesque scans them,
+1. **Plan.** Choose one or more source folders (in the desktop app with a
+   folder picker; in a browser during development, by typing the path). Picturesque scans them,
    reads each photo's metadata, finds duplicates and works out where every
    file will go. This runs in the background with progress, and nothing is
    copied yet.

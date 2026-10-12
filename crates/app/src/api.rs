@@ -22,6 +22,7 @@ use crate::ports::imports::ImportStore;
 use crate::ports::metadata::MetadataReader;
 use crate::ports::settings::SettingsStore;
 use crate::settings::{SettingsError, SettingsService, SettingsUpdate};
+use crate::templates::{self, PreviewTemplateArgs};
 
 /// Category of an API failure. Transports map it to their own error form
 /// (for example an HTTP status code).
@@ -131,6 +132,14 @@ impl Api {
             "update_settings" => {
                 let update: SettingsUpdate = parse_args(command, args)?;
                 respond(self.settings.update(update).map_err(settings_error)?)
+            }
+            "template_presets" => {
+                no_args(command, &args)?;
+                respond(templates::presets())
+            }
+            "preview_template" => {
+                let args: PreviewTemplateArgs = parse_args(command, args)?;
+                respond(templates::preview(&args.template))
             }
             "plan_import" => {
                 let args: PlanImportArgs = parse_args(command, args)?;

@@ -8,7 +8,5 @@ test("shows the backend version through the development server", async ({
   await expect(
     page.getByRole("heading", { name: "Picturesque" }),
   ).toBeVisible();
-  await expect(page.getByTestId("app-version")).toHaveText(
-    /^Picturesque \d+\.\d+\.\d+$/,
-  );
+  await expect(page.getByTestId("app-version")).toHaveText(/^v\d+\.\d+\.\d+$/);
 });

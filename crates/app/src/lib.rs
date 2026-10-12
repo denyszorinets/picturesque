@@ -11,6 +11,7 @@ pub mod info;
 pub mod ports;
 pub mod scan;
 pub mod settings;
+pub mod templates;
 
 #[cfg(test)]
 mod testing;

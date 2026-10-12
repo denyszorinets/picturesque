@@ -1,21 +1,118 @@
 :root {
   color-scheme: light dark;
-  --bg: #f6f6f4;
+  --bg: #f4f4f1;
+  --surface: #ffffff;
+  --surface-2: #f0efeb;
+  --border: #dddcd5;
   --fg: #1d1d1b;
   --muted: #6b6b66;
-  font-family: system-ui, sans-serif;
+  --accent: #2f8a52;
+  --accent-fg: #ffffff;
+  --info: #2f6db3;
+  --danger: #c0392b;
+  --warn: #b7791f;
+  --radius: 10px;
+  font-family:
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    sans-serif;
+  font-size: 15px;
   background: var(--bg);
   color: var(--fg);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #161615;
+    --bg: #141413;
+    --surface: #1d1d1b;
+    --surface-2: #262624;
+    --border: #34342f;
     --fg: #ececea;
     --muted: #9a9a94;
+    --accent: #3fb36b;
+    --accent-fg: #0d1f14;
+    --info: #6aa6ec;
+    --danger: #ef6a5b;
+    --warn: #e0a443;
   }
+}
+
+* {
+  box-sizing: border-box;
 }
 
 body {
   margin: 0;
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+  font-weight: 600;
+}
+
+button {
+  font: inherit;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--fg);
+  padding: 0.45rem 0.9rem;
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) {
+  border-color: var(--muted);
+}
+
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-fg);
+  font-weight: 600;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+input,
+select {
+  font: inherit;
+  color: var(--fg);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.45rem 0.6rem;
+  min-width: 0;
+}
+
+input:focus,
+select:focus,
+button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+code {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 0.88em;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.1rem 1.2rem;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.error-text {
+  color: var(--danger);
 }

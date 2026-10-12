@@ -13,8 +13,11 @@ export default defineConfig({
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: [
     {
-      command: "cargo run --quiet -p picturesque-devserver",
+      // A fresh catalog for every run.
+      command:
+        "node -e \"require('fs').rmSync('target/e2e-data',{recursive:true,force:true})\" && cargo run --quiet -p picturesque-devserver",
       cwd: "..",
+      env: { PICTURESQUE_DATA_DIR: "target/e2e-data" },
       url: "http://127.0.0.1:5174/api/health",
       reuseExistingServer: !process.env.CI,
       timeout: 300_000,
