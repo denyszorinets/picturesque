@@ -96,6 +96,21 @@ Validation
 
 :issue:`17` tests known coordinates and measures lookup time.
 
+Findings (2026-10-12):
+
+- Plain nearest-place matching named photos after city districts that
+  GeoNames lists as separate places, for example *Minato City* for Tokyo
+  Tower. The implementation therefore lets each place claim a radius of
+  0.005 km × √population (2–20 km) and picks the most populous place whose
+  claim covers the photo, falling back to the nearest place within 50 km.
+  With this, Times Square and Brooklyn give *New York City*, Shibuya
+  *Tokyo*, Westminster *London* and Montmartre *Paris*, while Sintra,
+  Yokohama and Hallstatt keep their own names.
+- Dataset: 225,393 places after dropping neighbourhoods (``PPLX``) and
+  historical, abandoned, destroyed and religious places; 3.6 MB gzipped.
+- Lookups take well under a millisecond once the index is loaded
+  (about 0.1 s in a release build).
+
 References
 ----------
 
