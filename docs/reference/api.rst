@@ -20,6 +20,15 @@ Commands
 ``get_settings``, ``update_settings``
    See :doc:`settings`.
 
+``template_presets``
+   No arguments. The built-in templates: ``[{ "id", "label", "template" }]``.
+
+``preview_template``
+   ``{ "template": "..." }``. ``{ "error": null, "examples": [...] }``:
+   either the reason the template is invalid, or the paths it produces for
+   three sample photos (RAW+JPEG with a place, a phone photo without
+   location, an undated scan).
+
 ``plan_import``
    ``{ "sources": ["/absolute/folder", ...] }``. Starts planning in the
    background and returns the run's ``ImportStatus`` (state

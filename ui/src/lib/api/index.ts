@@ -4,6 +4,8 @@ import type { ImportPlanView } from "./generated/ImportPlanView";
 import type { ImportStatus } from "./generated/ImportStatus";
 import type { Settings } from "./generated/Settings";
 import type { SettingsUpdate } from "./generated/SettingsUpdate";
+import type { TemplatePresetView } from "./generated/TemplatePresetView";
+import type { TemplatePreview } from "./generated/TemplatePreview";
 import { selectTransport } from "./transport";
 
 export { ApiError } from "./error";
@@ -13,6 +15,11 @@ export type { ImportPlanView } from "./generated/ImportPlanView";
 export type { ImportStatus } from "./generated/ImportStatus";
 export type { Settings } from "./generated/Settings";
 export type { SettingsUpdate } from "./generated/SettingsUpdate";
+export type { TemplatePresetView } from "./generated/TemplatePresetView";
+export type { TemplatePreview } from "./generated/TemplatePreview";
+export type { PlannedPhotoView } from "./generated/PlannedPhotoView";
+export type { PhotoStatus } from "./generated/PhotoStatus";
+export { canPickFolders, pickFolders } from "./dialogs";
 
 const transport = selectTransport();
 
@@ -32,6 +39,16 @@ export function getSettings(): Promise<Settings> {
  */
 export function updateSettings(update: SettingsUpdate): Promise<Settings> {
   return transport.call<Settings>("update_settings", update);
+}
+
+/** Built-in path templates. */
+export function templatePresets(): Promise<TemplatePresetView[]> {
+  return transport.call<TemplatePresetView[]>("template_presets");
+}
+
+/** Validates a path template and renders it for sample photos. */
+export function previewTemplate(template: string): Promise<TemplatePreview> {
+  return transport.call<TemplatePreview>("preview_template", { template });
 }
 
 /** Starts planning an import of the given absolute folders; progress arrives as events. */

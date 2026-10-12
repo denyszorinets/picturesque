@@ -15,6 +15,7 @@ analysis and on-device AI.
    :maxdepth: 2
    :caption: Using Picturesque
 
+   getting-started/index
    concepts/index
    features/index
    reference/index
