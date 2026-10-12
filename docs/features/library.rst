@@ -127,7 +127,9 @@ Background analysis
 -------------------
 
 After an import, Picturesque analyzes every photo in the background to
-score it and find series. While it works, the toolbar shows
+score its sharpness, exposure and noise
+(:doc:`/reference/quality-scores`); the loupe shows the scores under
+**Quality**. While it works, the toolbar shows
 **Analyzing 120 / 300**. Photos on screen are analyzed first, so scrolling
 to a day gets its results within seconds. Analysis continues where it left
 off after the app restarts.

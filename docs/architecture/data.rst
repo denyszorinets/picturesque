@@ -60,10 +60,10 @@ task that introduces them. The rest is in the schema today
    (:doc:`ADR-0011 </architecture/decisions/0011-resumable-background-analysis>`).
 
 ``scores`` (planned)
-   Technical scores (sharpness, exposure clipping, noise), AI scores
-   (aesthetics, faces, eyes closed), the combined score, and the model and
-   algorithm versions that produced them, so outdated scores can be
-   recomputed.
+   Technical scores are stored as the ``technical`` analysis result
+   (:doc:`/reference/quality-scores`). AI scores (aesthetics, faces, eyes
+   closed) and the combined score will join them; values needed for
+   filtering and sorting may be copied into columns (:issue:`38`).
 
 ``embedding`` (planned)
    CLIP image embedding and model version. Used for semantic search and
