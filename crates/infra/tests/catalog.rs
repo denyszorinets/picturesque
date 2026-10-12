@@ -203,3 +203,50 @@ fn refuses_a_catalog_from_a_newer_version() {
 
     assert!(err.to_string().contains("newer"), "{err}");
 }
+
+mod settings {
+    use std::path::PathBuf;
+
+    use picturesque_app::ports::settings::SettingsStore;
+    use picturesque_app::settings::Settings;
+    use picturesque_infra::catalog::SqliteCatalog;
+
+    #[test]
+    fn defaults_before_anything_is_saved() {
+        let catalog = SqliteCatalog::open_in_memory().unwrap();
+
+        assert_eq!(catalog.load_settings().unwrap(), Settings::default());
+    }
+
+    #[test]
+    fn saved_settings_survive_reopening() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("catalog.sqlite");
+        let settings = Settings {
+            library_root: Some(PathBuf::from("/photos/Clean")),
+            path_template: "{year}/{name}.{ext}".into(),
+        };
+        SqliteCatalog::open(&path)
+            .unwrap()
+            .save_settings(&settings)
+            .unwrap();
+
+        let reopened = SqliteCatalog::open(&path).unwrap();
+
+        assert_eq!(reopened.load_settings().unwrap(), settings);
+    }
+
+    #[test]
+    fn saving_again_replaces_the_settings() {
+        let catalog = SqliteCatalog::open_in_memory().unwrap();
+        catalog.save_settings(&Settings::default()).unwrap();
+        let changed = Settings {
+            path_template: "{name}.{ext}".into(),
+            ..Settings::default()
+        };
+
+        catalog.save_settings(&changed).unwrap();
+
+        assert_eq!(catalog.load_settings().unwrap(), changed);
+    }
+}

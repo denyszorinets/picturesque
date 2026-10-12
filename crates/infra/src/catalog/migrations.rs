@@ -6,7 +6,13 @@
 use rusqlite::Connection;
 
 /// Ordered migrations; index + 1 is the schema version.
-const MIGRATIONS: &[(&str, &str)] = &[("0001_photos", include_str!("migrations/0001_photos.sql"))];
+const MIGRATIONS: &[(&str, &str)] = &[
+    ("0001_photos", include_str!("migrations/0001_photos.sql")),
+    (
+        "0002_settings",
+        include_str!("migrations/0002_settings.sql"),
+    ),
+];
 
 /// Schema version after all migrations have run.
 pub const LATEST_VERSION: i64 = MIGRATIONS.len() as i64;

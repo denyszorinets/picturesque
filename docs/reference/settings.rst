@@ -1,0 +1,78 @@
+Settings
+========
+
+Settings are stored in the catalog database and apply immediately; no
+restart is needed. Invalid values are rejected with a message explaining
+what to change, and nothing is saved when any value in a change is
+invalid.
+
+.. _reference-settings-library-root:
+
+``library_root``
+----------------
+
+The root folder of the Clean library, where imported photos are copied.
+
+:Type: absolute path, or unset
+:Default: unset (chosen on first import)
+:Validation: must be an absolute path to an existing folder that
+   Picturesque can create files in. Writability is checked by creating and
+   removing a temporary file, so read-only mounts and folders without
+   permission are caught.
+
+.. _reference-settings-path-template:
+
+``path_template``
+-----------------
+
+How photos are arranged inside the library. Tokens in braces are replaced
+with values from each photo.
+
+:Type: text
+:Default: ``{year}/{date}/{name}.{ext}``, for example
+   ``2026/2026-10-12/IMG_0042.CR3``
+:Validation: must not be empty. The available tokens are defined by the
+   path template engine (:issue:`18`).
+
+Where settings are stored
+-------------------------
+
+In the catalog database, ``catalog.sqlite``, in the application data
+folder:
+
+.. list-table::
+   :header-rows: 1
+
+   * - Platform
+     - Folder
+   * - Linux
+     - ``~/.local/share/io.github.denyszorinets.picturesque/``
+       (``$XDG_DATA_HOME`` if set)
+   * - macOS
+     - ``~/Library/Application Support/io.github.denyszorinets.picturesque/``
+   * - Windows
+     - ``%APPDATA%\io.github.denyszorinets.picturesque\``
+
+The development server uses ``target/devserver-data/`` instead, or the
+folder in ``PICTURESQUE_DATA_DIR``
+(:doc:`/development/ui-in-browser`).
+
+API
+---
+
+``get_settings``
+   No arguments. Returns all settings:
+
+   .. code-block:: json
+
+      { "library_root": null, "path_template": "{year}/{date}/{name}.{ext}" }
+
+``update_settings``
+   Arguments: any subset of the settings. Unknown fields are rejected.
+   Returns all settings after the change.
+
+   .. code-block:: console
+
+      $ curl -s -X POST http://127.0.0.1:5174/api/commands/update_settings \
+          -d '{"library_root": "/does/not/exist"}'
+      {"code":"invalid_arguments","message":"Cannot use `/does/not/exist` as the library folder: it does not exist. Choose an existing folder you can write to."}

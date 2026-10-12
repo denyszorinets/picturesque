@@ -13,6 +13,8 @@ picturesque-app.workspace = true
 picturesque-core.workspace = true
 rusqlite.workspace = true
 chrono.workspace = true
+serde_json.workspace = true
+tempfile.workspace = true
 
 [dev-dependencies]
 rusqlite.workspace = true

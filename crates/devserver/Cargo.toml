@@ -11,6 +11,7 @@ publish.workspace = true
 [dependencies]
 axum.workspace = true
 picturesque-app.workspace = true
+picturesque-infra.workspace = true
 serde_json.workspace = true
 tokio.workspace = true
 

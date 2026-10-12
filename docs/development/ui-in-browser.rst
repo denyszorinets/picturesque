@@ -25,7 +25,9 @@ Then open http://127.0.0.1:5173. ``Ctrl+C`` stops both servers. To reach
 the page from the host, forward port 5173 from the devcontainer (VS Code
 does this automatically).
 
-The dev server listens on ``127.0.0.1:5174``. Set
+The dev server stores its catalog in ``target/devserver-data/``; set
+``PICTURESQUE_DATA_DIR`` to use another folder, or delete it to start
+fresh. It listens on ``127.0.0.1:5174``. Set
 ``PICTURESQUE_DEVSERVER_ADDR`` to change it; non-loopback addresses are
 refused, because the server exposes file-system operations. If you change
 the port, update the ``/api`` proxy in ``ui/vite.config.ts`` to match.

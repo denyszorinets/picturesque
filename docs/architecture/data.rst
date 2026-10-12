@@ -101,6 +101,10 @@ how many have run. Each migration runs in its own transaction.
      - ``0001_photos.sql``
      - ``photo`` (capture metadata, place, orientation, dimensions) and
        ``asset`` (role, format, library path, size, BLAKE3 hash)
+   * - 2
+     - ``0002_settings.sql``
+     - ``setting``: JSON documents by key; the settings document lives
+       under ``settings`` (:doc:`/reference/settings`)
 
 Conventions:
 

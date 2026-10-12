@@ -1,15 +1,20 @@
 //! Runs the development HTTP server.
 //!
 //! Listens on `127.0.0.1:5174` unless `PICTURESQUE_DEVSERVER_ADDR` is set.
-//! Only loopback addresses are accepted.
+//! Only loopback addresses are accepted. The catalog is stored in
+//! `PICTURESQUE_DATA_DIR` (default `target/devserver-data`).
 
 use std::net::SocketAddr;
+use std::path::PathBuf;
 use std::process::ExitCode;
 use std::sync::Arc;
 
-use picturesque_app::api::Api;
+use picturesque_app::api::{Api, AppContext};
+use picturesque_infra::catalog::SqliteCatalog;
+use picturesque_infra::fs::StdFileSystem;
 
 const DEFAULT_ADDR: &str = "127.0.0.1:5174";
+const DEFAULT_DATA_DIR: &str = "target/devserver-data";
 
 #[tokio::main]
 async fn main() -> ExitCode {
@@ -32,18 +37,30 @@ async fn serve() -> Result<(), String> {
         return Err(format!("refusing to listen on non-loopback address {addr}"));
     }
 
+    let data_dir = PathBuf::from(
+        std::env::var("PICTURESQUE_DATA_DIR").unwrap_or_else(|_| DEFAULT_DATA_DIR.to_owned()),
+    );
+    std::fs::create_dir_all(&data_dir)
+        .map_err(|e| format!("create {}: {e}", data_dir.display()))?;
+    let catalog =
+        Arc::new(SqliteCatalog::open(&data_dir.join("catalog.sqlite")).map_err(|e| e.to_string())?);
+    let api = Api::new(AppContext {
+        settings_store: catalog,
+        fs: Arc::new(StdFileSystem),
+    });
+
     let listener = tokio::net::TcpListener::bind(addr)
         .await
         .map_err(|e| format!("bind {addr}: {e}"))?;
-    println!("picturesque-devserver listening on http://{addr}");
+    println!(
+        "picturesque-devserver listening on http://{addr} (data: {})",
+        data_dir.display()
+    );
 
-    axum::serve(
-        listener,
-        picturesque_devserver::router(Arc::new(Api::new())),
-    )
-    .with_graceful_shutdown(async {
-        let _ = tokio::signal::ctrl_c().await;
-    })
-    .await
-    .map_err(|e| format!("server error: {e}"))
+    axum::serve(listener, picturesque_devserver::router(Arc::new(api)))
+        .with_graceful_shutdown(async {
+            let _ = tokio::signal::ctrl_c().await;
+        })
+        .await
+        .map_err(|e| format!("server error: {e}"))
 }
