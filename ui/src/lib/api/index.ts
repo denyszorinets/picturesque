@@ -1,3 +1,4 @@
+import type { AnalysisStatus } from "./generated/AnalysisStatus";
 import type { AppEvent } from "./generated/AppEvent";
 import type { AppInfo } from "./generated/AppInfo";
 import type { ImportPlanView } from "./generated/ImportPlanView";
@@ -15,6 +16,7 @@ import type { TemplatePreview } from "./generated/TemplatePreview";
 import { selectTransport, type ImageSize } from "./transport";
 
 export { ApiError } from "./error";
+export type { AnalysisStatus } from "./generated/AnalysisStatus";
 export type { AppEvent } from "./generated/AppEvent";
 export type { AppInfo } from "./generated/AppInfo";
 export type { ImportPlanView } from "./generated/ImportPlanView";
@@ -126,4 +128,18 @@ export function setDecisions(
   changes: DecisionChange[],
 ): Promise<DecisionView[]> {
   return transport.call<DecisionView[]>("set_decisions", { changes });
+}
+
+/** How many photos background analysis has finished. */
+export function analysisStatus(): Promise<AnalysisStatus> {
+  return transport.call<AnalysisStatus>("analysis_status");
+}
+
+/** Analyzes these photos next (for example the ones on screen). */
+export function prioritizeAnalysis(
+  photoIds: number[],
+): Promise<AnalysisStatus> {
+  return transport.call<AnalysisStatus>("prioritize_analysis", {
+    photo_ids: photoIds,
+  });
 }

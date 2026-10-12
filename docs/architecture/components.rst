@@ -113,3 +113,8 @@ Long-running work (import, thumbnail generation, analysis) runs as jobs
 owned by the application layer. Jobs report progress through events, can be
 cancelled, and record enough state in the catalog to resume after a restart.
 CPU-heavy steps run on a bounded worker pool so the UI stays responsive.
+
+Photo analysis (scores, hashes, AI models) is a queue of analyzers run over
+every photo's preview, with results stored per analyzer version; photos on
+screen go first
+(:doc:`ADR-0011 </architecture/decisions/0011-resumable-background-analysis>`).

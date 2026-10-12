@@ -17,9 +17,11 @@
     onopen?: (index: number) => void;
     /** Called with the current layout, for keyboard navigation. */
     onlayout?: (layout: Layout) => void;
+    /** Called with the ids of the loaded photos on screen. */
+    onvisible?: (photoIds: number[]) => void;
   }
 
-  let { store, selection, onopen, onlayout }: Props = $props();
+  let { store, selection, onopen, onlayout, onvisible }: Props = $props();
 
   const GAP = 6;
   const HEADER = 44;
@@ -62,6 +64,19 @@
     for (const r of rows)
       if (r.kind === "tiles") last = Math.max(last, r.end - 1);
     if (last >= 0) void store.ensureLoaded(last);
+  });
+
+  // Report the photos on screen (without overscan).
+  $effect(() => {
+    if (!onvisible) return;
+    const ids: number[] = [];
+    for (const r of visibleRows(computed.rows, scrollTop, height, 0))
+      if (r.kind === "tiles")
+        for (let i = r.start; i < r.end; i++) {
+          const photo = store.photos[i];
+          if (photo) ids.push(photo.id);
+        }
+    onvisible(ids);
   });
 
   // Keep the focused photo in view.

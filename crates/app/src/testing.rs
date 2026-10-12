@@ -102,6 +102,11 @@ impl MemFs {
         self
     }
 
+    /// Deletes a file (as if removed outside the app).
+    pub fn delete(&self, path: &Path) {
+        let _ = self.remove_file(path);
+    }
+
     pub fn write(&self, path: &Path, bytes: &[u8]) {
         let mut s = self.state.lock().unwrap();
         s.clock += 1;
@@ -325,7 +330,7 @@ use crate::api::AppContext;
 use crate::import::model::{
     FileStatus, ImportProblem, ImportRun, ImportState, PhotoStatus, PlannedPhoto,
 };
-use crate::ports::catalog::{CatalogError, PhotoCatalog};
+use crate::ports::catalog::{AnalyzerId, CatalogError, PhotoCatalog};
 use crate::ports::events::{AppEvent, EventSink};
 use crate::ports::imports::ImportStore;
 use crate::settings::tests::MemorySettings;
@@ -337,6 +342,18 @@ pub struct MemoryCatalog {
     pub decisions: Mutex<HashMap<PhotoId, picturesque_core::decision::Decision>>,
     /// (revision, revision the sidecar reflects) per decision.
     pub revisions: Mutex<HashMap<PhotoId, (u64, Option<u64>)>>,
+    /// (photo, analyzer) → (version, result).
+    pub analysis: Mutex<HashMap<(PhotoId, String), (u32, serde_json::Value)>>,
+}
+
+impl MemoryCatalog {
+    fn is_analyzed(&self, id: PhotoId, analyzer: AnalyzerId) -> bool {
+        self.analysis
+            .lock()
+            .unwrap()
+            .get(&(id, analyzer.name.to_owned()))
+            .is_some_and(|(v, _)| *v == analyzer.version)
+    }
 }
 
 impl PhotoCatalog for MemoryCatalog {
@@ -508,6 +525,78 @@ impl PhotoCatalog for MemoryCatalog {
         photo.assets = picturesque_core::photo::PhotoAssets::new(assets)
             .map_err(|e| CatalogError::Storage(e.to_string()))?;
         Ok(())
+    }
+
+    fn pending_analysis(
+        &self,
+        analyzers: &[AnalyzerId],
+        limit: usize,
+    ) -> Result<Vec<PhotoId>, CatalogError> {
+        let mut photos: Vec<(bool, Option<chrono::NaiveDateTime>, PhotoId)> = self
+            .photos
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|p| {
+                let time = p.metadata.captured_at.map(|t| t.local);
+                (time.is_none(), time, p.id)
+            })
+            .collect();
+        // Oldest first, undated last.
+        photos.sort();
+        Ok(photos
+            .into_iter()
+            .map(|(_, _, id)| id)
+            .filter(|id| analyzers.iter().any(|a| !self.is_analyzed(*id, *a)))
+            .take(limit)
+            .collect())
+    }
+
+    fn analysis_progress(&self, analyzers: &[AnalyzerId]) -> Result<(usize, usize), CatalogError> {
+        let total = self.photos.lock().unwrap().len();
+        let pending = self.pending_analysis(analyzers, usize::MAX)?.len();
+        Ok((pending, total))
+    }
+
+    fn analyzed(
+        &self,
+        id: PhotoId,
+        analyzers: &[AnalyzerId],
+    ) -> Result<Vec<AnalyzerId>, CatalogError> {
+        Ok(analyzers
+            .iter()
+            .copied()
+            .filter(|a| self.is_analyzed(id, *a))
+            .collect())
+    }
+
+    fn store_analysis(
+        &self,
+        id: PhotoId,
+        analyzer: AnalyzerId,
+        result: &serde_json::Value,
+    ) -> Result<(), CatalogError> {
+        if self.photo(id)?.is_none() {
+            return Err(CatalogError::Storage(format!("no photo {}", id.0)));
+        }
+        self.analysis.lock().unwrap().insert(
+            (id, analyzer.name.to_owned()),
+            (analyzer.version, result.clone()),
+        );
+        Ok(())
+    }
+
+    fn analysis(&self, id: PhotoId) -> Result<Vec<(String, u32, serde_json::Value)>, CatalogError> {
+        let mut results: Vec<_> = self
+            .analysis
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|((p, _), _)| *p == id)
+            .map(|((_, name), (version, value))| (name.clone(), *version, value.clone()))
+            .collect();
+        results.sort_by(|a, b| a.0.cmp(&b.0));
+        Ok(results)
     }
 
     fn media_sizes(&self) -> Result<StdHashSet<u64>, CatalogError> {
@@ -708,6 +797,31 @@ impl crate::ports::images::ImageDecoder for FakeDecoder {
     }
 }
 
+/// Pixel loader returning a solid grey image of the requested size.
+#[derive(Default)]
+pub struct FakePixels {
+    pub calls: Mutex<Vec<PathBuf>>,
+    pub fail: bool,
+}
+
+impl crate::ports::pixels::PixelLoader for FakePixels {
+    fn load(
+        &self,
+        path: &Path,
+        max_edge: u32,
+    ) -> Result<picturesque_core::pixels::RgbImage, String> {
+        self.calls.lock().unwrap().push(path.to_path_buf());
+        if self.fail {
+            return Err("cannot decode".into());
+        }
+        Ok(picturesque_core::pixels::RgbImage::filled(
+            max_edge,
+            max_edge * 2 / 3,
+            [128, 128, 128],
+        ))
+    }
+}
+
 /// Sidecars kept in memory: path → decision.
 #[derive(Default)]
 pub struct MemorySidecars(pub Mutex<HashMap<PathBuf, picturesque_core::decision::Decision>>);
@@ -737,6 +851,7 @@ pub struct TestWorld {
     pub events: Arc<RecordedEvents>,
     pub decoder: Arc<FakeDecoder>,
     pub sidecars: Arc<MemorySidecars>,
+    pub pixels: Arc<FakePixels>,
 }
 
 impl TestWorld {
@@ -750,6 +865,7 @@ impl TestWorld {
         Self {
             decoder: Arc::new(decoder),
             sidecars: Arc::default(),
+            pixels: Arc::default(),
             fs,
             settings: Arc::default(),
             catalog: Arc::default(),
@@ -771,6 +887,8 @@ impl TestWorld {
             decoder: self.decoder.clone(),
             cache_dir: PathBuf::from("/cache"),
             sidecars: self.sidecars.clone(),
+            pixels: self.pixels.clone(),
+            analyzers: Vec::new(),
         }
     }
 }

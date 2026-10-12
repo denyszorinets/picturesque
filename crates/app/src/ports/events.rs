@@ -3,6 +3,7 @@
 use serde::Serialize;
 use ts_rs::TS;
 
+use crate::analysis::AnalysisStatus;
 use crate::import::ImportStatus;
 
 /// An event for the UI. Serialized with a `type` field, for example
@@ -12,6 +13,7 @@ use crate::import::ImportStatus;
 #[ts(export)]
 pub enum AppEvent {
     ImportProgress(ImportStatus),
+    AnalysisProgress(AnalysisStatus),
 }
 
 /// Delivers events to the UI: Tauri events in the desktop app,

@@ -60,6 +60,8 @@ pub fn run() {
                 events: Arc::new(TauriEvents(app.handle().clone())),
                 decoder: Arc::new(VipsDecoder),
                 sidecars: Arc::new(picturesque_infra::xmp::XmpSidecars),
+                pixels: Arc::new(picturesque_infra::images::VipsPixels),
+                analyzers: Vec::new(),
                 cache_dir: app.path().app_cache_dir()?,
             })?;
             api.start_background_work();

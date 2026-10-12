@@ -12,8 +12,10 @@ use std::sync::OnceLock;
 use libvips::ops::{self, Angle, Direction, ForeignKeep, JpegsaveOptions};
 use libvips::{VipsApp, VipsImage};
 use picturesque_app::ports::images::{ImageDecoder, Rendered};
+use picturesque_app::ports::pixels::PixelLoader;
 use picturesque_core::media::MediaFormat;
 use picturesque_core::metadata::Orientation;
+use picturesque_core::pixels::RgbImage;
 
 use libraw::Preview;
 
@@ -84,6 +86,29 @@ impl ImageDecoder for VipsDecoder {
             height: image.get_height() as u32,
             source_size,
         })
+    }
+}
+
+/// [`PixelLoader`] decoding with libvips (used on cached preview JPEGs).
+#[derive(Debug, Default, Clone, Copy)]
+pub struct VipsPixels;
+
+impl PixelLoader for VipsPixels {
+    fn load(&self, path: &Path, max_edge: u32) -> Result<RgbImage, String> {
+        vips();
+        let edge = i32::try_from(max_edge).map_err(|e| e.to_string())?;
+        let (mut image, _) = render_file(path, edge)?;
+        if image.get_bands() == 4 || image.get_bands() == 2 {
+            image = ops::flatten(&image).map_err(|_| vips_error("flatten"))?;
+        }
+        if image.get_bands() != 3 {
+            image = ops::colourspace(&image, ops::Interpretation::Srgb)
+                .map_err(|_| vips_error("colourspace"))?;
+        }
+        let image = ops::cast(&image, ops::BandFormat::Uchar).map_err(|_| vips_error("cast"))?;
+        let (width, height) = (image.get_width() as u32, image.get_height() as u32);
+        RgbImage::new(width, height, image.image_write_to_memory())
+            .ok_or_else(|| "unexpected pixel layout".to_owned())
     }
 }
 

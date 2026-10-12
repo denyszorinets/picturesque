@@ -29,6 +29,13 @@ impl fmt::Display for CatalogError {
 
 impl std::error::Error for CatalogError {}
 
+/// Which analyzer (and version) produced a result.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct AnalyzerId {
+    pub name: &'static str,
+    pub version: u32,
+}
+
 /// A decision whose sidecar is out of date.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DirtyDecision {
@@ -86,6 +93,35 @@ pub trait PhotoCatalog: Send + Sync {
         size: u64,
         hash: &ContentHash,
     ) -> Result<(), CatalogError>;
+
+    /// Photos lacking a result from at least one of `analyzers` (at its
+    /// current version), oldest capture first, at most `limit`.
+    fn pending_analysis(
+        &self,
+        analyzers: &[AnalyzerId],
+        limit: usize,
+    ) -> Result<Vec<PhotoId>, CatalogError>;
+
+    /// How many photos still need any of `analyzers`, and how many photos exist.
+    fn analysis_progress(&self, analyzers: &[AnalyzerId]) -> Result<(usize, usize), CatalogError>;
+
+    /// Which of `analyzers` already have a current result for `id`.
+    fn analyzed(
+        &self,
+        id: PhotoId,
+        analyzers: &[AnalyzerId],
+    ) -> Result<Vec<AnalyzerId>, CatalogError>;
+
+    /// Stores (or replaces) an analyzer's result for a photo.
+    fn store_analysis(
+        &self,
+        id: PhotoId,
+        analyzer: AnalyzerId,
+        result: &serde_json::Value,
+    ) -> Result<(), CatalogError>;
+
+    /// A photo's current results, by analyzer name.
+    fn analysis(&self, id: PhotoId) -> Result<Vec<(String, u32, serde_json::Value)>, CatalogError>;
 
     /// Sizes of all catalogued RAW and image files. A new file can only be
     /// a duplicate if its size is in this set, so only those are hashed.

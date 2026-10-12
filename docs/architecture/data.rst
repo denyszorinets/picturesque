@@ -35,6 +35,7 @@ task that introduces them. The rest is in the schema today
 
    erDiagram
      PHOTO ||--|{ ASSET : "has files"
+     PHOTO ||--o{ ANALYSIS : has
      PHOTO ||--o| SCORES : has
      PHOTO ||--o| EMBEDDING : has
      PHOTO }o--o| SERIES : "member of"
@@ -51,6 +52,12 @@ task that introduces them. The rest is in the schema today
    One file belonging to a photo: the RAW, the JPEG, an XMP sidecar. Stores
    the path inside the Clean library, size and BLAKE3 content hash. RAW+JPEG
    pairs are two assets of one photo.
+
+``analysis``
+   One analyzer's result for a photo: analyzer name, version and a JSON
+   result (or ``{"error": ...}``). A photo is analyzed again when an
+   analyzer's version changes
+   (:doc:`ADR-0011 </architecture/decisions/0011-resumable-background-analysis>`).
 
 ``scores`` (planned)
    Technical scores (sharpness, exposure clipping, noise), AI scores
@@ -122,6 +129,9 @@ how many have run. Each migration runs in its own transaction.
      - ``decision.revision`` / ``sidecar_revision`` (a sidecar is up to
        date when it reflects the latest revision); ``import_photo.decision``
        (decisions read from existing sidecars)
+   * - 6
+     - ``0006_analysis.sql``
+     - ``analysis`` (result per photo and analyzer, with version)
 
 Conventions:
 
