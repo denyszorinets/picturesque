@@ -2,6 +2,7 @@
 
 mod migrations;
 mod photos;
+mod settings;
 
 use std::path::Path;
 use std::sync::{Mutex, MutexGuard};

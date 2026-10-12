@@ -3,12 +3,19 @@ use std::sync::Arc;
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use http_body_util::BodyExt;
-use picturesque_app::api::Api;
+use picturesque_app::api::{Api, AppContext};
+use picturesque_infra::catalog::SqliteCatalog;
+use picturesque_infra::fs::StdFileSystem;
 use serde_json::{Value, json};
 use tower::ServiceExt;
 
 async fn send(request: Request<Body>) -> (StatusCode, Vec<u8>) {
-    let response = picturesque_devserver::router(Arc::new(Api::new()))
+    let catalog = Arc::new(SqliteCatalog::open_in_memory().expect("catalog"));
+    let api = Api::new(AppContext {
+        settings_store: catalog,
+        fs: Arc::new(StdFileSystem),
+    });
+    let response = picturesque_devserver::router(Arc::new(api))
         .oneshot(request)
         .await
         .expect("router responds");
@@ -75,4 +82,29 @@ async fn rejected_arguments_return_400() {
 
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert_eq!(json(&body)["code"], "invalid_arguments");
+}
+
+#[tokio::test]
+async fn settings_round_trip_over_http() {
+    let (status, body) = send(post("/api/commands/get_settings", "")).await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(json(&body)["library_root"], Value::Null);
+}
+
+#[tokio::test]
+async fn invalid_settings_return_400_with_reason() {
+    let (status, body) = send(post(
+        "/api/commands/update_settings",
+        r#"{"library_root":"/definitely/not/here"}"#,
+    ))
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert!(
+        json(&body)["message"]
+            .as_str()
+            .unwrap()
+            .contains("does not exist")
+    );
 }

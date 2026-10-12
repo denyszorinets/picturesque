@@ -16,6 +16,7 @@ analysis and on-device AI.
    :caption: Using Picturesque
 
    concepts/index
+   reference/index
 
 .. toctree::
    :maxdepth: 2
