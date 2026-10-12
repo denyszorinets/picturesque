@@ -1,5 +1,5 @@
 {
-    "name": "Golang dev container",
+    "name": "Picturesque dev container",
     "build": {
         "dockerfile": "Containerfile",
         "context": "."
@@ -7,7 +7,11 @@
     "customizations": {
         "vscode": {
             "extensions": [
-                "golang.go",
+                "rust-lang.rust-analyzer",
+                "tauri-apps.tauri-vscode",
+                "svelte.svelte-vscode",
+                "tamasfe.even-better-toml",
+                "vadimcn.vscode-lldb",
                 "anthropic.claude-code"
             ],
             "mcp": {
@@ -29,6 +33,7 @@
     "mounts": [
         "source=${localWorkspaceFolderBasename}_claude,target=/root/.claude,type=volume",
         "source=${localEnv:HOME}${localEnv:USERPROFILE}/.ssh,target=/root/.ssh,type=bind,readonly",
-        "source=${localWorkspaceFolderBasename}_gh,target=/root/.config/gh,type=volume"
+        "source=${localWorkspaceFolderBasename}_gh,target=/root/.config/gh,type=volume",
+        "source=${localWorkspaceFolderBasename}_cargo_registry,target=/root/.cargo/registry,type=volume"
     ]
 }
