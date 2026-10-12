@@ -110,9 +110,15 @@ export function queryPhotos(query: PhotoQuery = {}): Promise<PhotoPage> {
   return transport.call<PhotoPage>("query_photos", query);
 }
 
-/** Values present in the library, for building filters. */
-export function photoFacets(): Promise<PhotoFacets> {
-  return transport.call<PhotoFacets>("photo_facets");
+/**
+ * Values present in the library, for building filters. With a filter,
+ * `total` and `days` count only matching photos; option lists stay complete.
+ */
+export function photoFacets(filter?: PhotoQuery): Promise<PhotoFacets> {
+  return transport.call<PhotoFacets>(
+    "photo_facets",
+    filter ? { filter } : undefined,
+  );
 }
 
 /** Changes photos' flags and/or ratings; returns the resulting decisions. */

@@ -116,3 +116,19 @@ describe("LibraryStore", () => {
     expect(store.error).toBe("catalog unavailable");
   });
 });
+
+describe("LibraryStore filters", () => {
+  it("sends the filter with facets and every page", async () => {
+    const api = backend(700);
+    const store = new LibraryStore(api);
+
+    await store.setFilter({ flags: ["pick"] });
+    await store.ensureLoaded(400);
+
+    expect(api.photoFacets).toHaveBeenCalledWith({ flags: ["pick"] });
+    for (const [q] of (api.queryPhotos as ReturnType<typeof vi.fn>).mock
+      .calls) {
+      expect(q.flags).toEqual(["pick"]);
+    }
+  });
+});

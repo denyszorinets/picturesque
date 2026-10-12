@@ -87,3 +87,36 @@ Decisions are saved immediately. **Undo** and **Redo** (above the
 timeline, or Ctrl+Z / Ctrl+Shift+Z) step back and forward through the
 last 200 changes; undoing restores each photo's previous flag and rating,
 even when a change covered photos that had different ones.
+
+Filters
+-------
+
+The **Filters** panel beside the timeline (toggle it with the
+**Filters** button) narrows the timeline to matching photos:
+
+.. list-table::
+   :header-rows: 1
+
+   * - Filter
+     - Shows
+   * - Flag
+     - Picks, unflagged and/or rejects (any of the chosen ones)
+   * - Rating
+     - Photos with at least the chosen number of stars
+   * - Date
+     - Photos taken from / until a day (both included)
+   * - Place
+     - A country, or one city in it
+   * - Camera, Lens
+     - Photos taken with that camera or lens
+
+Filters combine: *Picks* with *3★+* in *Lisbon* shows picked photos of
+three stars or more taken in Lisbon. Every option shows how many photos
+in the library have it. Active filters appear as chips above the
+timeline; remove one with its ✕, or all with **Clear all**. Filters are
+kept while the app is open.
+
+The timeline, day headers and counts all reflect the filters. A photo you
+change while filtering (for example rejecting it while showing only
+picks) stays in view until the filters change, so it does not jump away
+mid-cull.

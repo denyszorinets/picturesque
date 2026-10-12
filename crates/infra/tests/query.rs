@@ -382,7 +382,7 @@ fn facets_list_values_with_counts() {
     )
     .unwrap();
 
-    let f = c.facets().unwrap();
+    let f = c.facets(None).unwrap();
 
     assert_eq!(f.total, 6);
     assert_eq!(
@@ -414,6 +414,30 @@ fn facets_list_values_with_counts() {
         [(Flag::Pick, 1), (Flag::Unflagged, 5)]
     );
     assert_eq!(f.ratings, [5, 0, 0, 0, 0, 1]);
+}
+
+#[test]
+fn filtered_facets_count_matching_days_but_keep_every_option() {
+    let c = sample();
+
+    let f = c
+        .facets(Some(&PhotoQuery {
+            city: Some("Lisbon".into()),
+            ..Default::default()
+        }))
+        .unwrap();
+
+    assert_eq!(f.total, 2);
+    assert_eq!(
+        f.days
+            .iter()
+            .map(|d| (d.value.as_str(), d.count))
+            .collect::<Vec<_>>(),
+        [("2026-10-12", 2)]
+    );
+    // Options still list the whole library.
+    assert_eq!(f.places.len(), 2);
+    assert_eq!(f.cameras.len(), 2);
 }
 
 #[test]
@@ -490,7 +514,12 @@ fn queries_over_ten_thousand_photos_are_fast() {
         );
     }
     let start = Instant::now();
-    c.facets().unwrap();
+    c.facets(None).unwrap();
+    c.facets(Some(&PhotoQuery {
+        flags: Some(vec![Flag::Pick]),
+        ..Default::default()
+    }))
+    .unwrap();
     assert!(
         start.elapsed().as_millis() < 100,
         "facets: {:?}",

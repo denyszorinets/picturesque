@@ -5,7 +5,7 @@ import { buildSections, type Section } from "./layout";
 /** Backend calls the library needs (injectable for tests). */
 export interface LibraryApi {
   queryPhotos(query: PhotoQuery): Promise<PhotoPage>;
-  photoFacets(): Promise<PhotoFacets>;
+  photoFacets(filter?: PhotoQuery): Promise<PhotoFacets>;
 }
 
 const PAGE = 300;
@@ -26,6 +26,8 @@ export class LibraryStore {
   private complete = false;
   private queue: Promise<void> = Promise.resolve();
   private generation = 0;
+  /** Filters applied to the timeline. */
+  private filter: PhotoQuery = {};
 
   constructor(private readonly api: LibraryApi) {}
 
@@ -39,6 +41,12 @@ export class LibraryStore {
       : [];
   }
 
+  /** Applies new filters and reloads. */
+  setFilter(filter: PhotoQuery): Promise<void> {
+    this.filter = filter;
+    return this.load();
+  }
+
   /** (Re)loads facets and the first page. */
   async load(): Promise<void> {
     const generation = ++this.generation;
@@ -46,8 +54,8 @@ export class LibraryStore {
     this.error = null;
     try {
       const [facets, page] = await Promise.all([
-        this.api.photoFacets(),
-        this.api.queryPhotos({ limit: PAGE }),
+        this.api.photoFacets(this.filter),
+        this.api.queryPhotos({ ...this.filter, limit: PAGE }),
       ]);
       if (generation !== this.generation) return;
       this.facets = facets;
@@ -73,6 +81,7 @@ export class LibraryStore {
       ) {
         try {
           const page = await this.api.queryPhotos({
+            ...this.filter,
             limit: PAGE,
             cursor: this.cursor ?? undefined,
           });

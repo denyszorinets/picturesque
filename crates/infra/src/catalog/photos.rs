@@ -191,8 +191,11 @@ impl PhotoCatalog for SqliteCatalog {
         self.query_photos(query)
     }
 
-    fn facets(&self) -> Result<picturesque_app::library::PhotoFacets, CatalogError> {
-        self.photo_facets()
+    fn facets(
+        &self,
+        filter: Option<&picturesque_app::library::PhotoQuery>,
+    ) -> Result<picturesque_app::library::PhotoFacets, CatalogError> {
+        self.photo_facets(filter)
     }
 
     fn decision(&self, id: PhotoId) -> Result<picturesque_core::decision::Decision, CatalogError> {

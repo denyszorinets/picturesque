@@ -52,8 +52,10 @@ pub trait PhotoCatalog: Send + Sync {
     /// A page of photos matching `query` (already validated).
     fn query(&self, query: &PhotoQuery) -> Result<PhotoPage, CatalogError>;
 
-    /// Values present in the library, for filters.
-    fn facets(&self) -> Result<PhotoFacets, CatalogError>;
+    /// Values present in the library, for filters. With a filter, `total`
+    /// and `days` count only matching photos (they drive the timeline
+    /// layout); the option lists always cover the whole library.
+    fn facets(&self, filter: Option<&PhotoQuery>) -> Result<PhotoFacets, CatalogError>;
 
     /// A photo's decision; the default when none was made.
     fn decision(&self, id: PhotoId) -> Result<Decision, CatalogError>;

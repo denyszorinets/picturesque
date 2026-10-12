@@ -266,20 +266,37 @@ where
     .map_err(storage)
 }
 
-fn facets(conn: &Connection) -> Result<PhotoFacets, CatalogError> {
+fn facets(conn: &Connection, filter: Option<&PhotoQuery>) -> Result<PhotoFacets, CatalogError> {
+    let (clauses, values) = filter.map(filters).unwrap_or_default();
     let (total, first, last): (i64, Option<String>, Option<String>) = conn
         .query_row(
-            "SELECT count(*), substr(min(captured_local), 1, 10), substr(max(captured_local), 1, 10) FROM photo",
-            [],
+            &format!(
+                "SELECT count(*), substr(min(p.captured_local), 1, 10), substr(max(p.captured_local), 1, 10)
+                 {FROM} {}",
+                where_sql(&clauses)
+            ),
+            params_from_iter(values.iter()),
             |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
         )
         .map_err(storage)?;
-    let days = counted(
-        conn,
-        "SELECT substr(captured_local, 1, 10) AS day, count(*) AS n FROM photo
-         WHERE captured_local IS NOT NULL GROUP BY day ORDER BY day DESC",
-        |r| r.get("day"),
-    )?;
+    let mut day_clauses = clauses.clone();
+    day_clauses.push("p.captured_local IS NOT NULL".into());
+    let mut stmt = conn
+        .prepare(&format!(
+            "SELECT substr(p.captured_local, 1, 10) AS day, count(*) AS n {FROM} {} GROUP BY day ORDER BY day DESC",
+            where_sql(&day_clauses)
+        ))
+        .map_err(storage)?;
+    let days = stmt
+        .query_map(params_from_iter(values.iter()), |r| {
+            Ok(Counted {
+                value: r.get::<_, String>("day")?,
+                count: r.get::<_, i64>("n")? as usize,
+            })
+        })
+        .map_err(storage)?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(storage)?;
     let cameras = counted(
         conn,
         "SELECT coalesce(camera_make, '') AS make, coalesce(camera_model, '') AS model, count(*) AS n FROM photo
@@ -352,8 +369,11 @@ impl SqliteCatalog {
         query_page(&self.conn(), query)
     }
 
-    pub(super) fn photo_facets(&self) -> Result<PhotoFacets, CatalogError> {
-        facets(&self.conn())
+    pub(super) fn photo_facets(
+        &self,
+        filter: Option<&PhotoQuery>,
+    ) -> Result<PhotoFacets, CatalogError> {
+        facets(&self.conn(), filter)
     }
 
     pub(super) fn load_decision(&self, id: PhotoId) -> Result<Decision, CatalogError> {

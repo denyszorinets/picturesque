@@ -1,6 +1,8 @@
 <script lang="ts">
   import * as api from "../api";
   import { Culling } from "./culling.svelte";
+  import FilterPanel from "./FilterPanel.svelte";
+  import { Filters } from "./filters.svelte";
   import { neighbour, type Direction, type Layout } from "./layout";
   import Loupe from "./Loupe.svelte";
   import { Selection } from "./selection.svelte";
@@ -18,6 +20,24 @@
     store = new LibraryStore(api),
     selection = new Selection(),
   }: Props = $props();
+
+  const filters = new Filters();
+  let showFilters = $state(true);
+
+  // Reload whenever the filters change; indices change, so selection resets.
+  let lastFilter: string | null = null;
+  $effect(() => {
+    const query = filters.toQuery();
+    const key = JSON.stringify(query);
+    if (key === lastFilter) return;
+    const first = lastFilter === null;
+    lastFilter = key;
+    filters.save();
+    if (!first) {
+      selection.clear();
+      void store.setFilter(query);
+    }
+  });
 
   /** Index of the photo open in the loupe. */
   let loupe = $state<number | null>(null);
@@ -123,7 +143,7 @@
   let section: HTMLElement | undefined = $state();
 
   $effect(() => {
-    void store.load();
+    void store.setFilter(filters.toQuery());
     // New photos appear when an import completes.
     return api.onAppEvent((event) => {
       if (event.type === "import_progress" && event.state === "completed")
@@ -137,7 +157,7 @@
 <section class="library" aria-label="Library" bind:this={section}>
   {#if store.error}
     <p class="error-text" role="alert">{store.error}</p>
-  {:else if store.facets && store.total === 0}
+  {:else if store.facets && store.total === 0 && !filters.active}
     <div class="empty card">
       <h2>No photos yet</h2>
       <p class="muted">Import a folder to start building your library.</p>
@@ -146,7 +166,31 @@
     </div>
   {:else if store.facets}
     <div class="bar">
-      <span data-testid="library-count">{store.total} photos</span>
+      <button
+        class="small"
+        aria-pressed={showFilters}
+        onclick={() => (showFilters = !showFilters)}
+        data-testid="toggle-filters">Filters</button
+      >
+      <span data-testid="library-count"
+        >{store.total} {store.total === 1 ? "photo" : "photos"}</span
+      >
+      {#each filters.chips as chip (chip.label)}
+        <span class="chip"
+          >{chip.label}
+          <button
+            aria-label={`Remove filter ${chip.label}`}
+            onclick={chip.clear}>✕</button
+          ></span
+        >
+      {/each}
+      {#if filters.active}
+        <button
+          class="link"
+          onclick={() => filters.clear()}
+          data-testid="clear-filters">Clear all</button
+        >
+      {/if}
       {#if selection.size > 0}
         <span class="muted" data-testid="selection-count"
           >{selection.size} selected</span
@@ -169,13 +213,26 @@
         title="Redo (Ctrl+Shift+Z)">Redo</button
       >
     </div>
-    <div class="grid">
-      <Timeline
-        {store}
-        {selection}
-        onopen={open}
-        onlayout={(l) => (layout = l)}
-      />
+    <div class="body">
+      {#if showFilters}
+        <aside class="filters">
+          <FilterPanel {filters} facets={store.facets} />
+        </aside>
+      {/if}
+      <div class="grid">
+        {#if store.total === 0}
+          <p class="muted no-match" data-testid="no-match">
+            No photos match these filters.
+          </p>
+        {:else}
+          <Timeline
+            {store}
+            {selection}
+            onopen={open}
+            onlayout={(l) => (layout = l)}
+          />
+        {/if}
+      </div>
     </div>
     {#if loupe !== null}
       <Loupe
@@ -201,6 +258,7 @@
 
   .bar {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 1rem;
     padding-bottom: 0.4rem;
@@ -216,9 +274,52 @@
     font-size: 0.85rem;
   }
 
-  .grid {
+  .body {
     flex: 1;
     min-height: 0;
+    display: flex;
+    gap: 1.2rem;
+  }
+
+  .filters {
+    width: 15rem;
+    flex-shrink: 0;
+    overflow-y: auto;
+    padding-right: 0.2rem;
+  }
+
+  .grid {
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+  }
+
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.2rem;
+    padding: 0.1rem 0.2rem 0.1rem 0.6rem;
+    border-radius: 999px;
+    background: var(--surface-2);
+    font-size: 0.82rem;
+  }
+
+  .chip button,
+  .link {
+    border: none;
+    background: none;
+    padding: 0.1rem 0.35rem;
+    color: var(--muted);
+    font-size: 0.82rem;
+  }
+
+  .link {
+    text-decoration: underline;
+  }
+
+  .no-match {
+    margin-top: 3rem;
+    text-align: center;
   }
 
   .empty {
