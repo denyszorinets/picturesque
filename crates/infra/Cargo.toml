@@ -11,6 +11,12 @@ publish.workspace = true
 [dependencies]
 picturesque-app.workspace = true
 picturesque-core.workspace = true
+rusqlite.workspace = true
+chrono.workspace = true
+
+[dev-dependencies]
+rusqlite.workspace = true
+tempfile.workspace = true
 
 [lints]
 workspace = true

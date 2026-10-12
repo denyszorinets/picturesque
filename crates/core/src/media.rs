@@ -30,6 +30,17 @@ pub enum AssetRole {
     Sidecar,
 }
 
+impl AssetRole {
+    /// Stable lowercase name, as used in storage and the API.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Raw => "raw",
+            Self::Image => "image",
+            Self::Sidecar => "sidecar",
+        }
+    }
+}
+
 const RAW_EXTENSIONS: &[&str] = &[
     "3fr", "ari", "arw", "bay", "cap", "cr2", "cr3", "crw", "dcr", "dcs", "dng", "erf", "fff",
     "gpr", "iiq", "k25", "kdc", "mdc", "mef", "mos", "mrw", "nef", "nrw", "orf", "ori", "pef",
@@ -57,6 +68,34 @@ impl MediaFormat {
     pub fn from_file_name(name: &str) -> Option<Self> {
         let (_, ext) = name.rsplit_once('.')?;
         Self::from_extension(ext)
+    }
+
+    /// Stable lowercase name, as used in storage and the API.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Raw => "raw",
+            Self::Jpeg => "jpeg",
+            Self::Heif => "heif",
+            Self::Png => "png",
+            Self::Tiff => "tiff",
+            Self::Webp => "webp",
+            Self::Xmp => "xmp",
+        }
+    }
+
+    /// Inverse of [`MediaFormat::as_str`].
+    pub fn from_name(name: &str) -> Option<Self> {
+        [
+            Self::Raw,
+            Self::Jpeg,
+            Self::Heif,
+            Self::Png,
+            Self::Tiff,
+            Self::Webp,
+            Self::Xmp,
+        ]
+        .into_iter()
+        .find(|f| f.as_str() == name)
     }
 
     pub fn role(self) -> AssetRole {
@@ -106,5 +145,22 @@ mod tests {
         assert_eq!(MediaFormat::Raw.role(), AssetRole::Raw);
         assert_eq!(MediaFormat::Webp.role(), AssetRole::Image);
         assert_eq!(MediaFormat::Xmp.role(), AssetRole::Sidecar);
+    }
+
+    #[test]
+    fn names_round_trip() {
+        for f in [
+            MediaFormat::Raw,
+            MediaFormat::Jpeg,
+            MediaFormat::Heif,
+            MediaFormat::Png,
+            MediaFormat::Tiff,
+            MediaFormat::Webp,
+            MediaFormat::Xmp,
+        ] {
+            assert_eq!(MediaFormat::from_name(f.as_str()), Some(f));
+        }
+        assert_eq!(MediaFormat::from_name("gif"), None);
+        assert_eq!(AssetRole::Sidecar.as_str(), "sidecar");
     }
 }

@@ -3,3 +3,5 @@
 //! file system).
 //!
 //! Types from native libraries and frameworks stay inside this crate.
+
+pub mod catalog;

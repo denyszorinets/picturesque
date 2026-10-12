@@ -208,6 +208,20 @@ impl Orientation {
         }
     }
 
+    /// The EXIF tag value, 1–8.
+    pub fn to_exif(self) -> u16 {
+        match self {
+            Self::Normal => 1,
+            Self::FlipHorizontal => 2,
+            Self::Rotate180 => 3,
+            Self::FlipVertical => 4,
+            Self::Transpose => 5,
+            Self::Rotate90 => 6,
+            Self::Transverse => 7,
+            Self::Rotate270 => 8,
+        }
+    }
+
     /// Whether displaying the image swaps its width and height.
     pub fn swaps_dimensions(self) -> bool {
         matches!(
@@ -315,6 +329,13 @@ mod tests {
         assert_eq!(Orientation::from_exif(8), Orientation::Rotate270);
         assert_eq!(Orientation::from_exif(0), Orientation::Normal);
         assert_eq!(Orientation::from_exif(42), Orientation::Normal);
+    }
+
+    #[test]
+    fn orientation_round_trips_exif_values() {
+        for v in 1..=8 {
+            assert_eq!(Orientation::from_exif(v).to_exif(), v);
+        }
     }
 
     #[test]
