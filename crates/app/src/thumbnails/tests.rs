@@ -291,3 +291,26 @@ fn image_requests_are_parsed_and_validated() {
     );
     assert_eq!(api.image_request("grid/999").unwrap_err().code, NotFound);
 }
+
+#[test]
+fn a_concurrently_created_image_is_kept_not_replaced() {
+    let world = world(FakeDecoder::default());
+    let id = add(
+        &world,
+        CaptureMetadata::default(),
+        vec![asset("2026/IMG_2.CR3", b"raw-2")],
+    );
+    let thumbs = service(&world);
+    let path = thumbs.cache_path(&fake_hash(b"raw-2"), ImageSize::Grid);
+    // Another thread finished first.
+    world.fs.write(&path, b"from the other thread");
+
+    // A rendering that started before it existed must not replace it.
+    let photo = world.catalog.photo(id).unwrap().unwrap();
+    let got = thumbs
+        .ensure(Path::new("/lib"), &photo, ImageSize::Grid)
+        .unwrap();
+
+    assert_eq!(got, path);
+    assert_eq!(world.fs.read(&path).unwrap(), b"from the other thread");
+}

@@ -164,7 +164,7 @@ impl ThumbnailService {
             .create_dir_all(dir)
             .map_err(ThumbnailError::Decode)?;
         // Concurrent requests for the same image each write their own temp
-        // file; the last rename wins with identical content.
+        // file; the first rename wins and the others are discarded.
         let tmp = dir.join(format!(
             ".{}.{}.tmp",
             std::process::id(),
@@ -183,12 +183,10 @@ impl ThumbnailService {
                 let _ = self.fs.remove_file(&tmp);
                 ThumbnailError::Decode(e)
             })?;
-        let _ = self.fs.remove_file(&path);
-        match self.fs.rename_no_replace(&tmp, &path) {
-            Ok(()) => {}
-            Err(_) => {
-                let _ = self.fs.remove_file(&tmp);
-            }
+        // Never remove an existing image: a reader may be about to open it.
+        // If another thread got there first, its image is identical.
+        if self.fs.rename_no_replace(&tmp, &path).is_err() {
+            let _ = self.fs.remove_file(&tmp);
         }
         if photo.metadata.dimensions.is_none()
             && let Some((w, h)) = rendered.source_size
