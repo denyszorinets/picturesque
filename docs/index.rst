@@ -13,6 +13,12 @@ analysis and on-device AI.
 
 .. toctree::
    :maxdepth: 2
+   :caption: Using Picturesque
+
+   concepts/index
+
+.. toctree::
+   :maxdepth: 2
    :caption: Contributing
 
    development/index

@@ -4,3 +4,9 @@
 //! `docs/architecture/components.rst` for the layer rules.
 
 #![forbid(unsafe_code)]
+
+pub mod grouping;
+pub mod hash;
+pub mod media;
+pub mod metadata;
+pub mod photo;
