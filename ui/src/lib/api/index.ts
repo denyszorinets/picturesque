@@ -2,6 +2,8 @@ import type { AppEvent } from "./generated/AppEvent";
 import type { AppInfo } from "./generated/AppInfo";
 import type { ImportPlanView } from "./generated/ImportPlanView";
 import type { ImportStatus } from "./generated/ImportStatus";
+import type { DecisionChange } from "./generated/DecisionChange";
+import type { DecisionView } from "./generated/DecisionView";
 import type { PhotoDetail } from "./generated/PhotoDetail";
 import type { PhotoFacets } from "./generated/PhotoFacets";
 import type { PhotoPage } from "./generated/PhotoPage";
@@ -17,6 +19,8 @@ export type { AppEvent } from "./generated/AppEvent";
 export type { AppInfo } from "./generated/AppInfo";
 export type { ImportPlanView } from "./generated/ImportPlanView";
 export type { ImportStatus } from "./generated/ImportStatus";
+export type { DecisionChange } from "./generated/DecisionChange";
+export type { DecisionView } from "./generated/DecisionView";
 export type { PhotoDetail } from "./generated/PhotoDetail";
 export type { PhotoFacets } from "./generated/PhotoFacets";
 export type { PhotoPage } from "./generated/PhotoPage";
@@ -109,4 +113,11 @@ export function queryPhotos(query: PhotoQuery = {}): Promise<PhotoPage> {
 /** Values present in the library, for building filters. */
 export function photoFacets(): Promise<PhotoFacets> {
   return transport.call<PhotoFacets>("photo_facets");
+}
+
+/** Changes photos' flags and/or ratings; returns the resulting decisions. */
+export function setDecisions(
+  changes: DecisionChange[],
+): Promise<DecisionView[]> {
+  return transport.call<DecisionView[]>("set_decisions", { changes });
 }

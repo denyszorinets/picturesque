@@ -15,7 +15,7 @@ use ts_rs::TS;
 
 use crate::import::{Deps, ImportError, ImportService, PlanImportArgs, RunArgs};
 use crate::info;
-use crate::library::{PhotoArgs, PhotoDetail, PhotoQuery};
+use crate::library::{DecisionView, PhotoArgs, PhotoDetail, PhotoQuery, SetDecisionsArgs};
 use crate::ports::catalog::PhotoCatalog;
 use crate::ports::events::EventSink;
 use crate::ports::fs::FileSystem;
@@ -182,6 +182,55 @@ impl Api {
             })
     }
 
+    /// Applies decision changes. Everything is validated first, so an
+    /// invalid change (bad rating, unknown photo) changes nothing.
+    fn set_decisions(
+        &self,
+        changes: &[crate::library::DecisionChange],
+    ) -> Result<Vec<DecisionView>, ApiError> {
+        use picturesque_core::decision::{Decision, Rating};
+        let mut planned = Vec::with_capacity(changes.len());
+        for change in changes {
+            let id = PhotoId(change.photo_id);
+            if self.catalog.photo(id).map_err(catalog_error)?.is_none() {
+                return Err(ApiError::new(
+                    ApiErrorCode::NotFound,
+                    format!("There is no photo {}.", change.photo_id),
+                ));
+            }
+            let current = self.catalog.decision(id).map_err(catalog_error)?;
+            let rating = match change.rating {
+                Some(stars) => Rating::new(stars).ok_or_else(|| {
+                    ApiError::new(
+                        ApiErrorCode::InvalidArguments,
+                        format!("A rating must be 0-5, got {stars}."),
+                    )
+                })?,
+                None => current.rating,
+            };
+            planned.push((
+                id,
+                Decision {
+                    flag: change.flag.unwrap_or(current.flag),
+                    rating,
+                },
+            ));
+        }
+        planned
+            .into_iter()
+            .map(|(id, decision)| {
+                self.catalog
+                    .set_decision(id, decision)
+                    .map_err(catalog_error)?;
+                Ok(DecisionView {
+                    photo_id: id.0,
+                    flag: decision.flag,
+                    rating: decision.rating.stars(),
+                })
+            })
+            .collect()
+    }
+
     /// Waits for a running import, if any (used on shutdown and in tests).
     pub fn wait_for_imports(&self) {
         self.imports.wait();
@@ -239,6 +288,10 @@ impl Api {
                     })?;
                 let decision = self.catalog.decision(id).map_err(catalog_error)?;
                 respond(PhotoDetail::new(&photo, decision))
+            }
+            "set_decisions" => {
+                let SetDecisionsArgs { changes } = parse_args(command, args)?;
+                respond(self.set_decisions(&changes)?)
             }
             "photo_facets" => {
                 no_args(command, &args)?;
@@ -422,5 +475,77 @@ mod tests {
             .unwrap_err();
 
         assert_eq!(err.code, ApiErrorCode::InvalidArguments);
+    }
+
+    mod decisions {
+        use picturesque_core::hash::ContentHash;
+        use picturesque_core::media::MediaFormat;
+        use picturesque_core::photo::{Asset, NewPhoto, PhotoAssets};
+        use serde_json::json;
+
+        use crate::api::{Api, ApiErrorCode};
+        use crate::ports::catalog::PhotoCatalog;
+        use crate::testing::{FakeMetadata, MemFs, TestWorld};
+
+        fn api_with_photos(n: u8) -> (Api, TestWorld) {
+            let world = TestWorld::new(MemFs::new(), FakeMetadata::default());
+            for i in 0..n {
+                world
+                    .catalog
+                    .insert_photo(&NewPhoto {
+                        metadata: Default::default(),
+                        assets: PhotoAssets::new(vec![Asset {
+                            format: MediaFormat::Jpeg,
+                            path: format!("{i}.jpg").into(),
+                            size: 1,
+                            hash: ContentHash::from_bytes([i; 32]),
+                        }])
+                        .unwrap(),
+                    })
+                    .unwrap();
+            }
+            (Api::new(world.context()).unwrap(), world)
+        }
+
+        #[test]
+        fn sets_flags_and_ratings_independently() {
+            let (api, _w) = api_with_photos(2);
+
+            api.call(
+                "set_decisions",
+                json!({ "changes": [{ "photo_id": 1, "rating": 4 }] }),
+            )
+            .unwrap();
+            let result = api
+                .call("set_decisions", json!({ "changes": [{ "photo_id": 1, "flag": "pick" }, { "photo_id": 2, "flag": "reject" }] }))
+                .unwrap();
+
+            assert_eq!(
+                result,
+                json!([{ "photo_id": 1, "flag": "pick", "rating": 4 }, { "photo_id": 2, "flag": "reject", "rating": 0 }])
+            );
+        }
+
+        #[test]
+        fn an_invalid_change_changes_nothing() {
+            let (api, world) = api_with_photos(2);
+
+            let bad_rating = api
+                .call("set_decisions", json!({ "changes": [{ "photo_id": 1, "flag": "pick" }, { "photo_id": 2, "rating": 9 }] }))
+                .unwrap_err();
+            let missing = api
+                .call("set_decisions", json!({ "changes": [{ "photo_id": 1, "flag": "pick" }, { "photo_id": 99, "flag": "pick" }] }))
+                .unwrap_err();
+
+            assert_eq!(bad_rating.code, ApiErrorCode::InvalidArguments);
+            assert_eq!(missing.code, ApiErrorCode::NotFound);
+            assert_eq!(
+                world
+                    .catalog
+                    .decision(picturesque_core::photo::PhotoId(1))
+                    .unwrap(),
+                Default::default()
+            );
+        }
     }
 }

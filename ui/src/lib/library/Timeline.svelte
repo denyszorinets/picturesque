@@ -1,5 +1,11 @@
 <script lang="ts">
-  import { computeLayout, rowTopOf, visibleRows, type Section } from "./layout";
+  import {
+    computeLayout,
+    rowTopOf,
+    visibleRows,
+    type Layout,
+    type Section,
+  } from "./layout";
   import type { Selection } from "./selection.svelte";
   import type { LibraryStore } from "./store.svelte";
   import Tile from "./Tile.svelte";
@@ -9,9 +15,11 @@
     selection: Selection;
     /** Double-click or Enter on a photo. */
     onopen?: (index: number) => void;
+    /** Called with the current layout, for keyboard navigation. */
+    onlayout?: (layout: Layout) => void;
   }
 
-  let { store, selection, onopen }: Props = $props();
+  let { store, selection, onopen, onlayout }: Props = $props();
 
   const GAP = 6;
   const HEADER = 44;
@@ -22,7 +30,7 @@
   let height = $state(0);
   let scrollTop = $state(0);
 
-  const layout = $derived(
+  const computed = $derived(
     computeLayout(store.sections, {
       width: Math.max(0, width),
       minTile: 180,
@@ -30,7 +38,12 @@
       headerHeight: HEADER,
     }),
   );
-  const rows = $derived(visibleRows(layout.rows, scrollTop, height, OVERSCAN));
+  $effect(() => {
+    onlayout?.(computed);
+  });
+  const rows = $derived(
+    visibleRows(computed.rows, scrollTop, height, OVERSCAN),
+  );
 
   $effect(() => {
     if (!viewport) return;
@@ -55,11 +68,11 @@
   $effect(() => {
     const focus = selection.focus;
     if (focus === null || !viewport) return;
-    const top = rowTopOf(layout.rows, focus);
+    const top = rowTopOf(computed.rows, focus);
     if (top === null) return;
     if (top < viewport.scrollTop) viewport.scrollTop = top - HEADER;
-    else if (top + layout.tile > viewport.scrollTop + height)
-      viewport.scrollTop = top + layout.tile - height + GAP;
+    else if (top + computed.tile > viewport.scrollTop + height)
+      viewport.scrollTop = top + computed.tile - height + GAP;
   });
 
   let frame = 0;
@@ -96,7 +109,7 @@
   data-testid="timeline"
   tabindex="-1"
 >
-  <div class="canvas" style:height={`${layout.height}px`}>
+  <div class="canvas" style:height={`${computed.height}px`}>
     {#each rows as row (row.kind + row.top)}
       {#if row.kind === "header"}
         <div
@@ -122,7 +135,7 @@
             {#if photo}
               <Tile
                 {photo}
-                size={layout.tile}
+                size={computed.tile}
                 selected={selection.has(index)}
                 focused={selection.focus === index}
                 onclick={(e) => select(index, e)}
@@ -131,8 +144,8 @@
             {:else}
               <div
                 class="placeholder"
-                style:width={`${layout.tile}px`}
-                style:height={`${layout.tile}px`}
+                style:width={`${computed.tile}px`}
+                style:height={`${computed.tile}px`}
               ></div>
             {/if}
           {/each}

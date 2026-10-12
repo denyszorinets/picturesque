@@ -59,6 +59,14 @@ Commands
    size, ``flag``, ``rating`` and ``files`` (path, format, size). Unknown
    photos are ``not_found``.
 
+``set_decisions``
+   ``{ "changes": [{ "photo_id": 7, "flag": "pick" }, { "photo_id": 8, "rating": 4 }] }``.
+   Each change sets a photo's ``flag`` (``unflagged``, ``pick``,
+   ``reject``), ``rating`` (0–5), or both; omitted fields stay as they
+   are. Returns each photo's resulting ``{ "photo_id", "flag", "rating" }``.
+   All changes are validated first: an unknown photo (``not_found``) or a
+   rating above 5 (``invalid_arguments``) changes nothing.
+
 ``photo_facets``
    No arguments. The values present in the library with photo counts:
    ``days`` (newest first), ``cameras`` (with display labels), ``lenses``,

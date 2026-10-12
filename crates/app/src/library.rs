@@ -228,6 +228,38 @@ pub struct PhotoArgs {
     pub photo_id: i64,
 }
 
+/// A change to one photo's decision; absent fields stay as they are.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, TS)]
+#[serde(deny_unknown_fields)]
+#[ts(export)]
+pub struct DecisionChange {
+    #[ts(type = "number")]
+    pub photo_id: i64,
+    #[ts(optional, type = "\"unflagged\" | \"pick\" | \"reject\"")]
+    pub flag: Option<picturesque_core::decision::Flag>,
+    #[ts(optional)]
+    pub rating: Option<u8>,
+}
+
+/// Arguments of `set_decisions`.
+#[derive(Debug, Clone, Deserialize, TS)]
+#[serde(deny_unknown_fields)]
+#[ts(export)]
+pub struct SetDecisionsArgs {
+    pub changes: Vec<DecisionChange>,
+}
+
+/// A photo's decision after a change.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
+#[ts(export)]
+pub struct DecisionView {
+    #[ts(type = "number")]
+    pub photo_id: i64,
+    #[ts(type = "\"unflagged\" | \"pick\" | \"reject\"")]
+    pub flag: picturesque_core::decision::Flag,
+    pub rating: u8,
+}
+
 /// Formats an exposure time: `1/250 s` for fractions of a second, `2 s`,
 /// `2.5 s` or `30 s` otherwise.
 pub fn format_shutter(numerator: u32, denominator: u32) -> String {

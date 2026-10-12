@@ -107,3 +107,41 @@ describe("rowTopOf", () => {
     expect(rowTopOf(layout.rows, 99)).toBeNull();
   });
 });
+
+describe("neighbour", async () => {
+  const { neighbour } = await import("./layout");
+  // 5 columns: day one has 7 photos (rows 0-4, 5-6), day two has 8 (7-11, 12-14).
+  const layout = computeLayout(
+    buildSections(
+      [
+        { value: "d1", count: 7 },
+        { value: "d2", count: 8 },
+      ],
+      15,
+    ),
+    metrics,
+  );
+
+  it("moves left and right through the list", () => {
+    expect(neighbour(layout.rows, 4, "right", 15)).toBe(5);
+    expect(neighbour(layout.rows, 0, "left", 15)).toBe(0);
+    expect(neighbour(layout.rows, 14, "right", 15)).toBe(14);
+  });
+
+  it("moves up and down by row, keeping the column", () => {
+    expect(neighbour(layout.rows, 1, "down", 15)).toBe(6);
+    expect(neighbour(layout.rows, 6, "up", 15)).toBe(1);
+  });
+
+  it("crosses day headers and clamps to shorter rows", () => {
+    // From the short second row of day one (5-6) down to day two's first row.
+    expect(neighbour(layout.rows, 6, "down", 15)).toBe(8);
+    // From column 4 of day two's first row up to the short row: its last tile.
+    expect(neighbour(layout.rows, 11, "up", 15)).toBe(6);
+  });
+
+  it("stays put at the top and bottom", () => {
+    expect(neighbour(layout.rows, 2, "up", 15)).toBe(2);
+    expect(neighbour(layout.rows, 13, "down", 15)).toBe(13);
+  });
+});
