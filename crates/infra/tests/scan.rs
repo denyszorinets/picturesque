@@ -62,7 +62,7 @@ fn follows_symlinked_files_but_not_symlinked_folders() {
     std::os::unix::fs::symlink(dir.path().join("elsewhere/b.jpg"), root.join("b.jpg")).unwrap();
     std::os::unix::fs::symlink(&root, root.join("loop")).unwrap();
 
-    let report = scan_sources(&StdFileSystem, &[root.clone()], &[]);
+    let report = scan_sources(&StdFileSystem, std::slice::from_ref(&root), &[]);
 
     let sizes: Vec<u64> = report
         .photos
