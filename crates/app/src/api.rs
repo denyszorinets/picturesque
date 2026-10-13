@@ -14,7 +14,7 @@ use serde_json::Value;
 use ts_rs::TS;
 
 use crate::ai::AiService;
-use crate::analysis::clip::ClipAnalyzer;
+use crate::analysis::clip::{AestheticView, ClipAnalyzer};
 use crate::analysis::technical::{QualityView, TechnicalAnalyzer};
 use crate::analysis::{AnalysisService, Analyzer, PrioritizeArgs};
 use crate::embeddings::{DEFAULT_LIMIT, EmbeddingIndex, MAX_LIMIT, SimilarArgs};
@@ -25,7 +25,7 @@ use crate::library::{
     DecisionView, FacetsArgs, PhotoArgs, PhotoDetail, PhotoQuery, SetDecisionsArgs,
 };
 use crate::models::{ModelArgs, ModelError, ModelService};
-use crate::ports::catalog::PhotoCatalog;
+use crate::ports::catalog::{AnalyzerId, PhotoCatalog};
 use crate::ports::events::EventSink;
 use crate::ports::fs::FileSystem;
 use crate::ports::geocoder::ReverseGeocoder;
@@ -394,16 +394,17 @@ impl Api {
                     })?;
                 let decision = self.catalog.decision(id).map_err(catalog_error)?;
                 let mut detail = PhotoDetail::new(&photo, decision);
-                detail.quality = self
-                    .catalog
-                    .analysis(id)
-                    .map_err(catalog_error)?
-                    .into_iter()
-                    .find(|(name, version, _)| {
-                        *name == TechnicalAnalyzer::ID.name
-                            && *version == TechnicalAnalyzer::ID.version
-                    })
-                    .and_then(|(_, _, result)| QualityView::from_result(&result));
+                let results = self.catalog.analysis(id).map_err(catalog_error)?;
+                let current = |analyzer: AnalyzerId| {
+                    results
+                        .iter()
+                        .find(|(name, version, _)| {
+                            *name == analyzer.name && *version == analyzer.version
+                        })
+                        .map(|(_, _, result)| result)
+                };
+                detail.quality = current(TechnicalAnalyzer::ID).and_then(QualityView::from_result);
+                detail.aesthetic = current(ClipAnalyzer::ID).and_then(AestheticView::from_result);
                 respond(detail)
             }
             "set_decisions" => {

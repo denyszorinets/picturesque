@@ -267,6 +267,8 @@ pub struct PhotoDetail {
     pub files: Vec<PhotoFileView>,
     /// Technical scores, once analyzed.
     pub quality: Option<crate::analysis::technical::QualityView>,
+    /// How good the photo looks, once the CLIP model analyzed it.
+    pub aesthetic: Option<crate::analysis::clip::AestheticView>,
 }
 
 /// Arguments of commands that act on one photo.
@@ -391,6 +393,7 @@ impl PhotoDetail {
             flag: decision.flag,
             rating: decision.rating.stars(),
             quality: None,
+            aesthetic: None,
             files: photo
                 .assets
                 .iter()

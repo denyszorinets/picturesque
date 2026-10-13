@@ -16,7 +16,7 @@ runs it repeatedly on fixed pseudo-random inputs and reports:
 
    cargo build --release -p picturesque-infra --example bench_inference
    LD_LIBRARY_PATH=target/release target/release/examples/bench_inference \
-       ~/.local/share/io.github.denyszorinets.picturesque/models/clip-vit-b32-image/v1/visual/model.onnx 50
+       ~/.local/share/io.github.denyszorinets.picturesque/models/clip-image/v1/visual/model.onnx 50
 
 Arguments: the model, the number of runs (default 50), the input name
 (default ``image``) and its shape (default ``1x3x224x224``, the CLIP image
@@ -42,33 +42,48 @@ Without a GPU, Mesa's software Vulkan driver runs WebGPU on the CPU.
 Results
 -------
 
-CLIP ViT-B/32 image encoder (:issue:`43`), 50 runs, ONNX Runtime 1.28.
+ONNX Runtime 1.28, Ryzen 7 PRO 7840HS (16 threads) in the devcontainer.
+Without the GPU passed in, WebGPU runs on Mesa's software Vulkan driver.
 
 .. list-table::
    :header-rows: 1
 
-   * - Machine
+   * - Model
      - Provider
      - Load
      - Mean
      - p95
      - Max Δ vs CPU
      - Stable
-   * - Ryzen 7 PRO 7840HS, 16 threads, devcontainer
+   * - CLIP ViT-L/14 image encoder (the app's, :issue:`44`)
+     - CPU
+     - 2.0 s
+     - 283 ms
+     - 290 ms
+     - —
+     - yes
+   * -
+     - WebGPU, software Vulkan
+     - 1.7 s
+     - 3.6 s
+     - 3.7 s
+     - 1.3 × 10⁻⁶
+     - yes
+   * - CLIP ViT-B/32 image encoder (:issue:`43`)
      - CPU
      - 0.6 s
      - 18 ms
      - 19 ms
      - —
      - yes
-   * - same, no GPU passed in (software Vulkan)
-     - WebGPU
+   * -
+     - WebGPU, software Vulkan
      - 0.3 s
      - 258 ms
      - 269 ms
      - 7 × 10⁻⁷
      - yes
-   * - same, Radeon 780M passed in
+   * - Either, Radeon 780M passed in
      - WebGPU
      - —
      - —
@@ -76,5 +91,5 @@ CLIP ViT-B/32 image encoder (:issue:`43`), 50 runs, ONNX Runtime 1.28.
      - —
      - pending (:issue:`42`)
 
-On this laptop the CPU embeds a 10,000-photo library in about three
-minutes, so the GPU is not needed for CLIP; it matters for larger models.
+With ViT-L/14 the CPU analyzes a 10,000-photo library in about an hour in
+the background, so a working GPU provider is worth having.

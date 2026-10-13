@@ -246,6 +246,15 @@
               )} · Low noise {percent(detail.quality.noise)}
             </dd>
           {/if}
+          {#if detail.aesthetic}
+            <dt>Aesthetic</dt>
+            <dd
+              data-testid="loupe-aesthetic"
+              title={`Rated ${detail.aesthetic.rating.toFixed(1)} of 10 by the aesthetic model`}
+            >
+              {percent(detail.aesthetic.score)}
+            </dd>
+          {/if}
           {#if detail.width && detail.height}<dt>Size</dt>
             <dd>{detail.width} × {detail.height}</dd>{/if}
           {#if detail.place}<dt>Place</dt>

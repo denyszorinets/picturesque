@@ -72,10 +72,10 @@ Available models:
    * - Model
      - Size
      - Used for
-   * - CLIP ViT-B/32 image encoder (OpenCLIP, trained on LAION-2B; MIT)
-     - 352 MB
-     - Understanding what photos show: similar photos, and later the
-       aesthetic score and text search
+   * - CLIP ViT-L/14 image encoder (OpenAI; MIT)
+     - 1.2 GB
+     - Understanding what photos show: the aesthetic score, similar
+       photos, and later text search
 
 Models are stored in the ``models`` folder of the application data folder
 (:doc:`/reference/data-locations`), one folder per model and version.
@@ -87,7 +87,7 @@ Image embeddings
 
 Once the CLIP model is downloaded, background analysis
 (:ref:`features-library-analysis`) also runs it on every photo, photos on
-screen first. It turns each photo into an **embedding**: 512 numbers
+screen first. It turns each photo into an **embedding**: 768 numbers
 describing what the photo shows, so photos of similar subjects get similar
 embeddings. Photos analyzed before the download are processed then; until
 the model is downloaded, analysis does not wait for it.
@@ -100,3 +100,29 @@ catalog with the model version and recomputed when the model changes.
 across the whole library in memory, which takes milliseconds for 10,000
 photos (``similar_photos``, :doc:`/reference/api`). The library shows them
 from :issue:`48`.
+
+On a laptop CPU (Ryzen 7 PRO 7840HS) a photo takes about a third of a
+second, so a 10,000-photo library is analyzed in about an hour in the
+background; a supported GPU is faster (:doc:`/development/benchmarks`).
+
+.. _features-ai-aesthetic:
+
+Aesthetic score
+---------------
+
+The **aesthetic score** estimates how good a photo looks to people:
+composition, light, subject and mood, not only technical quality. It comes
+from the improved LAION aesthetic predictor (Apache-2.0), a linear model on
+the CLIP embedding trained on hundreds of thousands of human ratings from
+1 to 10.
+
+The loupe shows it as **Aesthetic** in percent: the rating mapped linearly
+from 4.5 (0%) to 6.5 (100%), which covers almost all photos; ordinary
+snapshots typically land around 30% and outstanding photos around 60%.
+The rating itself is shown when you point at the score.
+
+On a sample of 150 Wikimedia Commons *Featured pictures* and 150 random
+Commons photos, a featured photo scores higher than an ordinary one 80%
+of the time, against 66% for the technical score
+(:repo:`spikes/aesthetic/results.md`). It judges looks only: it does not
+know which shot of a series you prefer or which moment matters to you.
