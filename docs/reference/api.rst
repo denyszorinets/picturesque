@@ -122,6 +122,20 @@ Commands
    even the CPU failed); ``problem`` says why the chosen provider was not
    used. The check runs once per choice.
 
+``plan_reject_move``
+   No arguments. ``{ "photos": 12, "files": 30, "bytes": 912345678,
+   "undo_batch": 3, "undo_photos": 8 }``: rejected photos not moved yet,
+   and the latest move that can be undone (:doc:`/features/rejects`).
+
+``move_rejects``
+   No arguments. Moves every rejected photo's files into ``_Rejected``.
+   Returns ``{ "batch": 4, "moved": 11, "failed": [{ "photo_id": 7,
+   "error": "..." }] }``; failed photos stayed where they were.
+
+``undo_reject_move``
+   ``{ "batch": 4 }``. Moves the latest batch back; another batch is
+   ``invalid_arguments``. Returns the same shape as ``move_rejects``.
+
 ``similar_photos``
    ``{ "photo_id": 7, "limit": 50 }`` (``limit`` 1–500, default 50). The
    photos that look most like this one, most similar first, by CLIP

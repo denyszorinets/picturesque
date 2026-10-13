@@ -349,6 +349,8 @@ pub struct MemoryCatalog {
     pub best_choices: Mutex<Vec<PhotoId>>,
     /// Combined scores and AI signals.
     pub scores: Mutex<HashMap<PhotoId, crate::ports::catalog::PhotoScore>>,
+    /// Photos moved to the rejected folder → batch.
+    pub reject_moves: Mutex<HashMap<PhotoId, i64>>,
 }
 
 impl MemoryCatalog {
@@ -708,6 +710,55 @@ impl PhotoCatalog for MemoryCatalog {
             .collect();
         ids.sort();
         Ok(ids)
+    }
+
+    fn move_assets(&self, id: PhotoId, moves: &[(PathBuf, PathBuf)]) -> Result<(), CatalogError> {
+        let mut photos = self.photos.lock().unwrap();
+        let photo = photos
+            .iter_mut()
+            .find(|p| p.id == id)
+            .ok_or_else(|| CatalogError::Storage("no photo".into()))?;
+        let mut assets: Vec<picturesque_core::photo::Asset> = photo.assets.clone().into();
+        for (old, new) in moves {
+            let asset = assets
+                .iter_mut()
+                .find(|a| &a.path == old)
+                .ok_or_else(|| CatalogError::Storage(format!("no asset {}", old.display())))?;
+            asset.path = new.clone();
+        }
+        photo.assets = picturesque_core::photo::PhotoAssets::new(assets)
+            .map_err(|e| CatalogError::Storage(e.to_string()))?;
+        Ok(())
+    }
+
+    fn record_reject_move(&self, batch: i64, ids: &[PhotoId]) -> Result<(), CatalogError> {
+        let mut moves = self.reject_moves.lock().unwrap();
+        for id in ids {
+            moves.insert(*id, batch);
+        }
+        Ok(())
+    }
+
+    fn last_reject_move(&self) -> Result<Option<(i64, Vec<PhotoId>)>, CatalogError> {
+        let moves = self.reject_moves.lock().unwrap();
+        let Some(batch) = moves.values().max().copied() else {
+            return Ok(None);
+        };
+        let mut ids: Vec<PhotoId> = moves
+            .iter()
+            .filter(|(_, b)| **b == batch)
+            .map(|(id, _)| *id)
+            .collect();
+        ids.sort();
+        Ok(Some((batch, ids)))
+    }
+
+    fn forget_reject_move(&self, ids: &[PhotoId]) -> Result<(), CatalogError> {
+        let mut moves = self.reject_moves.lock().unwrap();
+        for id in ids {
+            moves.remove(id);
+        }
+        Ok(())
     }
 
     fn replace_scores(

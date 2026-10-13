@@ -16,6 +16,7 @@ pub mod info;
 pub mod library;
 pub mod models;
 pub mod ports;
+pub mod rejects;
 pub mod scan;
 pub mod search;
 pub mod series;
