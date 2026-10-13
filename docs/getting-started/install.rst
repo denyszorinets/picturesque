@@ -3,12 +3,22 @@ Installing
 
 Picturesque runs on Linux, macOS (Apple Silicon) and Windows.
 
-.. note::
+Installers are attached to each
+`release <https://github.com/denyszorinets/picturesque/releases>`_:
 
-   Ready-made installers (AppImage, deb, rpm, dmg, msi) are being prepared
-   (:issue:`52`). Until they are published on the
-   `releases page <https://github.com/denyszorinets/picturesque/releases>`_,
-   build the app from source as described in :doc:`/development/building`.
+- **Fedora** and other rpm-based distributions: ``Picturesque-*.x86_64.rpm``
+  (``sudo dnf install ./Picturesque-*.rpm`` installs libvips, LibRaw and
+  libheif as well).
+- **Ubuntu, Debian**: ``Picturesque_*_amd64.deb``
+  (``sudo apt install ./Picturesque_*.deb``).
+- **Other Linux**: ``Picturesque_*_amd64.AppImage``: make it executable and
+  run it. For HEIC photos, prefer the rpm or deb.
+- **macOS** (Apple Silicon): ``Picturesque_*.dmg``. The app is not signed
+  yet: the first time, right-click it and choose **Open**.
+- **Windows**: not available yet.
+
+Until the first release is published, build the app from source
+(:doc:`/development/building`, :doc:`/development/packaging`).
 
 What you need
 -------------

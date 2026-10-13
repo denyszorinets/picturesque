@@ -1,6 +1,7 @@
 [package]
 name = "picturesque-desktop"
 description = "Picturesque desktop application (Tauri 2 shell)"
+authors = ["Denys Zorinets"]
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
