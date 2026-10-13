@@ -55,6 +55,8 @@ Timeline
      - Open the selected photo in the loupe
    * - Esc
      - Clear the selection
+   * - /
+     - Search photos by description (:ref:`features-ai-search`)
    * - C
      - Compare the selected photos, or the selected photo's series
        (:ref:`features-compare`)

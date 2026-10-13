@@ -72,6 +72,7 @@ impl ProviderChoice {
 #[derive(Debug, Clone, PartialEq)]
 pub enum TensorData {
     F32(Vec<f32>),
+    I32(Vec<i32>),
     I64(Vec<i64>),
 }
 
@@ -92,6 +93,14 @@ impl Tensor {
         }
     }
 
+    pub fn i32(name: &str, shape: &[usize], data: Vec<i32>) -> Self {
+        Self {
+            name: name.to_owned(),
+            shape: shape.to_vec(),
+            data: TensorData::I32(data),
+        }
+    }
+
     pub fn i64(name: &str, shape: &[usize], data: Vec<i64>) -> Self {
         Self {
             name: name.to_owned(),
@@ -104,7 +113,7 @@ impl Tensor {
     pub fn as_f32(&self) -> Option<&[f32]> {
         match &self.data {
             TensorData::F32(v) => Some(v),
-            TensorData::I64(_) => None,
+            TensorData::I32(_) | TensorData::I64(_) => None,
         }
     }
 }

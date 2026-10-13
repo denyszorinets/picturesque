@@ -16,6 +16,7 @@ pub mod library;
 pub mod models;
 pub mod ports;
 pub mod scan;
+pub mod search;
 pub mod series;
 pub mod settings;
 pub mod sidecars;

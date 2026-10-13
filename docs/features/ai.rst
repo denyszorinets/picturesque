@@ -75,7 +75,10 @@ Available models:
    * - CLIP ViT-L/14 image encoder (OpenAI; MIT)
      - 1.2 GB
      - Understanding what photos show: the aesthetic score, similar
-       photos, and later text search
+       photos, text search
+   * - CLIP ViT-L/14 text encoder (OpenAI; MIT)
+     - 496 MB
+     - Text search (with the image encoder)
 
 Models are stored in the ``models`` folder of the application data folder
 (:doc:`/reference/data-locations`), one folder per model and version.
@@ -126,3 +129,27 @@ Commons photos, a featured photo scores higher than an ordinary one 80%
 of the time, against 66% for the technical score
 (:repo:`spikes/aesthetic/results.md`). It judges looks only: it does not
 know which shot of a series you prefer or which moment matters to you.
+
+.. _features-ai-search:
+
+Text search
+-----------
+
+With both CLIP encoders downloaded, type a description in the **search
+box** above the timeline (or press **/**) and press **Enter**: *dog on a
+beach*, *red flowers*, *church interior*, *sunset over the sea*. The
+description is turned into an embedding in the same space as the photos',
+and the matching photos replace the timeline, **best match first**, under
+*Matching "…"*. The search appears as a chip with the other filters and
+combines with them (for example only picks, or one day); remove the chip,
+clear the box or press **Esc** in it to return to the timeline.
+
+Photos are ranked by how close their embedding is to the description's,
+and clearly unrelated photos are left out. On a sample of 150 photos,
+queries such as *a bird*, *flowers* or *a church interior* returned only
+fitting photos in their top five (:repo:`spikes/search/results.md`).
+Descriptions work best in English. Photos are found once background
+analysis has computed their embeddings.
+
+Text search also needs the image encoder; without either model the search
+box says which one to download.

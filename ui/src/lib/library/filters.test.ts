@@ -139,4 +139,14 @@ describe("Filters", () => {
     // Sorting is not a filter.
     expect(f.toQuery()).toEqual({ sort: "quality_desc" });
   });
+
+  it("keeps the search as a chip, outside the query", () => {
+    const f = new Filters(memoryStorage());
+    f.search = "dog on a beach";
+    expect(f.toQuery()).toEqual({});
+    expect(f.active).toBe(true);
+    expect(f.chips.map((c) => c.label)).toEqual(["“dog on a beach”"]);
+    f.chips[0]!.clear();
+    expect(f.search).toBe("");
+  });
 });

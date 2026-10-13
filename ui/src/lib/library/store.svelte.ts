@@ -16,6 +16,12 @@ export interface LibraryApi {
 
 const PAGE = 300;
 
+/** Photos to show in a given order (search results), with a heading. */
+export interface Ranking {
+  ids: number[];
+  label: string;
+}
+
 /**
  * The timeline's data: day counts (so the full layout is known up front)
  * and the photos, loaded page by page in newest-first order as they are
@@ -36,6 +42,10 @@ export class LibraryStore {
   private filter: PhotoQuery = {};
   /** The sort `facets` were loaded for (sections follow it). */
   private sort = $state<PhotoSort | undefined>();
+  /** Search results: photo ids best first, shown in that order. */
+  private ranking: Ranking | null = null;
+  /** The heading of the ranked list `facets` were loaded for. */
+  private rankedLabel = $state<string | null>(null);
 
   constructor(private readonly api: LibraryApi) {}
 
@@ -44,15 +54,50 @@ export class LibraryStore {
   }
 
   get sections(): Section[] {
-    return this.facets
-      ? buildSections(this.facets.days, this.facets.total, this.sort)
-      : [];
+    if (!this.facets) return [];
+    if (this.rankedLabel !== null)
+      return this.facets.total > 0
+        ? [
+            {
+              day: null,
+              label: this.rankedLabel,
+              start: 0,
+              count: this.facets.total,
+            },
+          ]
+        : [];
+    return buildSections(this.facets.days, this.facets.total, this.sort);
   }
 
-  /** Applies new filters and reloads. */
-  setFilter(filter: PhotoQuery): Promise<void> {
+  /**
+   * Applies new filters and reloads. With `ranking`, shows only those
+   * photos (that match the filters) in the ranking's order.
+   */
+  setFilter(filter: PhotoQuery, ranking: Ranking | null = null): Promise<void> {
     this.filter = filter;
+    this.ranking = ranking;
     return this.load();
+  }
+
+  /** Loads the ranked photos that match the filters, in ranking order. */
+  private async loadRanked(ranking: Ranking, generation: number) {
+    const query = { ...this.filter, photo_ids: ranking.ids };
+    const [facets, page] = await Promise.all([
+      this.api.photoFacets(query),
+      this.api.queryPhotos({ ...query, limit: 1000 }),
+    ]);
+    if (generation !== this.generation) return;
+    const position: Record<number, number> = {};
+    ranking.ids.forEach((id, i) => (position[id] = i));
+    this.sort = this.filter.sort;
+    this.rankedLabel = ranking.label;
+    this.facets = facets;
+    this.photos = [...page.photos].sort(
+      (a, b) => (position[a.id] ?? 0) - (position[b.id] ?? 0),
+    );
+    this.cursor = null;
+    this.complete = true;
+    this.queue = Promise.resolve();
   }
 
   /** (Re)loads facets and the first page. */
@@ -61,12 +106,17 @@ export class LibraryStore {
     this.loading = true;
     this.error = null;
     try {
+      if (this.ranking) {
+        await this.loadRanked(this.ranking, generation);
+        return;
+      }
       const [facets, page] = await Promise.all([
         this.api.photoFacets(this.filter),
         this.api.queryPhotos({ ...this.filter, limit: PAGE }),
       ]);
       if (generation !== this.generation) return;
       this.sort = this.filter.sort;
+      this.rankedLabel = null;
       this.facets = facets;
       this.photos = page.photos;
       this.cursor = page.next_cursor;
@@ -87,6 +137,10 @@ export class LibraryStore {
     const generation = ++this.generation;
     const want = Math.max(1, this.photos.length);
     try {
+      if (this.ranking) {
+        await this.loadRanked(this.ranking, generation);
+        return;
+      }
       const facets = await this.api.photoFacets(this.filter);
       const photos: PhotoSummary[] = [];
       let cursor: string | null = null;

@@ -27,19 +27,50 @@
   const analysis = new AnalysisProgress(api);
   let showFilters = $state(true);
 
+  /** The search box's text; searching starts on Enter. */
+  let searchText = $state(filters.search);
+  let searchInput: HTMLInputElement | undefined = $state();
+  let searchError = $state<string | null>(null);
+  let searching = $state(false);
+  let searchRun = 0;
+
+  /** Shows the photos matching the filters, or the search results. */
+  async function apply(query: api.PhotoQuery, text: string) {
+    const run = ++searchRun;
+    if (!text) {
+      searchError = null;
+      searching = false;
+      return store.setFilter(query);
+    }
+    searching = true;
+    try {
+      const found = await api.searchPhotos(text);
+      if (run !== searchRun) return;
+      searchError = null;
+      await store.setFilter(query, {
+        ids: found.map((f) => f.photo_id),
+        label: `Matching “${text}”`,
+      });
+    } catch (e) {
+      if (run === searchRun) searchError = api.ApiError.from(e).message;
+    } finally {
+      if (run === searchRun) searching = false;
+    }
+  }
+
   // Reload whenever the filters change; indices change, so selection resets.
   let lastFilter: string | null = null;
   $effect(() => {
     const query = filters.toQuery();
-    const key = JSON.stringify(query);
+    const text = filters.search;
+    const key = JSON.stringify([query, text]);
     if (key === lastFilter) return;
     const first = lastFilter === null;
     lastFilter = key;
     filters.save();
-    if (!first) {
-      selection.clear();
-      void store.setFilter(query);
-    }
+    searchText = text;
+    if (!first) selection.clear();
+    void apply(query, text);
   });
 
   /** Index of the photo open in the loupe. */
@@ -227,6 +258,11 @@
     // The library is hidden while the Import tab is shown; the compare
     // view handles its own keys.
     if (!section?.offsetParent || compare) return;
+    if (e.key === "/" && loupe === null) {
+      e.preventDefault();
+      searchInput?.focus();
+      return;
+    }
     let used = cull(e);
     const seriesAction = SERIES_KEYS[e.key.toLowerCase()];
     if (!used && !e.ctrlKey && !e.metaKey && !e.altKey && seriesAction) {
@@ -247,7 +283,6 @@
   let section: HTMLElement | undefined = $state();
 
   $effect(() => {
-    void store.setFilter(filters.toQuery());
     void analysis.load();
     // New photos appear when an import completes.
     const unsubscribe = api.onAppEvent((event) => {
@@ -283,9 +318,44 @@
         onclick={() => (showFilters = !showFilters)}
         data-testid="toggle-filters">Filters</button
       >
-      <span data-testid="library-count"
-        >{store.total} {store.total === 1 ? "photo" : "photos"}</span
+      <form
+        class="search"
+        role="search"
+        onsubmit={(e) => {
+          e.preventDefault();
+          filters.search = searchText.trim();
+        }}
       >
+        <input
+          type="search"
+          bind:value={searchText}
+          bind:this={searchInput}
+          placeholder="Search photos… (/)"
+          aria-label="Search photos by description"
+          data-testid="search"
+          oninput={() => {
+            // Clearing the box (also with its ✕) ends the search.
+            if (!searchText) filters.search = "";
+          }}
+          onkeydown={(e) => {
+            if (e.key === "Escape") {
+              searchText = "";
+              filters.search = "";
+              searchInput?.blur();
+            }
+          }}
+        />
+      </form>
+      <span data-testid="library-count"
+        >{searching
+          ? "Searching…"
+          : `${store.total} ${store.total === 1 ? "photo" : "photos"}`}</span
+      >
+      {#if searchError}
+        <span class="error-text" role="alert" data-testid="search-error"
+          >{searchError}</span
+        >
+      {/if}
       {#each filters.chips as chip (chip.label)}
         <span class="chip"
           >{chip.label}
@@ -372,7 +442,9 @@
       <div class="grid">
         {#if store.total === 0}
           <p class="muted no-match" data-testid="no-match">
-            No photos match these filters.
+            {filters.search
+              ? `No photos match “${filters.search}”.`
+              : "No photos match these filters."}
           </p>
         {:else}
           <Timeline
@@ -431,6 +503,12 @@
 
   .spacer {
     flex: 1;
+  }
+
+  .search input {
+    width: 14rem;
+    padding: 0.25rem 0.6rem;
+    font-size: 0.88rem;
   }
 
   .small {

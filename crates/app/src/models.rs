@@ -14,7 +14,9 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use crate::ports::events::{AppEvent, EventSink};
+use crate::ports::inference::{InferenceEngine, Model, ModelSource, ProviderChoice};
 use crate::ports::models::{FetchError, ModelFile, ModelSpec, ModelStore};
+use crate::ports::settings::SettingsStore;
 
 /// How often download progress is sent.
 const PROGRESS_INTERVAL: Duration = Duration::from_millis(250);
@@ -23,6 +25,12 @@ const PROGRESS_INTERVAL: Duration = Duration::from_millis(250);
 pub const CLIP_IMAGE: &str = "clip-image";
 /// Its ONNX file inside the model folder.
 pub const CLIP_IMAGE_FILE: &str = "visual/model.onnx";
+
+/// The CLIP text encoder matching [`CLIP_IMAGE`] (`search`).
+pub const CLIP_TEXT: &str = "clip-text";
+pub const CLIP_TEXT_FILE: &str = "textual/model.onnx";
+/// The tokenizer's merge list.
+pub const CLIP_MERGES_FILE: &str = "textual/merges.txt";
 
 /// Immich's ONNX export of OpenAI CLIP ViT-L/14, pinned to a commit. The
 /// improved LAION aesthetic predictor was trained on its embeddings; with
@@ -33,23 +41,130 @@ const CLIP_REPO: &str = "https://huggingface.co/immich-app/ViT-L-14__openai/reso
 /// The models the app offers. Each feature adds the models it uses; every
 /// license must allow use in a GPL-3.0 application (ADR-0006).
 pub fn catalog() -> Vec<ModelSpec> {
-    vec![ModelSpec {
-        id: CLIP_IMAGE.into(),
-        name: "CLIP ViT-L/14 image encoder (OpenAI)".into(),
-        purpose: "Understands what photos show: scores how good they look \
+    vec![
+        ModelSpec {
+            id: CLIP_IMAGE.into(),
+            name: "CLIP ViT-L/14 image encoder (OpenAI)".into(),
+            purpose: "Understands what photos show: scores how good they look \
                   and finds similar photos."
-            .into(),
-        version: 1,
-        license: "MIT".into(),
-        license_url: "https://github.com/openai/CLIP/blob/main/LICENSE".into(),
-        homepage: "https://github.com/openai/CLIP".into(),
-        files: vec![ModelFile {
-            name: CLIP_IMAGE_FILE.into(),
-            url: format!("{CLIP_REPO}/{CLIP_IMAGE_FILE}"),
-            sha256: "2b02d572f59c509f4b97b9c54a868453cca1a652cd5d60e1d51d0052f055cb8c".into(),
-            size: 1_216_297_719,
-        }],
-    }]
+                .into(),
+            version: 1,
+            license: "MIT".into(),
+            license_url: "https://github.com/openai/CLIP/blob/main/LICENSE".into(),
+            homepage: "https://github.com/openai/CLIP".into(),
+            files: vec![ModelFile {
+                name: CLIP_IMAGE_FILE.into(),
+                url: format!("{CLIP_REPO}/{CLIP_IMAGE_FILE}"),
+                sha256: "2b02d572f59c509f4b97b9c54a868453cca1a652cd5d60e1d51d0052f055cb8c".into(),
+                size: 1_216_297_719,
+            }],
+        },
+        ModelSpec {
+            id: CLIP_TEXT.into(),
+            name: "CLIP ViT-L/14 text encoder (OpenAI)".into(),
+            purpose: "Finds photos by describing them, for example \"dog on a beach\". \
+                  Needs the image encoder."
+                .into(),
+            version: 1,
+            license: "MIT".into(),
+            license_url: "https://github.com/openai/CLIP/blob/main/LICENSE".into(),
+            homepage: "https://github.com/openai/CLIP".into(),
+            files: vec![
+                ModelFile {
+                    name: CLIP_TEXT_FILE.into(),
+                    url: format!("{CLIP_REPO}/{CLIP_TEXT_FILE}"),
+                    sha256: "9fbe72ea8d36c2effaccedcf7249e3729ad0d9b4af6604b433ecdd0105663c9c"
+                        .into(),
+                    size: 495_082_255,
+                },
+                ModelFile {
+                    name: CLIP_MERGES_FILE.into(),
+                    url: format!("{CLIP_REPO}/{CLIP_MERGES_FILE}"),
+                    sha256: "9fd691f7c8039210e0fced15865466c65820d09b63988b0174bfe25de299051a"
+                        .into(),
+                    size: 524_619,
+                },
+            ],
+        },
+    ]
+}
+
+/// A model loaded on first use and again when the provider setting
+/// changes, shared by the threads that run it.
+pub struct LoadedModel {
+    models: Arc<ModelService>,
+    engine: Arc<dyn InferenceEngine>,
+    settings: Arc<dyn SettingsStore>,
+    id: &'static str,
+    file: &'static str,
+    loaded: Mutex<Option<(ProviderChoice, Arc<dyn Model>)>>,
+}
+
+impl fmt::Debug for LoadedModel {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("LoadedModel")
+            .field("id", &self.id)
+            .finish_non_exhaustive()
+    }
+}
+
+impl LoadedModel {
+    /// `file` of model `id`.
+    pub fn new(
+        models: Arc<ModelService>,
+        engine: Arc<dyn InferenceEngine>,
+        settings: Arc<dyn SettingsStore>,
+        id: &'static str,
+        file: &'static str,
+    ) -> Self {
+        Self {
+            models,
+            engine,
+            settings,
+            id,
+            file,
+            loaded: Mutex::new(None),
+        }
+    }
+
+    /// Whether the model is downloaded.
+    pub fn available(&self) -> bool {
+        self.models.files(self.id).is_some()
+    }
+
+    /// The paths of the model's files, if downloaded.
+    pub fn files(&self) -> Option<HashMap<String, PathBuf>> {
+        self.models.files(self.id)
+    }
+
+    pub fn get(&self) -> Result<Arc<dyn Model>, String> {
+        let choice = self
+            .settings
+            .load_settings()
+            .map_err(|e| e.to_string())?
+            .ai
+            .provider;
+        let mut loaded = self.loaded.lock().expect("model lock");
+        if let Some((c, model)) = loaded.as_ref()
+            && *c == choice
+        {
+            return Ok(Arc::clone(model));
+        }
+        let files = self
+            .models
+            .files(self.id)
+            .ok_or_else(|| format!("the model `{}` is not downloaded", self.id))?;
+        let path = files
+            .get(self.file)
+            .ok_or_else(|| format!("the model `{}` has no `{}`", self.id, self.file))?;
+        let model: Arc<dyn Model> = Arc::from(
+            self.engine
+                .load(ModelSource::File(path), choice)
+                .map_err(|e| e.to_string())?,
+        );
+        *loaded = Some((choice, Arc::clone(&model)));
+        Ok(model)
+    }
 }
 
 /// A model's state.
@@ -223,6 +338,17 @@ impl ModelService {
                 .map(|f| (f.name.clone(), self.store.path(spec, f)))
                 .collect(),
         )
+    }
+
+    /// The contents of an installed model's file.
+    pub fn read(&self, id: &str, file: &str) -> Result<Vec<u8>, ModelError> {
+        let spec = self.spec(id)?;
+        let file = spec
+            .files
+            .iter()
+            .find(|f| f.name == file)
+            .ok_or_else(|| ModelError::Unknown(format!("{id}/{file}")))?;
+        self.store.read(spec, file).map_err(ModelError::Storage)
     }
 
     /// Starts downloading a model in the background; progress and the

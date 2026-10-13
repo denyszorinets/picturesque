@@ -6,7 +6,7 @@
 //! aesthetic predictor: a linear model on the embedding trained on people's
 //! 1–10 ratings (`aesthetic/convert.py`).
 
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use picturesque_core::clip::{Embedding, INPUT_SIZE, LinearHead, preprocess};
 use serde::Serialize;
@@ -14,9 +14,9 @@ use serde_json::{Value, json};
 use ts_rs::TS;
 
 use super::{AnalysisInput, Analyzer};
-use crate::models::{CLIP_IMAGE, CLIP_IMAGE_FILE, ModelService};
+use crate::models::{CLIP_IMAGE, CLIP_IMAGE_FILE, LoadedModel, ModelService};
 use crate::ports::catalog::AnalyzerId;
-use crate::ports::inference::{InferenceEngine, Model, ModelSource, ProviderChoice, Tensor};
+use crate::ports::inference::{InferenceEngine, Tensor};
 use crate::ports::settings::SettingsStore;
 
 /// The improved LAION aesthetic predictor for CLIP ViT-L/14 (Apache-2.0).
@@ -60,12 +60,8 @@ impl AestheticView {
 
 /// Computes CLIP embeddings once the model is downloaded.
 pub struct ClipAnalyzer {
-    models: Arc<ModelService>,
-    engine: Arc<dyn InferenceEngine>,
-    settings: Arc<dyn SettingsStore>,
+    model: LoadedModel,
     aesthetic: LinearHead,
-    /// The loaded model and the provider choice it was loaded with.
-    loaded: Mutex<Option<(ProviderChoice, Arc<dyn Model>)>>,
 }
 
 impl ClipAnalyzer {
@@ -82,11 +78,8 @@ impl ClipAnalyzer {
         settings: Arc<dyn SettingsStore>,
     ) -> Self {
         Self {
-            models,
-            engine,
-            settings,
+            model: LoadedModel::new(models, engine, settings, CLIP_IMAGE, CLIP_IMAGE_FILE),
             aesthetic: aesthetic_head(),
-            loaded: Mutex::new(None),
         }
     }
 
@@ -98,37 +91,6 @@ impl ClipAnalyzer {
     /// The stored embedding of an analysis result.
     pub fn embedding(result: &Value) -> Option<Embedding> {
         Embedding::decode(result.get("embedding")?.as_str()?)
-    }
-
-    /// The model, loaded on first use and again when the provider choice
-    /// changes.
-    fn model(&self) -> Result<Arc<dyn Model>, String> {
-        let choice = self
-            .settings
-            .load_settings()
-            .map_err(|e| e.to_string())?
-            .ai
-            .provider;
-        let mut loaded = self.loaded.lock().expect("clip model lock");
-        if let Some((c, model)) = loaded.as_ref()
-            && *c == choice
-        {
-            return Ok(Arc::clone(model));
-        }
-        let files = self
-            .models
-            .files(CLIP_IMAGE)
-            .ok_or("the CLIP model is not downloaded")?;
-        let path = files
-            .get(CLIP_IMAGE_FILE)
-            .ok_or("the CLIP model has no image encoder")?;
-        let model: Arc<dyn Model> = Arc::from(
-            self.engine
-                .load(ModelSource::File(path), choice)
-                .map_err(|e| e.to_string())?,
-        );
-        *loaded = Some((choice, Arc::clone(&model)));
-        Ok(model)
     }
 }
 
@@ -144,11 +106,11 @@ impl Analyzer for ClipAnalyzer {
     }
 
     fn ready(&self) -> bool {
-        self.models.files(CLIP_IMAGE).is_some()
+        self.model.available()
     }
 
     fn analyze(&self, input: &AnalysisInput<'_>) -> Result<Value, String> {
-        let model = self.model()?;
+        let model = self.model.get()?;
         let size = INPUT_SIZE as usize;
         let outputs = model
             .run(vec![Tensor::f32(

@@ -343,12 +343,7 @@ mod clip {
     /// Puts the CLIP model's files in the store, as if downloaded.
     fn install(store: &MemoryModelStore) {
         let spec = catalog().into_iter().find(|m| m.id == CLIP_IMAGE).unwrap();
-        for f in &spec.files {
-            store.files.lock().unwrap().insert(
-                (spec.id.clone(), spec.version, f.name.clone()),
-                vec![0; f.size as usize],
-            );
-        }
+        store.install(&spec, &[]);
     }
 
     #[test]

@@ -116,6 +116,13 @@ Commands
    ``[{ "photo_id": 12, "similarity": 0.93 }]``. Empty until the photo has
    an embedding; unknown photos are ``not_found``.
 
+``search_photos``
+   ``{ "text": "dog on a beach", "limit": 200 }`` (``limit`` 1–1000,
+   default 200). Photos matching the description, best first, by CLIP
+   (:ref:`features-ai-search`): ``[{ "photo_id": 12, "similarity": 0.23 }]``.
+   Photos below a similarity of 0.17 are left out. Empty text, or a missing
+   CLIP model (the message says which), is ``invalid_arguments``.
+
 ``list_models``
    No arguments. The downloadable AI models (:doc:`/features/ai`), each a
    ``ModelView``:
