@@ -157,7 +157,8 @@ into :doc:`series </features/series>`. The loupe shows the scores under
 **Quality**. While it works, the toolbar shows
 **Analyzing 120 / 300**. Photos on screen are analyzed first, so scrolling
 to a day gets its results within seconds. Analysis continues where it left
-off after the app restarts.
+off after the app restarts. With the CLIP model downloaded, analysis also
+computes image embeddings (:ref:`features-ai-embeddings`).
 
 .. _features-library-sidecars:
 

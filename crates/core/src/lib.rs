@@ -5,6 +5,7 @@
 
 #![forbid(unsafe_code)]
 
+pub mod clip;
 pub mod decision;
 pub mod grouping;
 pub mod hash;

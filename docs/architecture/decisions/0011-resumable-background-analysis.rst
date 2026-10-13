@@ -115,6 +115,10 @@ Follow-up
 
 - Technical scores (:issue:`32`) and perceptual hashes (:issue:`33`) are
   the first analyzers.
+- AI analyzers need a downloaded model (:issue:`43`): an analyzer reports
+  whether it is *ready*, and photos are pending only for ready analyzers,
+  so analysis completes without the model and resumes when it is
+  downloaded.
 
 Validation
 ----------
