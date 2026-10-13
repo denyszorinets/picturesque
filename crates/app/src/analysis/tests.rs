@@ -319,3 +319,64 @@ fn api_reports_status_and_accepts_priorities() {
         .unwrap_err();
     assert_eq!(err.code, crate::api::ApiErrorCode::InvalidArguments);
 }
+
+mod clip {
+    use std::sync::Arc;
+
+    use picturesque_core::clip::Embedding;
+
+    use super::{result, service, world};
+    use crate::analysis::clip::ClipAnalyzer;
+    use crate::analysis::technical::TechnicalAnalyzer;
+    use crate::models::{CLIP_IMAGE, ModelService, catalog};
+    use crate::ports::inference::Provider;
+    use crate::testing::{FakeInference, MemoryModelStore};
+
+    fn clip(models: &Arc<ModelService>, world: &crate::testing::TestWorld) -> Arc<ClipAnalyzer> {
+        Arc::new(ClipAnalyzer::new(
+            Arc::clone(models),
+            Arc::new(FakeInference::new(&[Provider::WebGpu])),
+            world.settings.clone(),
+        ))
+    }
+
+    /// Puts the CLIP model's files in the store, as if downloaded.
+    fn install(store: &MemoryModelStore) {
+        let spec = catalog().into_iter().find(|m| m.id == CLIP_IMAGE).unwrap();
+        for f in &spec.files {
+            store.files.lock().unwrap().insert(
+                (spec.id.clone(), spec.version, f.name.clone()),
+                vec![0; f.size as usize],
+            );
+        }
+    }
+
+    #[test]
+    fn embeds_photos_once_the_model_is_downloaded() {
+        let (world, ids) = world(2);
+        let store = Arc::new(MemoryModelStore::default());
+        let models = Arc::new(ModelService::new(
+            catalog(),
+            store.clone(),
+            world.events.clone(),
+        ));
+        let clip = clip(&models, &world);
+        let analysis = service(&world, vec![Arc::new(TechnicalAnalyzer), clip.clone()]);
+
+        // Without the model, photos are done once the other analyzers ran.
+        assert!(!crate::analysis::Analyzer::ready(clip.as_ref()));
+        assert_eq!(analysis.run_until_idle(), 2);
+        assert_eq!(analysis.status().analyzed, 2);
+        assert!(result(&world, ids[0], "clip").is_none());
+
+        install(&store);
+        assert_eq!(analysis.status().analyzed, 0);
+        assert_eq!(analysis.run_until_idle(), 2);
+        let (version, stored) = result(&world, ids[0], "clip").unwrap();
+        assert_eq!(version, ClipAnalyzer::ID.version);
+        // The fake model echoes its input: the preprocessed 224 × 224 image.
+        let embedding = ClipAnalyzer::embedding(&stored).unwrap();
+        assert_eq!(embedding.values().len(), 3 * 224 * 224);
+        assert!(Embedding::new(embedding.values()).is_some());
+    }
+}

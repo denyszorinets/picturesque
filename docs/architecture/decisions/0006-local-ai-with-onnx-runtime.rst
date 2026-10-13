@@ -148,6 +148,13 @@ request to ``<data>/models/<id>/v<version>/``, verified while streaming,
 and renamed into place only when they match; nothing else touches the
 network.
 
+:issue:`43` chose the first model: **OpenCLIP ViT-B/32 trained on
+LAION-2B** (``laion2b_s34b_b79k``), MIT licensed, as exported to ONNX by the
+Immich project (pinned to a commit). Its 512-dimensional embeddings are
+small enough to keep every photo's in memory. It runs as a background
+analyzer that becomes active once the model is downloaded; one photo takes
+tens of milliseconds on a laptop CPU.
+
 Follow-up
 ~~~~~~~~~
 

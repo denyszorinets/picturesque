@@ -107,6 +107,13 @@ Commands
    even the CPU failed); ``problem`` says why the chosen provider was not
    used. The check runs once per choice.
 
+``similar_photos``
+   ``{ "photo_id": 7, "limit": 50 }`` (``limit`` 1–500, default 50). The
+   photos that look most like this one, most similar first, by CLIP
+   embedding (:ref:`features-ai-embeddings`):
+   ``[{ "photo_id": 12, "similarity": 0.93 }]``. Empty until the photo has
+   an embedding; unknown photos are ``not_found``.
+
 ``list_models``
    No arguments. The downloadable AI models (:doc:`/features/ai`), each a
    ``ModelView``:

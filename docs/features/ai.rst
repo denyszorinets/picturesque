@@ -63,5 +63,40 @@ offered has a license that allows its use in a GPL-3.0 application.
   one, which is then deleted. Results computed with the old version are
   recomputed.
 
+Available models:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 30 15 55
+
+   * - Model
+     - Size
+     - Used for
+   * - CLIP ViT-B/32 image encoder (OpenCLIP, trained on LAION-2B; MIT)
+     - 352 MB
+     - Understanding what photos show: similar photos, and later the
+       aesthetic score and text search
+
 Models are stored in the ``models`` folder of the application data folder
 (:doc:`/reference/data-locations`), one folder per model and version.
+
+.. _features-ai-embeddings:
+
+Image embeddings
+----------------
+
+Once the CLIP model is downloaded, background analysis
+(:ref:`features-library-analysis`) also runs it on every photo, photos on
+screen first. It turns each photo into an **embedding**: 512 numbers
+describing what the photo shows, so photos of similar subjects get similar
+embeddings. Photos analyzed before the download are processed then; until
+the model is downloaded, analysis does not wait for it.
+
+The photo's preview is scaled so its shorter side is 224 pixels and the
+centre square is used, as CLIP was trained. Embeddings are stored in the
+catalog with the model version and recomputed when the model changes.
+
+**Similar photos** are found by comparing embeddings (cosine similarity)
+across the whole library in memory, which takes milliseconds for 10,000
+photos (``similar_photos``, :doc:`/reference/api`). The library shows them
+from :issue:`48`.

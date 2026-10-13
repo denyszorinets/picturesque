@@ -21,6 +21,7 @@ use crate::ports::events::{AppEvent, EventSink};
 use crate::ports::pixels::PixelLoader;
 use crate::thumbnails::{ImageSize, ThumbnailService};
 
+pub mod clip;
 pub mod similarity;
 pub mod technical;
 
@@ -48,6 +49,13 @@ pub trait Analyzer: Send + Sync {
     fn id(&self) -> AnalyzerId;
 
     fn analyze(&self, input: &AnalysisInput<'_>) -> Result<serde_json::Value, String>;
+
+    /// Whether the analyzer can run now (an AI analyzer needs its model
+    /// downloaded). Photos are not pending for analyzers that are not
+    /// ready.
+    fn ready(&self) -> bool {
+        true
+    }
 }
 
 /// Analysis progress, sent as an event and returned by `analysis_status`.
@@ -127,8 +135,13 @@ impl AnalysisService {
         }
     }
 
+    /// The analyzers that can run now.
+    fn active(&self) -> Vec<&Arc<dyn Analyzer>> {
+        self.analyzers.iter().filter(|a| a.ready()).collect()
+    }
+
     fn ids(&self) -> Vec<AnalyzerId> {
-        self.analyzers.iter().map(|a| a.id()).collect()
+        self.active().iter().map(|a| a.id()).collect()
     }
 
     pub fn status(&self) -> AnalysisStatus {
@@ -181,6 +194,9 @@ impl AnalysisService {
             self.process(id);
             self.finish(id);
             done += 1;
+        }
+        if done > 0 {
+            self.report();
         }
         done
     }
@@ -258,8 +274,8 @@ impl AnalysisService {
         };
         let done = self.catalog.analyzed(id, &ids).unwrap_or_default();
         let needed: Vec<&Arc<dyn Analyzer>> = self
-            .analyzers
-            .iter()
+            .active()
+            .into_iter()
             .filter(|a| !done.contains(&a.id()))
             .collect();
         if needed.is_empty() {
@@ -284,7 +300,8 @@ impl AnalysisService {
         }
     }
 
-    fn report(&self) {
+    /// Sends the current status (also when analyzers became ready or not).
+    pub fn report(&self) {
         self.events.emit(&AppEvent::AnalysisProgress(self.status()));
     }
 }

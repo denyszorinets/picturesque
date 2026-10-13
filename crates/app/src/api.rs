@@ -14,8 +14,10 @@ use serde_json::Value;
 use ts_rs::TS;
 
 use crate::ai::AiService;
+use crate::analysis::clip::ClipAnalyzer;
 use crate::analysis::technical::{QualityView, TechnicalAnalyzer};
 use crate::analysis::{AnalysisService, Analyzer, PrioritizeArgs};
+use crate::embeddings::{DEFAULT_LIMIT, EmbeddingIndex, MAX_LIMIT, SimilarArgs};
 use crate::hooks::EventHooks;
 use crate::import::{Deps, ImportError, ImportService, PlanImportArgs, RunArgs};
 use crate::info;
@@ -130,6 +132,7 @@ pub struct Api {
     series: Arc<SeriesService>,
     ai: AiService,
     models: Arc<ModelService>,
+    embeddings: Arc<EmbeddingIndex>,
 }
 
 impl fmt::Debug for Api {
@@ -151,11 +154,23 @@ impl Api {
         ));
         let events = Arc::new(EventHooks::new(ctx.events));
         let _ = events.thumbnails.set(Arc::clone(&thumbnails));
+        let models = Arc::new(ModelService::new(
+            ctx.models,
+            ctx.model_store,
+            Arc::clone(&events) as Arc<dyn EventSink>,
+        ));
+        // AI analyzers join once their models are downloaded.
+        let mut analyzers = ctx.analyzers;
+        analyzers.push(Arc::new(ClipAnalyzer::new(
+            Arc::clone(&models),
+            Arc::clone(&ctx.inference),
+            Arc::clone(&ctx.settings_store),
+        )));
         let analysis = Arc::new(AnalysisService::new(
             Arc::clone(&ctx.catalog),
             Arc::clone(&thumbnails),
             ctx.pixels,
-            ctx.analyzers,
+            analyzers,
             Arc::clone(&events) as Arc<dyn EventSink>,
         ));
         let _ = events.analysis.set(Arc::clone(&analysis));
@@ -165,11 +180,8 @@ impl Api {
             Arc::clone(&events) as Arc<dyn EventSink>,
         ));
         let _ = events.series.set(Arc::clone(&series));
-        let models = Arc::new(ModelService::new(
-            ctx.models,
-            ctx.model_store,
-            Arc::clone(&events) as Arc<dyn EventSink>,
-        ));
+        let embeddings = Arc::new(EmbeddingIndex::new(Arc::clone(&ctx.catalog)));
+        let _ = events.embeddings.set(Arc::clone(&embeddings));
         let catalog = Arc::clone(&ctx.catalog);
         let sidecars = Arc::new(SidecarService::new(
             Arc::clone(&ctx.catalog),
@@ -197,6 +209,7 @@ impl Api {
             analysis,
             series,
             models,
+            embeddings,
         })
     }
 
@@ -413,6 +426,22 @@ impl Api {
                 respond(
                     self.catalog
                         .facets(filter.as_ref())
+                        .map_err(catalog_error)?,
+                )
+            }
+            "similar_photos" => {
+                let SimilarArgs { photo_id, limit } = parse_args(command, args)?;
+                let limit = limit.unwrap_or(DEFAULT_LIMIT);
+                if !(1..=MAX_LIMIT).contains(&limit) {
+                    return Err(ApiError::new(
+                        ApiErrorCode::InvalidArguments,
+                        format!("`limit` must be 1-{MAX_LIMIT}."),
+                    ));
+                }
+                self.require_photo(photo_id)?;
+                respond(
+                    self.embeddings
+                        .similar(PhotoId(photo_id), limit)
                         .map_err(catalog_error)?,
                 )
             }
