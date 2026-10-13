@@ -75,7 +75,9 @@ Commands
    size, ``flag``, ``rating``, ``files`` (path, format, size) and
    ``quality`` (``sharpness``, ``exposure``, ``noise``, ``overall``,
    ``highlights_clipped``, ``shadows_clipped``; ``null`` until analyzed,
-   see :doc:`quality-scores`). Unknown photos are ``not_found``.
+   see :doc:`quality-scores`) and ``aesthetic`` (``score`` 0–1 and the
+   predictor's ``rating``, about 1–10; ``null`` until the CLIP model
+   analyzed the photo, see :ref:`features-ai-aesthetic`). Unknown photos are ``not_found``.
 
 ``set_decisions``
    ``{ "changes": [{ "photo_id": 7, "flag": "pick" }, { "photo_id": 8, "rating": 4 }] }``.
@@ -120,16 +122,17 @@ Commands
 
    .. code-block:: json
 
-      { "id": "clip-vit-b32", "name": "CLIP ViT-B/32", "purpose": "...",
-        "version": 1, "license": "MIT", "license_url": "https://...",
-        "homepage": "https://...", "size": 605807120,
+      { "id": "clip-image", "name": "CLIP ViT-L/14 image encoder (OpenAI)",
+        "purpose": "...", "version": 1, "license": "MIT",
+        "license_url": "https://...", "homepage": "https://...",
+        "size": 1216297719,
         "state": "downloading", "downloaded": 12000000, "error": null }
 
    ``state`` is ``not_installed``, ``downloading``, ``installed`` or
    ``failed`` (with ``error``). Never uses the network.
 
 ``install_model`` / ``cancel_model`` / ``remove_model``
-   ``{ "id": "clip-vit-b32" }``. Start a download in the background, stop
+   ``{ "id": "clip-image" }``. Start a download in the background, stop
    it, or delete the model's files; each returns the ``ModelView``.
    Removing a model while it downloads is ``invalid_arguments``; unknown
    models are ``not_found``.

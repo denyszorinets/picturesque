@@ -148,12 +148,16 @@ request to ``<data>/models/<id>/v<version>/``, verified while streaming,
 and renamed into place only when they match; nothing else touches the
 network.
 
-:issue:`43` chose the first model: **OpenCLIP ViT-B/32 trained on
-LAION-2B** (``laion2b_s34b_b79k``), MIT licensed, as exported to ONNX by the
-Immich project (pinned to a commit). Its 512-dimensional embeddings are
-small enough to keep every photo's in memory. It runs as a background
-analyzer that becomes active once the model is downloaded; one photo takes
-tens of milliseconds on a laptop CPU.
+:issue:`43` added CLIP image embeddings as a background analyzer that
+becomes active once the model is downloaded, starting with OpenCLIP
+ViT-B/32 (LAION-2B, MIT). :issue:`44` measured aesthetic predictors on 150
+Wikimedia Commons *Featured pictures* against 150 random Commons photos
+(:repo:`spikes/aesthetic/results.md`): LAION's V1 head on ViT-B/32 reached
+an AUC of only 0.62 (below the technical score's 0.66), the improved LAION
+predictor (Apache-2.0) on **OpenAI CLIP ViT-L/14** (MIT) 0.80. The app
+therefore uses ViT-L/14, exported to ONNX by the Immich project and pinned
+to a commit: a 1.2 GB download and about 0.3 s per photo on a laptop CPU.
+Its 768-dimensional embeddings still fit in memory for the whole library.
 
 Follow-up
 ~~~~~~~~~
@@ -168,12 +172,12 @@ maintainer's integrated AMD GPU (Radeon 780M) under Linux
 (:doc:`/development/benchmarks`). First findings, without the GPU passed
 into the devcontainer:
 
-- The CPU runs the CLIP ViT-B/32 image encoder in 18 ms per photo
-  (Ryzen 7 PRO 7840HS, 16 threads): a 10,000-photo library in about three
-  minutes. CPU-only inference is fast enough for this model.
+- The CPU runs the CLIP ViT-B/32 image encoder in 18 ms per photo and
+  ViT-L/14, which the app uses, in 283 ms (Ryzen 7 PRO 7840HS, 16
+  threads): a 10,000-photo library in about an hour.
 - WebGPU initializes on Mesa's software Vulkan driver and matches CPU
-  results (largest difference 7 × 10⁻⁷) over repeated runs, at 258 ms per
-  photo. The measurement on the real iGPU is still to be done.
+  results (largest difference 1.3 × 10⁻⁶) over repeated runs, though far
+  slower. The measurement on the real iGPU is still to be done.
 
 References
 ----------

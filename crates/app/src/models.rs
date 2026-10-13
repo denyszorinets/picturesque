@@ -20,31 +20,34 @@ use crate::ports::models::{FetchError, ModelFile, ModelSpec, ModelStore};
 const PROGRESS_INTERVAL: Duration = Duration::from_millis(250);
 
 /// The CLIP image encoder (`analysis::clip`).
-pub const CLIP_IMAGE: &str = "clip-vit-b32-image";
+pub const CLIP_IMAGE: &str = "clip-image";
 /// Its ONNX file inside the model folder.
 pub const CLIP_IMAGE_FILE: &str = "visual/model.onnx";
 
-/// Immich's ONNX export of OpenCLIP ViT-B/32 (LAION-2B), pinned to a commit.
-const CLIP_REPO: &str = "https://huggingface.co/immich-app/ViT-B-32__laion2b-s34b-b79k/resolve/19a057a0fb927cf239541300e74237cd56c7ffe2";
+/// Immich's ONNX export of OpenAI CLIP ViT-L/14, pinned to a commit. The
+/// improved LAION aesthetic predictor was trained on its embeddings; with
+/// the smaller ViT-B/32 the aesthetic score barely beat chance
+/// (`spikes/aesthetic/results.md`).
+const CLIP_REPO: &str = "https://huggingface.co/immich-app/ViT-L-14__openai/resolve/9b27c6b49d2ff4957fa0b5a25521eee12f109543";
 
 /// The models the app offers. Each feature adds the models it uses; every
 /// license must allow use in a GPL-3.0 application (ADR-0006).
 pub fn catalog() -> Vec<ModelSpec> {
     vec![ModelSpec {
         id: CLIP_IMAGE.into(),
-        name: "CLIP ViT-B/32 image encoder".into(),
-        purpose: "Understands what photos show: finds similar photos and \
-                  powers the aesthetic score and text search."
+        name: "CLIP ViT-L/14 image encoder (OpenAI)".into(),
+        purpose: "Understands what photos show: scores how good they look \
+                  and finds similar photos."
             .into(),
         version: 1,
         license: "MIT".into(),
-        license_url: "https://huggingface.co/laion/CLIP-ViT-B-32-laion2B-s34B-b79K".into(),
-        homepage: "https://github.com/mlfoundations/open_clip".into(),
+        license_url: "https://github.com/openai/CLIP/blob/main/LICENSE".into(),
+        homepage: "https://github.com/openai/CLIP".into(),
         files: vec![ModelFile {
             name: CLIP_IMAGE_FILE.into(),
             url: format!("{CLIP_REPO}/{CLIP_IMAGE_FILE}"),
-            sha256: "b9ce24b91a8c62ef8d40ea786051709c93140104cbf2b6b4a2cc270df3838f9c".into(),
-            size: 351_613_724,
+            sha256: "2b02d572f59c509f4b97b9c54a868453cca1a652cd5d60e1d51d0052f055cb8c".into(),
+            size: 1_216_297_719,
         }],
     }]
 }

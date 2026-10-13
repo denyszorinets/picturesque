@@ -74,6 +74,37 @@ impl Embedding {
     }
 }
 
+/// A linear model on top of embeddings, like LAION's aesthetic predictor.
+#[derive(Debug, Clone, PartialEq)]
+pub struct LinearHead {
+    weights: Vec<f32>,
+    bias: f32,
+}
+
+impl LinearHead {
+    /// From little-endian `f32`s: the weights, then the bias.
+    pub fn from_le_bytes(bytes: &[u8]) -> Option<Self> {
+        let (chunks, rest) = bytes.as_chunks::<4>();
+        let (bias, weights) = chunks.split_last()?;
+        (rest.is_empty() && !weights.is_empty()).then(|| Self {
+            weights: weights.iter().map(|c| f32::from_le_bytes(*c)).collect(),
+            bias: f32::from_le_bytes(*bias),
+        })
+    }
+
+    /// `weights · embedding + bias`; `None` when the dimensions differ.
+    pub fn apply(&self, embedding: &Embedding) -> Option<f32> {
+        (self.weights.len() == embedding.0.len()).then(|| {
+            self.weights
+                .iter()
+                .zip(&embedding.0)
+                .map(|(w, e)| w * e)
+                .sum::<f32>()
+                + self.bias
+        })
+    }
+}
+
 const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
 fn base64_encode(bytes: &[u8]) -> String {
@@ -166,6 +197,20 @@ mod tests {
         assert!(Embedding::new(&[0.0, 0.0]).is_none());
         assert!(Embedding::new(&[f32::NAN]).is_none());
         assert!(Embedding::new(&[]).is_none());
+    }
+
+    #[test]
+    fn linear_heads_score_embeddings() {
+        let bytes: Vec<u8> = [2.0f32, -1.0, 0.5]
+            .iter()
+            .flat_map(|v| v.to_le_bytes())
+            .collect();
+        let head = LinearHead::from_le_bytes(&bytes).unwrap();
+        let e = Embedding::new(&[3.0, 4.0]).unwrap();
+        assert!((head.apply(&e).unwrap() - (2.0 * 0.6 - 0.8 + 0.5)).abs() < 1e-6);
+        assert_eq!(head.apply(&Embedding::new(&[1.0]).unwrap()), None);
+        assert!(LinearHead::from_le_bytes(&bytes[..4]).is_none());
+        assert!(LinearHead::from_le_bytes(&bytes[..5]).is_none());
     }
 
     #[test]

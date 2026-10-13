@@ -1,7 +1,7 @@
 //! Finding visually similar photos from CLIP embeddings
 //! (`docs/features/ai.rst`).
 //!
-//! All embeddings are kept in memory (10,000 photos take 20 MB) and
+//! All embeddings are kept in memory (10,000 photos take 30 MB) and
 //! compared by brute force, which takes milliseconds. The index reloads
 //! from the catalog after new photos were analyzed.
 

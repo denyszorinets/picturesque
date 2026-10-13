@@ -2,7 +2,7 @@
 //! similarity search.
 //!
 //! The regular test uses a tiny stand-in model (mean colour projected to
-//! 512 dimensions). `real_clip_model_groups_similar_photos` runs the real
+//! 768 dimensions). `real_clip_model_groups_similar_photos` runs the real
 //! model when `PICTURESQUE_CLIP_MODEL` points at its `visual/model.onnx`:
 //!
 //!     PICTURESQUE_CLIP_MODEL=/path/to/model.onnx cargo test -p picturesque-infra --test clip -- --ignored
@@ -148,6 +148,13 @@ fn ranks_like_colours_together(model: &Path) {
     assert!(similar(&l.api, red).is_empty(), "not analyzed yet");
 
     assert_eq!(l.api.run_analysis(), 3);
+    let aesthetic = &l
+        .api
+        .call("get_photo", json!({ "photo_id": red.0 }))
+        .unwrap()["aesthetic"];
+    let score = aesthetic["score"].as_f64().unwrap();
+    assert!((0.0..=1.0).contains(&score), "{aesthetic}");
+    assert!(aesthetic["rating"].as_f64().unwrap().is_finite());
     let ranked = similar(&l.api, red);
     assert_eq!(
         ranked.iter().map(|r| r.0).collect::<Vec<_>>(),

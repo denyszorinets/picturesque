@@ -46,5 +46,6 @@ ui/playwright-report/
 
 # Spike corpora and build output
 spikes/*/corpus/
+spikes/*/sample/
 spikes/*/target/
 spikes/*/stderr.log
