@@ -3,7 +3,7 @@ use std::time::Instant;
 
 use chrono::NaiveDateTime;
 use picturesque_app::library::{CameraKey, PhotoQuery, PhotoSort};
-use picturesque_app::ports::catalog::PhotoCatalog;
+use picturesque_app::ports::catalog::{PhotoCatalog, PhotoScore};
 use picturesque_core::decision::{Decision, Flag, Rating};
 use picturesque_core::hash::ContentHash;
 use picturesque_core::media::MediaFormat;
@@ -118,6 +118,17 @@ fn sample() -> SqliteCatalog {
         insert(&c, i as u64 + 1, s);
     }
     c
+}
+
+/// A combined score without AI signals.
+fn score(id: i64, score: f32) -> PhotoScore {
+    PhotoScore {
+        id: PhotoId(id),
+        score,
+        aesthetic: Some(score),
+        eyes_closed: None,
+        faces: 0,
+    }
 }
 
 fn ids(c: &SqliteCatalog, q: PhotoQuery) -> Vec<i64> {
@@ -493,8 +504,12 @@ fn queries_over_ten_thousand_photos_are_fast() {
         )
         .unwrap();
     }
-    let all_scores: Vec<(PhotoId, f32)> = (0..10_000u64)
-        .map(|n| (PhotoId(n as i64 + 1), ((n * 7919) % 1000) as f32 / 1000.0))
+    let all_scores: Vec<PhotoScore> = (0..10_000u64)
+        .map(|n| PhotoScore {
+            eyes_closed: Some(n % 10 == 0),
+            faces: (n % 3) as u32,
+            ..score(n as i64 + 1, ((n * 7919) % 1000) as f32 / 1000.0)
+        })
         .collect();
     c.replace_scores(&all_scores).unwrap();
     let queries = [
@@ -877,7 +892,7 @@ fn score_thresholds_best_only_and_quality_sort() {
 
     // Sorting uses the combined scores the series service stores; best
     // first, photos without a score last, newest id first among them.
-    c.replace_scores(&[(PhotoId(1), 0.85), (PhotoId(2), 0.55), (PhotoId(3), 0.6)])
+    c.replace_scores(&[score(1, 0.85), score(2, 0.55), score(3, 0.6)])
         .unwrap();
     let sorted = |limit| {
         let mut all = Vec::new();
@@ -913,4 +928,54 @@ fn score_thresholds_best_only_and_quality_sort() {
     c.replace_series(&[stored(&[PhotoId(2), PhotoId(1)])])
         .unwrap();
     assert_eq!(q(&|q| q.best_only = Some(true)), [2, 3, 5, 6, 4]);
+}
+
+#[test]
+fn ai_signals_filter_and_show_in_summaries() {
+    let c = sample();
+    c.replace_scores(&[
+        PhotoScore {
+            aesthetic: Some(0.8),
+            eyes_closed: Some(false),
+            faces: 2,
+            ..score(1, 0.9)
+        },
+        PhotoScore {
+            aesthetic: Some(0.3),
+            eyes_closed: Some(true),
+            faces: 1,
+            ..score(2, 0.4)
+        },
+        PhotoScore {
+            aesthetic: None,
+            ..score(3, 0.5)
+        },
+    ])
+    .unwrap();
+    let q = |f: &dyn Fn(&mut PhotoQuery)| {
+        let mut q = PhotoQuery::default();
+        f(&mut q);
+        ids(&c, q)
+    };
+    assert_eq!(q(&|q| q.min_aesthetic = Some(0.5)), [1]);
+    assert_eq!(q(&|q| q.hide_closed_eyes = Some(true)), [1, 3, 5, 6, 4]);
+    assert_eq!(q(&|q| q.people = Some(true)), [1, 2]);
+    assert_eq!(q(&|q| q.people = Some(false)), [3, 5, 6, 4]);
+    let facets = c
+        .facets(Some(&PhotoQuery {
+            people: Some(true),
+            ..Default::default()
+        }))
+        .unwrap();
+    assert_eq!(facets.total, 2);
+
+    let photos = c.query(&PhotoQuery::default()).unwrap().photos;
+    let by_id = |id: i64| photos.iter().find(|p| p.id == id).unwrap();
+    assert_eq!(by_id(1).aesthetic, Some(0.8));
+    assert_eq!((by_id(1).eyes_closed, by_id(1).faces), (Some(false), 2));
+    assert_eq!((by_id(2).eyes_closed, by_id(2).faces), (Some(true), 1));
+    assert_eq!(
+        (by_id(4).aesthetic, by_id(4).eyes_closed, by_id(4).faces),
+        (None, None, 0)
+    );
 }

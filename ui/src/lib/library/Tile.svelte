@@ -79,6 +79,11 @@
           >✕</span
         >{/if}
       {#if photo.has_raw}<span class="badge raw">RAW</span>{/if}
+      {#if photo.eyes_closed}<span
+          class="badge eyes"
+          title="Someone has closed eyes"
+          data-testid="tile-eyes-closed">Eyes closed</span
+        >{/if}
       {#if showQuality && quality}<span
           class="badge"
           title="Overall technical quality"
@@ -196,6 +201,10 @@
 
   .badge.reject {
     background: var(--danger);
+  }
+
+  .badge.eyes {
+    background: color-mix(in srgb, var(--danger) 80%, black);
   }
 
   .best-mark {

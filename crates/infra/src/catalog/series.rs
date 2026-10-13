@@ -1,7 +1,7 @@
 //! Series and their inputs on SQLite.
 
 use chrono::NaiveDateTime;
-use picturesque_app::ports::catalog::{AnalyzerId, CatalogError, StoredSeries};
+use picturesque_app::ports::catalog::{AnalyzerId, CatalogError, PhotoScore, StoredSeries};
 use picturesque_core::photo::PhotoId;
 use picturesque_core::ranking::Ranked;
 use picturesque_core::series::SeriesEdit;
@@ -204,17 +204,26 @@ impl SqliteCatalog {
         Ok(())
     }
 
-    pub(super) fn save_scores(&self, scores: &[(PhotoId, f32)]) -> Result<(), CatalogError> {
+    pub(super) fn save_scores(&self, scores: &[PhotoScore]) -> Result<(), CatalogError> {
         let mut conn = self.conn();
         let tx = conn.transaction().map_err(storage)?;
         tx.execute("DELETE FROM photo_score", []).map_err(storage)?;
         {
             let mut insert = tx
-                .prepare("INSERT INTO photo_score (photo_id, score) VALUES (?1, ?2)")
+                .prepare(
+                    "INSERT INTO photo_score (photo_id, score, aesthetic, eyes_closed, faces)
+                     VALUES (?1, ?2, ?3, ?4, ?5)",
+                )
                 .map_err(storage)?;
-            for (id, score) in scores {
+            for s in scores {
                 insert
-                    .execute(params![id.0, f64::from(*score)])
+                    .execute(params![
+                        s.id.0,
+                        f64::from(s.score),
+                        s.aesthetic.map(f64::from),
+                        s.eyes_closed,
+                        s.faces
+                    ])
                     .map_err(storage)?;
             }
         }

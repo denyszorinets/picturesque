@@ -33,6 +33,19 @@ best_in_series: boolean,
  */
 series_size: number, 
 /**
- * Overall technical quality, 0–1; `null` until analyzed.
+ * Combined quality score, 0–1; `null` until analyzed.
  */
-quality: number | null, };
+quality: number | null, 
+/**
+ * Aesthetic score, 0–1, once the CLIP model ran.
+ */
+aesthetic: number | null, 
+/**
+ * Whether someone important has closed eyes; `null` when undecided
+ * or without faces.
+ */
+eyes_closed: boolean | null, 
+/**
+ * Faces found (0 also before the face models ran).
+ */
+faces: number, };

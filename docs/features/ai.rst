@@ -21,7 +21,10 @@ In **Import → Library → AI acceleration**, choose where models run:
    * - Choice
      - Runs on
    * - Automatic (default)
-     - The best provider this computer supports, else the CPU
+     - DirectML on Windows, Core ML on Apple Silicon, the CPU on Linux.
+       WebGPU is used only when chosen: on Linux it may run on a software
+       Vulkan driver, slower than the CPU, and it failed on the real models
+       there (being measured on real GPUs, :issue:`42`).
    * - CPU only
      - The CPU. Always works.
    * - DirectML
@@ -181,3 +184,22 @@ The test photos (two with closed eyes, two with open eyes, from Wikimedia
 Commons) are all judged correctly
 (:repo:`crates/infra/tests/fixtures/faces/SOURCES.md`). Squinting, deep
 shadows and sunglasses can still fool it.
+
+.. _features-ai-library:
+
+AI in the library
+-----------------
+
+- **Tiles** of photos where someone important has closed eyes show an
+  **Eyes closed** badge.
+- **Filters** (Quality section): a minimum **Aesthetic** score, **Hide
+  closed eyes**, and **People**: *With* (any face found, even a small one
+  in the background) or *Without* (no face found, or not analyzed by the
+  face models yet).
+- **Best quality first** sorts by the combined score
+  (:ref:`features-series-score`).
+- The loupe's **Why this score** list says, in words, what raised or
+  lowered the photo's score: its place in its series and why the best
+  photo won (open eyes, sharper, looks better), closed eyes, a soft or
+  sharp face, blur, exposure problems, noise and the aesthetic score. Only
+  notable values are listed.

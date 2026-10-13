@@ -77,6 +77,17 @@ pub struct PhotoQuery {
     /// Hide photos that are in a series but not its best photo.
     #[ts(optional)]
     pub best_only: Option<bool>,
+    /// Minimum aesthetic score, 0–1; photos not analyzed by the CLIP model
+    /// never match.
+    #[ts(optional)]
+    pub min_aesthetic: Option<f32>,
+    /// Hide photos where someone important has closed eyes.
+    #[ts(optional)]
+    pub hide_closed_eyes: Option<bool>,
+    /// `true`: only photos with faces; `false`: only photos without (or
+    /// not yet analyzed by the face models).
+    #[ts(optional)]
+    pub people: Option<bool>,
     /// Only these photos (at most 1000).
     #[ts(optional, type = "number[]")]
     pub photo_ids: Option<Vec<i64>>,
@@ -107,6 +118,7 @@ impl PhotoQuery {
             ("min_sharpness", self.min_sharpness),
             ("min_exposure", self.min_exposure),
             ("min_noise", self.min_noise),
+            ("min_aesthetic", self.min_aesthetic),
         ] {
             if value.is_some_and(|v| !(0.0..=1.0).contains(&v)) {
                 return Err(format!("`{name}` must be between 0 and 1."));
@@ -157,8 +169,15 @@ pub struct PhotoSummary {
     pub best_in_series: bool,
     /// Photos in the photo's series (0 when in none).
     pub series_size: u32,
-    /// Overall technical quality, 0–1; `null` until analyzed.
+    /// Combined quality score, 0–1; `null` until analyzed.
     pub quality: Option<f32>,
+    /// Aesthetic score, 0–1, once the CLIP model ran.
+    pub aesthetic: Option<f32>,
+    /// Whether someone important has closed eyes; `null` when undecided
+    /// or without faces.
+    pub eyes_closed: Option<bool>,
+    /// Faces found (0 also before the face models ran).
+    pub faces: u32,
 }
 
 /// A page of results.
@@ -275,6 +294,8 @@ pub struct PhotoDetail {
     /// Combined quality, 0–1, from every analysis so far
     /// (`core::ranking::photo_quality`); `null` before technical analysis.
     pub score: Option<f32>,
+    /// Why the photo scored as it did, most important first.
+    pub reasons: Vec<crate::explain::ReasonView>,
 }
 
 /// Arguments of commands that act on one photo.
@@ -402,6 +423,7 @@ impl PhotoDetail {
             aesthetic: None,
             faces: None,
             score: None,
+            reasons: Vec::new(),
             files: photo
                 .assets
                 .iter()

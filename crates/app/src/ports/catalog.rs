@@ -38,6 +38,20 @@ pub struct AnalyzerId {
     pub version: u32,
 }
 
+/// What the library keeps about a photo's analysis for sorting, filtering
+/// and badges (derived by the series service).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct PhotoScore {
+    pub id: PhotoId,
+    /// Combined quality, 0–1.
+    pub score: f32,
+    /// Aesthetic score, 0–1, once the CLIP model ran.
+    pub aesthetic: Option<f32>,
+    /// Whether someone important has closed eyes; `None` when undecided.
+    pub eyes_closed: Option<bool>,
+    pub faces: u32,
+}
+
 /// A series as stored: members in capture order, their ranking and the
 /// best photo.
 #[derive(Debug, Clone, PartialEq)]
@@ -167,9 +181,9 @@ pub trait PhotoCatalog: Send + Sync {
     /// Photos flagged as rejected.
     fn rejected_photos(&self) -> Result<Vec<PhotoId>, CatalogError>;
 
-    /// Sets the combined quality scores (0–1) of photos; other photos'
-    /// scores are removed.
-    fn replace_scores(&self, scores: &[(PhotoId, f32)]) -> Result<(), CatalogError>;
+    /// Sets the combined scores and AI signals of photos; other photos'
+    /// are removed.
+    fn replace_scores(&self, scores: &[PhotoScore]) -> Result<(), CatalogError>;
 
     /// Sizes of all catalogued RAW and image files. A new file can only be
     /// a duplicate if its size is in this set, so only those are hashed.

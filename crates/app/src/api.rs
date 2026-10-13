@@ -19,6 +19,7 @@ use crate::analysis::faces::FaceAnalyzer;
 use crate::analysis::technical::{QualityView, TechnicalAnalyzer};
 use crate::analysis::{AnalysisService, Analyzer, PrioritizeArgs};
 use crate::embeddings::{DEFAULT_LIMIT, EmbeddingIndex, MAX_LIMIT, SimilarArgs};
+use crate::explain::{self, SeriesPlace, Signals};
 use crate::hooks::EventHooks;
 use crate::import::{Deps, ImportError, ImportService, PlanImportArgs, RunArgs};
 use crate::info;
@@ -118,6 +119,24 @@ pub struct AppContext {
 impl fmt::Debug for AppContext {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("AppContext").finish_non_exhaustive()
+    }
+}
+
+/// What analysis says about one photo (`get_photo`).
+struct Analyzed {
+    quality: Option<QualityView>,
+    aesthetic: Option<AestheticView>,
+    faces: Option<Vec<crate::analysis::faces::FaceView>>,
+    score: Option<f32>,
+}
+
+impl Analyzed {
+    fn signals(&self) -> Signals<'_> {
+        Signals {
+            quality: self.quality.as_ref(),
+            aesthetic: self.aesthetic.as_ref(),
+            faces: self.faces.as_deref(),
+        }
     }
 }
 
@@ -226,6 +245,34 @@ impl Api {
             series,
             models,
             embeddings,
+        })
+    }
+
+    /// A photo's current analysis results, read for display.
+    fn analyzed(&self, id: PhotoId) -> Result<Analyzed, ApiError> {
+        let results = self.catalog.analysis(id).map_err(catalog_error)?;
+        let current = |analyzer: AnalyzerId| {
+            results
+                .iter()
+                .find(|(name, version, _)| *name == analyzer.name && *version == analyzer.version)
+                .map(|(_, _, result)| result)
+        };
+        let quality = current(TechnicalAnalyzer::ID).and_then(QualityView::from_result);
+        let aesthetic = current(ClipAnalyzer::ID).and_then(AestheticView::from_result);
+        let faces = current(FaceAnalyzer::ID).and_then(crate::analysis::faces::faces);
+        let score = picturesque_core::ranking::photo_quality(&Candidate {
+            id,
+            scores: current(TechnicalAnalyzer::ID)
+                .and_then(|r| serde_json::from_value(r.clone()).ok()),
+            rejected: false,
+            aesthetic: aesthetic.map(|a| a.score),
+            face: faces.as_deref().and_then(crate::analysis::faces::signal),
+        });
+        Ok(Analyzed {
+            quality,
+            aesthetic,
+            faces,
+            score,
         })
     }
 
@@ -410,29 +457,28 @@ impl Api {
                     })?;
                 let decision = self.catalog.decision(id).map_err(catalog_error)?;
                 let mut detail = PhotoDetail::new(&photo, decision);
-                let results = self.catalog.analysis(id).map_err(catalog_error)?;
-                let current = |analyzer: AnalyzerId| {
-                    results
-                        .iter()
-                        .find(|(name, version, _)| {
-                            *name == analyzer.name && *version == analyzer.version
-                        })
-                        .map(|(_, _, result)| result)
+                let analyzed = self.analyzed(id)?;
+                detail.quality = analyzed.quality;
+                detail.aesthetic = analyzed.aesthetic;
+                detail.faces = analyzed.faces.clone();
+                detail.score = analyzed.score;
+                let series = self.series.view(id).map_err(catalog_error)?;
+                let best = match series.best_photo_id {
+                    Some(best) if best != photo_id => Some(self.analyzed(PhotoId(best))?),
+                    _ => None,
                 };
-                detail.quality = current(TechnicalAnalyzer::ID).and_then(QualityView::from_result);
-                detail.aesthetic = current(ClipAnalyzer::ID).and_then(AestheticView::from_result);
-                detail.faces = current(FaceAnalyzer::ID).and_then(crate::analysis::faces::faces);
-                detail.score = picturesque_core::ranking::photo_quality(&Candidate {
-                    id,
-                    scores: current(TechnicalAnalyzer::ID)
-                        .and_then(|r| serde_json::from_value(r.clone()).ok()),
-                    rejected: false,
-                    aesthetic: detail.aesthetic.map(|a| a.score),
-                    face: detail
-                        .faces
-                        .as_deref()
-                        .and_then(crate::analysis::faces::signal),
+                let place = series.best_photo_id.map(|best_id| SeriesPlace {
+                    rank: series
+                        .ranking
+                        .iter()
+                        .position(|r| r.photo_id == photo_id)
+                        .map_or(series.photo_ids.len(), |i| i + 1),
+                    size: series.photo_ids.len(),
+                    is_best: best_id == photo_id,
+                    best_chosen: series.best_chosen,
+                    best: best.as_ref().map(Analyzed::signals).unwrap_or_default(),
                 });
+                detail.reasons = explain::reasons(analyzed.signals(), place);
                 respond(detail)
             }
             "set_decisions" => {

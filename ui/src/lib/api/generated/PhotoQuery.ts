@@ -48,6 +48,20 @@ min_sharpness?: number, min_exposure?: number, min_noise?: number,
  */
 best_only?: boolean, 
 /**
+ * Minimum aesthetic score, 0–1; photos not analyzed by the CLIP model
+ * never match.
+ */
+min_aesthetic?: number, 
+/**
+ * Hide photos where someone important has closed eyes.
+ */
+hide_closed_eyes?: boolean, 
+/**
+ * `true`: only photos with faces; `false`: only photos without (or
+ * not yet analyzed by the face models).
+ */
+people?: boolean, 
+/**
  * Only these photos (at most 1000).
  */
 photo_ids?: number[], };

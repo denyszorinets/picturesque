@@ -35,6 +35,18 @@ const GPU_PROVIDERS: &[Provider] = if cfg!(windows) {
     &[]
 };
 
+/// GPU providers "Automatic" tries, preferred first. WebGPU is left out:
+/// on Linux it may run on a software Vulkan driver (slower than the CPU)
+/// and failed on the real models there, so it is used only when chosen
+/// explicitly, until it is measured on real GPUs (#42).
+const AUTO_PROVIDERS: &[Provider] = if cfg!(windows) {
+    &[Provider::DirectMl]
+} else if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
+    &[Provider::CoreMl]
+} else {
+    &[]
+};
+
 /// Held while creating any session.
 static CREATING: Mutex<()> = Mutex::new(());
 /// Held while running a model on a GPU provider.
@@ -114,7 +126,7 @@ impl InferenceEngine for OrtEngine {
         choice: ProviderChoice,
     ) -> Result<Box<dyn Model>, InferenceError> {
         let mut failures = Vec::new();
-        for provider in choice.candidates(GPU_PROVIDERS) {
+        for provider in choice.candidates(AUTO_PROVIDERS) {
             if provider != Provider::Cpu && !GPU_PROVIDERS.contains(&provider) {
                 failures.push(format!(
                     "{} is not available in this build",

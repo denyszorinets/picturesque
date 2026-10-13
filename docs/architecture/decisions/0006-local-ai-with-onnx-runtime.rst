@@ -185,7 +185,10 @@ into the devcontainer:
   threads): a 10,000-photo library in about an hour.
 - WebGPU initializes on Mesa's software Vulkan driver and matches CPU
   results (largest difference 1.3 × 10⁻⁶) over repeated runs, though far
-  slower. The measurement on the real iGPU is still to be done.
+  slower. Running the real models (CLIP ViT-L/14 and the face mesh)
+  there produced WebGPU device errors and hung the dev server, so
+  *Automatic* uses the CPU on Linux; WebGPU must be chosen explicitly
+  until it is measured on the real iGPU.
 
 References
 ----------

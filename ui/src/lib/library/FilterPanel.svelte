@@ -129,6 +129,28 @@
         data-testid="filter-best-only"
       /> Best of each series only</label
     >
+    <label class="check"
+      ><input
+        type="checkbox"
+        bind:checked={filters.hideClosedEyes}
+        data-testid="filter-hide-closed-eyes"
+      /> Hide closed eyes</label
+    >
+    <div class="score">
+      <span>People</span>
+      <div class="toggles" role="radiogroup" aria-label="People">
+        {#each [null, true, false] as people (String(people))}
+          <button
+            role="radio"
+            aria-checked={filters.people === people}
+            class:on={filters.people === people}
+            onclick={() => (filters.people = people)}
+            data-testid={`filter-people-${people}`}
+            >{people === null ? "Any" : people ? "With" : "Without"}</button
+          >
+        {/each}
+      </div>
+    </div>
   </section>
 
   <section>

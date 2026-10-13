@@ -113,6 +113,30 @@ fn photo_filters(query: &PhotoQuery, p: &str, d: &str) -> (Vec<String>, Vec<Valu
             );
         }
     }
+    if let Some(min) = query.min_aesthetic {
+        add(
+            "(SELECT ps.aesthetic FROM photo_score ps WHERE ps.photo_id = p.id) >= ?",
+            vec![Value::Real(f64::from(min))],
+        );
+    }
+    if query.hide_closed_eyes == Some(true) {
+        add(
+            "NOT EXISTS (SELECT 1 FROM photo_score ps WHERE ps.photo_id = p.id AND ps.eyes_closed = 1)",
+            Vec::new(),
+        );
+    }
+    if let Some(people) = query.people {
+        let with =
+            "EXISTS (SELECT 1 FROM photo_score ps WHERE ps.photo_id = p.id AND ps.faces > 0)";
+        add(
+            &if people {
+                with.to_owned()
+            } else {
+                format!("NOT {with}")
+            },
+            Vec::new(),
+        );
+    }
     if query.best_only == Some(true) {
         add(
             "NOT EXISTS (SELECT 1 FROM series_member bo WHERE bo.photo_id = p.id AND bo.best IS NULL)",
@@ -313,8 +337,11 @@ fn query_page(conn: &Connection, query: &PhotoQuery) -> Result<PhotoPage, Catalo
                  ORDER BY a.role = 'raw' LIMIT 1),
                 sm.series_id, sm.best IS NOT NULL,
                 (SELECT count(*) FROM series_member x WHERE x.series_id = sm.series_id),
-                {QUALITY_SQL} AS quality
-         {FROM} LEFT JOIN series_member sm ON sm.photo_id = p.id {} ORDER BY {} LIMIT ?",
+                {QUALITY_SQL} AS quality,
+                pss.aesthetic, pss.eyes_closed, coalesce(pss.faces, 0)
+         {FROM} LEFT JOIN series_member sm ON sm.photo_id = p.id
+                LEFT JOIN photo_score pss ON pss.photo_id = p.id
+         {} ORDER BY {} LIMIT ?",
         where_sql(&clauses),
         order_by(sort)
     );
@@ -354,6 +381,9 @@ fn query_page(conn: &Connection, query: &PhotoQuery) -> Result<PhotoPage, Catalo
                 best_in_series: row.get::<_, Option<bool>>(15)?.unwrap_or(false),
                 series_size: row.get::<_, u32>(16)?,
                 quality: quality.map(|q| q as f32),
+                aesthetic: row.get::<_, Option<f64>>(18)?.map(|a| a as f32),
+                eyes_closed: row.get(19)?,
+                faces: row.get(20)?,
             };
             // The exact stored score, for the cursor.
             Ok((summary, quality))

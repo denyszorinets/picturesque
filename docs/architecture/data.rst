@@ -149,6 +149,10 @@ how many have run. Each migration runs in its own transaction.
    * - 9
      - ``0009_photo_score.sql``
      - ``photo_score`` (each photo's combined quality score, derived)
+   * - 10
+     - ``0010_photo_signals.sql``
+     - ``photo_score.aesthetic`` / ``eyes_closed`` / ``faces`` (for
+       filters and badges)
 
 Conventions:
 
