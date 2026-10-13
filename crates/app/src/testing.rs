@@ -931,6 +931,102 @@ impl crate::ports::pixels::PixelLoader for FakePixels {
     }
 }
 
+/// An inference engine whose GPU providers always work and whose models
+/// echo their inputs; other providers fall back to CPU.
+#[derive(Debug, Default)]
+pub struct FakeInference {
+    gpus: Vec<crate::ports::inference::Provider>,
+    broken: bool,
+    probes: Mutex<usize>,
+}
+
+impl FakeInference {
+    pub fn new(gpus: &[crate::ports::inference::Provider]) -> Self {
+        Self {
+            gpus: gpus.to_vec(),
+            ..Default::default()
+        }
+    }
+
+    /// Nothing loads, not even on CPU.
+    pub fn broken() -> Self {
+        Self {
+            broken: true,
+            ..Default::default()
+        }
+    }
+
+    pub fn probes(&self) -> usize {
+        *self.probes.lock().unwrap()
+    }
+}
+
+#[derive(Debug)]
+struct EchoModel {
+    provider: crate::ports::inference::Provider,
+    fallback: Option<String>,
+}
+
+impl crate::ports::inference::Model for EchoModel {
+    fn provider(&self) -> crate::ports::inference::Provider {
+        self.provider
+    }
+
+    fn fallback(&self) -> Option<&str> {
+        self.fallback.as_deref()
+    }
+
+    fn run(
+        &self,
+        inputs: Vec<crate::ports::inference::Tensor>,
+    ) -> Result<Vec<crate::ports::inference::Tensor>, crate::ports::inference::InferenceError> {
+        Ok(inputs)
+    }
+}
+
+impl crate::ports::inference::InferenceEngine for FakeInference {
+    fn available(&self) -> Vec<crate::ports::inference::Provider> {
+        let mut all = self.gpus.clone();
+        all.push(crate::ports::inference::Provider::Cpu);
+        all
+    }
+
+    fn load(
+        &self,
+        _model: crate::ports::inference::ModelSource<'_>,
+        choice: crate::ports::inference::ProviderChoice,
+    ) -> Result<Box<dyn crate::ports::inference::Model>, crate::ports::inference::InferenceError>
+    {
+        use crate::ports::inference::{InferenceError, Provider};
+        if self.broken {
+            return Err(InferenceError("CPU: runtime missing".into()));
+        }
+        let mut failures = Vec::new();
+        for provider in choice.candidates(&self.gpus) {
+            if provider == Provider::Cpu || self.gpus.contains(&provider) {
+                return Ok(Box::new(EchoModel {
+                    provider,
+                    fallback: (!failures.is_empty()).then(|| failures.join("; ")),
+                }));
+            }
+            failures.push(format!("{} is not available", provider.label()));
+        }
+        unreachable!("candidates end with CPU")
+    }
+
+    fn probe(
+        &self,
+        choice: crate::ports::inference::ProviderChoice,
+    ) -> Result<crate::ports::inference::Probe, crate::ports::inference::InferenceError> {
+        *self.probes.lock().unwrap() += 1;
+        let model = self.load(crate::ports::inference::ModelSource::Bytes(&[]), choice)?;
+        Ok(crate::ports::inference::Probe {
+            provider: model.provider(),
+            fallback: model.fallback().map(str::to_owned),
+        })
+    }
+}
+
 /// Sidecars kept in memory: path → decision.
 #[derive(Default)]
 pub struct MemorySidecars(pub Mutex<HashMap<PathBuf, picturesque_core::decision::Decision>>);
@@ -998,6 +1094,7 @@ impl TestWorld {
             sidecars: self.sidecars.clone(),
             pixels: self.pixels.clone(),
             analyzers: Vec::new(),
+            inference: Arc::new(FakeInference::new(&[])),
         }
     }
 }

@@ -123,10 +123,29 @@ Risks
 - Some candidate models have non-commercial licenses; each model's license
   must be checked before it is offered.
 
+Implementation
+~~~~~~~~~~~~~~
+
+:issue:`40` integrated ``ort`` 2.0.0-rc.13 (ONNX Runtime 1.28):
+
+- The port is ``InferenceEngine``/``Model`` in ``picturesque-app``, with plain
+  ``f32``/``i64`` tensors; ``OrtEngine`` in ``picturesque-infra`` implements
+  it.
+- ONNX Runtime is linked statically from pyke's prebuilt binaries, chosen
+  per target: WebGPU on Linux x86-64, DirectML on Windows, Core ML and
+  WebGPU on Apple Silicon. Intel macOS has no prebuilt binaries and is not
+  supported for now.
+- Each provider is registered with ``error_on_failure``, so a provider that
+  cannot start is detected and the session is rebuilt on CPU, recording why.
+  ``ai_status`` probes the chosen provider with a tiny built-in model.
+- A first check in the devcontainer (no GPU passed through) found that
+  WebGPU initializes on a software Vulkan adapter and gives correct results;
+  :issue:`42` measures real GPU performance.
+
 Follow-up
 ~~~~~~~~~
 
-- Integrate ``ort`` (:issue:`40`) and the model manager (:issue:`41`).
+- Build the model manager (:issue:`41`).
 - Benchmark WebGPU against CPU on an integrated AMD GPU (:issue:`42`).
 
 Validation

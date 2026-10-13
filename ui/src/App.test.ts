@@ -15,6 +15,14 @@ vi.mock("./lib/api", async (importOriginal) => {
         sidecar_naming: "file_extension",
         series: { max_gap_seconds: 30, max_distance: 16 },
         ranking: { sharpness: 0.6, exposure: 0.3, noise: 0.1 },
+        ai: { provider: "auto" },
+      }),
+    aiStatus: () =>
+      Promise.resolve({
+        available: ["cpu"],
+        choice: "auto",
+        provider: "cpu",
+        problem: null,
       }),
     templatePresets: () => Promise.resolve([]),
     previewTemplate: () => Promise.resolve({ error: null, examples: [] }),

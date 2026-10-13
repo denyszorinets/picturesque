@@ -34,6 +34,9 @@ jobs:
             libvips-dev libraw-dev libheif-dev libheif-plugin-libde265
 
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          # Prebuilt ONNX Runtime downloaded by `ort` at build time.
+          cache-directories: ~/.cache/ort.pyke.io
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -83,6 +86,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          # Prebuilt ONNX Runtime downloaded by `ort` at build time.
+          cache-directories: ~/.cache/ort.pyke.io
 
       - name: Install image libraries (macOS)
         if: runner.os == 'macOS'

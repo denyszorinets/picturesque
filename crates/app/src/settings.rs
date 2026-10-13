@@ -12,6 +12,7 @@ use ts_rs::TS;
 
 use crate::ports::catalog::{CatalogError, PhotoCatalog};
 use crate::ports::fs::FileSystem;
+use crate::ports::inference::ProviderChoice;
 use crate::ports::settings::SettingsStore;
 
 /// Folder structure used until the user picks another template (the first
@@ -35,6 +36,17 @@ pub struct Settings {
     pub series: SeriesSettings,
     /// How the best photo of a series is chosen.
     pub ranking: RankingSettings,
+    /// Local AI models.
+    pub ai: AiSettings,
+}
+
+/// Local AI settings (`docs/features/ai.rst`).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(default)]
+#[ts(export)]
+pub struct AiSettings {
+    /// Hardware models run on.
+    pub provider: ProviderChoice,
 }
 
 /// How much each technical score counts when choosing the best photo of a
@@ -120,6 +132,7 @@ impl Default for Settings {
             sidecar_naming: SidecarNaming::default(),
             series: SeriesSettings::default(),
             ranking: RankingSettings::default(),
+            ai: AiSettings::default(),
         }
     }
 }
@@ -139,6 +152,8 @@ pub struct SettingsUpdate {
     pub series: Option<SeriesSettings>,
     #[ts(optional)]
     pub ranking: Option<RankingSettings>,
+    #[ts(optional)]
+    pub ai: Option<AiSettings>,
 }
 
 /// Why settings could not be read or changed.
@@ -255,6 +270,9 @@ impl SettingsService {
                 ));
             }
             settings.ranking = ranking;
+        }
+        if let Some(ai) = update.ai {
+            settings.ai = ai;
         }
         self.store.save_settings(&settings)?;
         Ok(settings)

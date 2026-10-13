@@ -94,6 +94,19 @@ Commands
    ``places``, ``flags``, ``ratings`` (counts for 0–5 stars), plus
    ``total``, ``first_day`` and ``last_day``.
 
+``ai_status``
+   No arguments. Where local AI models run (:doc:`/features/ai`):
+
+   .. code-block:: json
+
+      { "available": ["webgpu", "cpu"], "choice": "auto", "provider": "webgpu",
+        "problem": null }
+
+   ``available`` lists the providers of this build, preferred first.
+   ``provider`` is the one a tiny test model actually ran on (``null`` if
+   even the CPU failed); ``problem`` says why the chosen provider was not
+   used. The check runs once per choice.
+
 ``analysis_status``
    No arguments. ``{ "analyzed": 120, "total": 300, "running": true }``:
    photos with every analysis done, all photos, and whether workers are

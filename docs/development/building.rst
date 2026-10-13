@@ -25,6 +25,12 @@ needed. Outside it you need:
   On macOS: ``brew install vips libraw libheif`` and
   ``export LIBRARY_PATH=$(brew --prefix)/lib``.
 
+- Network access on the first build: ``ort`` downloads a prebuilt ONNX
+  Runtime for the target from ``cdn.pyke.io`` (checksummed) and caches it in
+  ``~/.cache/ort.pyke.io``. On Linux it brings ``libwebgpu_dawn.so``, which
+  Cargo copies next to the binaries; they find it there (``$ORIGIN``
+  run path). There are no prebuilt binaries for Intel macOS.
+
 .. warning::
 
    Building the full workspace on Windows is not set up yet: it needs
