@@ -61,6 +61,7 @@ async fn serve() -> Result<(), String> {
         sidecars: Arc::new(picturesque_infra::xmp::XmpSidecars),
         pixels: Arc::new(picturesque_infra::images::VipsPixels),
         analyzers: picturesque_app::analysis::default_analyzers(),
+        inference: Arc::new(picturesque_infra::inference::OrtEngine::for_background()),
         cache_dir: data_dir.join("cache"),
     })
     .map_err(|e| e.message)?;

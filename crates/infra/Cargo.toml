@@ -23,6 +23,18 @@ blake3.workspace = true
 libvips.workspace = true
 quick-xml.workspace = true
 ts-rs.workspace = true
+ort.workspace = true
+
+# Execution providers available as prebuilt ONNX Runtime binaries per target
+# (ADR-0006). Intel macOS has no prebuilt binaries.
+[target.'cfg(all(target_os = "linux", target_arch = "x86_64"))'.dependencies]
+ort = { workspace = true, features = ["webgpu"] }
+
+[target.'cfg(windows)'.dependencies]
+ort = { workspace = true, features = ["directml"] }
+
+[target.'cfg(all(target_os = "macos", target_arch = "aarch64"))'.dependencies]
+ort = { workspace = true, features = ["coreml", "webgpu"] }
 
 [dev-dependencies]
 image.workspace = true

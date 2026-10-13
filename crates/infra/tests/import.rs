@@ -35,6 +35,7 @@ fn api(catalog: &Arc<SqliteCatalog>) -> Api {
         sidecars: Arc::new(picturesque_infra::xmp::XmpSidecars),
         pixels: Arc::new(picturesque_infra::images::VipsPixels),
         analyzers: Vec::new(),
+        inference: Arc::new(picturesque_infra::inference::OrtEngine::new(1)),
         cache_dir,
     })
     .unwrap()

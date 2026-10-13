@@ -81,6 +81,18 @@ series (:doc:`/features/series`).
 
 Changing it re-ranks series immediately.
 
+.. _reference-settings-ai:
+
+``ai``
+------
+
+Where local AI models run (:doc:`/features/ai`).
+
+:Type: object with ``provider``
+:Default: ``{ "provider": "auto" }``
+:Values: ``auto``, ``cpu``, ``directml``, ``coreml`` or ``webgpu``. A
+   provider the build lacks, or that fails to start, falls back to the CPU.
+
 Where settings are stored
 -------------------------
 
@@ -97,7 +109,8 @@ API
       { "library_root": null, "path_template": "{year|Undated}/{date}/{name}.{ext}",
         "sidecar_naming": "file_extension",
         "series": { "max_gap_seconds": 30, "max_distance": 16 },
-        "ranking": { "sharpness": 0.6, "exposure": 0.3, "noise": 0.1 } }
+        "ranking": { "sharpness": 0.6, "exposure": 0.3, "noise": 0.1 },
+        "ai": { "provider": "auto" } }
 
 ``update_settings``
    Arguments: any subset of the settings. Unknown fields are rejected.

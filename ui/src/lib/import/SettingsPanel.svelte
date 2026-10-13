@@ -1,10 +1,14 @@
 <script lang="ts">
   import {
+    aiStatus,
     ApiError,
     getSettings,
     previewTemplate,
     templatePresets,
     updateSettings,
+    type AiStatus,
+    type Provider,
+    type ProviderChoice,
     type Settings,
     type SettingsUpdate,
     type TemplatePresetView,
@@ -32,6 +36,15 @@
     exposure: "Exposure",
     noise: "Low noise",
   } as const;
+  let provider = $state<ProviderChoice>("auto");
+  let ai = $state<AiStatus | null>(null);
+  const PROVIDER_LABELS: Record<Provider, string> = {
+    cpu: "CPU",
+    directml: "DirectML",
+    coreml: "Core ML",
+    webgpu: "WebGPU",
+  };
+  const providers = $derived<Provider[]>(ai?.available ?? ["cpu"]);
   let preview = $state<TemplatePreview | null>(null);
   let error = $state<string | null>(null);
   let notice = $state<string | null>(null);
@@ -57,7 +70,8 @@
         template.trim() !== saved.path_template ||
         sidecarNaming !== saved.sidecar_naming ||
         seriesChanged ||
-        rankingChanged),
+        rankingChanged ||
+        provider !== saved.ai.provider),
   );
 
   $effect(() => {
@@ -68,6 +82,13 @@
       })
       .catch((e: unknown) => (error = ApiError.from(e).message));
   });
+
+  /** Probes the provider; slow the first time (it loads a test model). */
+  function loadAi() {
+    aiStatus()
+      .then((status) => (ai = status))
+      .catch((e: unknown) => (error = ApiError.from(e).message));
+  }
 
   // Live preview, debounced while typing.
   $effect(() => {
@@ -90,6 +111,8 @@
     maxGap = settings.series.max_gap_seconds;
     maxDistance = settings.series.max_distance;
     weights = { ...settings.ranking };
+    provider = settings.ai.provider;
+    loadAi();
     onchange?.(settings);
   }
 
@@ -108,6 +131,7 @@
       if (seriesChanged)
         update.series = { max_gap_seconds: maxGap, max_distance: maxDistance };
       if (rankingChanged) update.ranking = { ...weights };
+      if (provider !== saved.ai.provider) update.ai = { provider };
       if (sidecarNaming !== saved.sidecar_naming)
         update.sidecar_naming = sidecarNaming;
       if (libraryRoot.trim() !== (saved.library_root ?? ""))
@@ -243,6 +267,32 @@
     </p>
   </fieldset>
 
+  <div class="field">
+    <label class="label" for="ai-provider">AI acceleration</label>
+    <select id="ai-provider" bind:value={provider} data-testid="ai-provider">
+      <option value="auto">Automatic</option>
+      {#each providers as p (p)}
+        <option value={p}
+          >{p === "cpu" ? "CPU only" : PROVIDER_LABELS[p]}</option
+        >
+      {/each}
+    </select>
+    {#if ai}
+      <p class="hint muted" data-testid="ai-status">
+        {#if ai.provider}
+          Models run on {PROVIDER_LABELS[ai.provider]}.
+        {:else}
+          Local AI is not working on this computer.
+        {/if}
+        {#if ai.problem}
+          <span class="problem" title={ai.problem}>{ai.problem}</span>
+        {/if}
+      </p>
+    {:else}
+      <p class="hint muted">Checking…</p>
+    {/if}
+  </div>
+
   <div class="actions">
     <button
       class="primary"
@@ -283,6 +333,12 @@
   .hint {
     margin: 0;
     font-size: 0.85rem;
+  }
+
+  .problem {
+    display: block;
+    margin-top: 0.2rem;
+    overflow-wrap: anywhere;
   }
 
   .examples {

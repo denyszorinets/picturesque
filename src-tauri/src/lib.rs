@@ -62,6 +62,7 @@ pub fn run() {
                 sidecars: Arc::new(picturesque_infra::xmp::XmpSidecars),
                 pixels: Arc::new(picturesque_infra::images::VipsPixels),
                 analyzers: picturesque_app::analysis::default_analyzers(),
+                inference: Arc::new(picturesque_infra::inference::OrtEngine::for_background()),
                 cache_dir: app.path().app_cache_dir()?,
             })?;
             api.start_background_work();

@@ -13,6 +13,7 @@ use serde::de::DeserializeOwned;
 use serde_json::Value;
 use ts_rs::TS;
 
+use crate::ai::AiService;
 use crate::analysis::technical::{QualityView, TechnicalAnalyzer};
 use crate::analysis::{AnalysisService, Analyzer, PrioritizeArgs};
 use crate::hooks::EventHooks;
@@ -27,6 +28,7 @@ use crate::ports::fs::FileSystem;
 use crate::ports::geocoder::ReverseGeocoder;
 use crate::ports::images::ImageDecoder;
 use crate::ports::imports::ImportStore;
+use crate::ports::inference::InferenceEngine;
 use crate::ports::metadata::MetadataReader;
 use crate::ports::pixels::PixelLoader;
 use crate::ports::settings::SettingsStore;
@@ -98,6 +100,8 @@ pub struct AppContext {
     pub pixels: Arc<dyn PixelLoader>,
     /// Analyses run in the background over every photo.
     pub analyzers: Vec<Arc<dyn Analyzer>>,
+    /// Runs local AI models.
+    pub inference: Arc<dyn InferenceEngine>,
 }
 
 impl fmt::Debug for AppContext {
@@ -118,6 +122,7 @@ pub struct Api {
     sidecars: Arc<SidecarService>,
     analysis: Arc<AnalysisService>,
     series: Arc<SeriesService>,
+    ai: AiService,
 }
 
 impl fmt::Debug for Api {
@@ -171,6 +176,7 @@ impl Api {
         })
         .map_err(import_error)?;
         Ok(Self {
+            ai: AiService::new(ctx.inference, Arc::clone(&ctx.settings_store)),
             settings: SettingsService::new(ctx.settings_store, ctx.fs, Arc::clone(&catalog)),
             imports,
             thumbnails,
@@ -397,6 +403,10 @@ impl Api {
                         .map_err(catalog_error)?,
                 )
             }
+            "ai_status" => {
+                no_args(command, &args)?;
+                respond(self.ai.status().map_err(catalog_error)?)
+            }
             "analysis_status" => {
                 no_args(command, &args)?;
                 respond(self.analysis.status())
@@ -579,7 +589,8 @@ mod tests {
                 "path_template": crate::settings::DEFAULT_PATH_TEMPLATE,
                 "sidecar_naming": "file_extension",
                 "series": { "max_gap_seconds": 30, "max_distance": 16 },
-                "ranking": { "sharpness": 0.6, "exposure": 0.3, "noise": 0.1 }
+                "ranking": { "sharpness": 0.6, "exposure": 0.3, "noise": 0.1 },
+                "ai": { "provider": "auto" }
             })
         );
     }
@@ -610,6 +621,29 @@ mod tests {
 
         assert_eq!(err.code, ApiErrorCode::InvalidArguments);
         assert!(err.message.contains("absolute"));
+    }
+
+    #[test]
+    fn ai_status_follows_the_provider_setting() {
+        let api = api();
+        let status = api.call("ai_status", Value::Null).unwrap();
+        assert_eq!(status["choice"], "auto");
+        assert_eq!(status["provider"], "cpu");
+        assert_eq!(status["available"], json!(["cpu"]));
+
+        let settings = api
+            .call("update_settings", json!({ "ai": { "provider": "webgpu" } }))
+            .unwrap();
+        assert_eq!(settings["ai"]["provider"], "webgpu");
+        let status = api.call("ai_status", Value::Null).unwrap();
+        assert_eq!(status["choice"], "webgpu");
+        assert_eq!(status["provider"], "cpu");
+        assert!(status["problem"].as_str().unwrap().contains("WebGPU"));
+
+        let err = api
+            .call("update_settings", json!({ "ai": { "provider": "tpu" } }))
+            .unwrap_err();
+        assert_eq!(err.code, ApiErrorCode::InvalidArguments);
     }
 
     #[test]

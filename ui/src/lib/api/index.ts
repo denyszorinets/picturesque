@@ -1,3 +1,4 @@
+import type { AiStatus } from "./generated/AiStatus";
 import type { AnalysisStatus } from "./generated/AnalysisStatus";
 import type { AppEvent } from "./generated/AppEvent";
 import type { AppInfo } from "./generated/AppInfo";
@@ -18,7 +19,10 @@ import type { TemplatePreview } from "./generated/TemplatePreview";
 import { selectTransport, type ImageSize } from "./transport";
 
 export { ApiError } from "./error";
+export type { AiStatus } from "./generated/AiStatus";
 export type { AnalysisStatus } from "./generated/AnalysisStatus";
+export type { Provider } from "./generated/Provider";
+export type { ProviderChoice } from "./generated/ProviderChoice";
 export type { AppEvent } from "./generated/AppEvent";
 export type { AppInfo } from "./generated/AppInfo";
 export type { ImportPlanView } from "./generated/ImportPlanView";
@@ -173,4 +177,9 @@ export function chooseBest(
     photo_id: photoId,
     best,
   });
+}
+
+/** Which hardware local AI models run on (probes it when the choice changed). */
+export function aiStatus(): Promise<AiStatus> {
+  return transport.call<AiStatus>("ai_status");
 }

@@ -5,6 +5,7 @@
 
 #![forbid(unsafe_code)]
 
+pub mod ai;
 pub mod analysis;
 pub mod api;
 pub mod hooks;
