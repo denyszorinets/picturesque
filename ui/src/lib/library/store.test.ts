@@ -114,6 +114,43 @@ describe("LibraryStore", () => {
     ]);
   });
 
+  it("shows ranked photos in ranking order under one heading", async () => {
+    const api = backend(10);
+    vi.mocked(api.queryPhotos).mockImplementation(async (q) => ({
+      // The backend returns matches in its own order.
+      photos: (q.photo_ids ?? [])
+        .filter((id) => id !== 7)
+        .sort()
+        .map((id) => photo(id)),
+      next_cursor: null,
+      total: 3,
+    }));
+    vi.mocked(api.photoFacets).mockResolvedValue(facets(3));
+    const store = new LibraryStore(api);
+
+    await store.setFilter(
+      { min_rating: 2 },
+      { ids: [9, 7, 2, 5], label: "Matching “dog”" },
+    );
+
+    expect(api.queryPhotos).toHaveBeenCalledWith({
+      min_rating: 2,
+      photo_ids: [9, 7, 2, 5],
+      limit: 1000,
+    });
+    expect(store.photos.map((p) => p.id)).toEqual([9, 2, 5]);
+    expect(store.sections).toEqual([
+      { day: null, label: "Matching “dog”", start: 0, count: 3 },
+    ]);
+    await store.refresh();
+    expect(store.photos.map((p) => p.id)).toEqual([9, 2, 5]);
+
+    // Without a ranking, the timeline is back.
+    vi.mocked(api.photoFacets).mockResolvedValue(facets(10));
+    await store.setFilter({});
+    expect(store.sections[0]!.day).toBe("2026-10-12");
+  });
+
   it("lists the cities of a section's loaded photos", async () => {
     const store = new LibraryStore(
       backend(5, (i) => (i < 3 ? "Lisbon" : "Porto")),

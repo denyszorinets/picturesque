@@ -1,29 +1,11 @@
-import { readFileSync } from "node:fs";
-import { createServer, type Server } from "node:http";
+import type { Server } from "node:http";
 import { expect, test } from "@playwright/test";
-import { call } from "./helpers";
+import { call, serveModels } from "./helpers";
 
-// Serves the test model at the URLs in fixtures/models.json.
-const MODEL = readFileSync(
-  new URL(
-    "../../crates/infra/tests/fixtures/onnx/affine.onnx",
-    import.meta.url,
-  ),
-);
 let server: Server;
 
 test.beforeAll(async () => {
-  server = createServer((req, res) => {
-    if (req.url === "/affine.onnx") {
-      res.writeHead(200, { "content-length": MODEL.length });
-      res.end(MODEL);
-    } else {
-      res.writeHead(404).end();
-    }
-  });
-  await new Promise<void>((resolve) =>
-    server.listen(5175, "127.0.0.1", resolve),
-  );
+  server = await serveModels();
 });
 
 test.afterAll(() => {
@@ -79,5 +61,7 @@ test("downloads, verifies and removes models", async ({ page, request }) => {
     "list_models",
     null,
   );
-  expect(models.map((m) => m.state)).toEqual(["not_installed", "failed"]);
+  const state = (id: string) => models.find((m) => m.id === id)?.state;
+  expect(state("e2e-affine")).toBe("not_installed");
+  expect(state("e2e-corrupt")).toBe("failed");
 });

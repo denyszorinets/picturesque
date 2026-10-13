@@ -3,6 +3,11 @@
 //! The prebuilt runtime is linked statically; which execution providers it
 //! has depends on the target (see `Cargo.toml`). Sessions are created per
 //! model with the user's provider choice and fall back to CPU.
+//!
+//! GPU stacks (Dawn and Vulkan drivers) are not reliably thread-safe while
+//! devices are created: creating two sessions at once crashed or hung in
+//! tests. Sessions are therefore created one at a time, and models on GPU
+//! providers run one at a time (the GPU is shared anyway).
 
 use std::sync::Mutex;
 
@@ -30,6 +35,11 @@ const GPU_PROVIDERS: &[Provider] = if cfg!(windows) {
     &[]
 };
 
+/// Held while creating any session.
+static CREATING: Mutex<()> = Mutex::new(());
+/// Held while running a model on a GPU provider.
+static GPU: Mutex<()> = Mutex::new(());
+
 /// ONNX Runtime with the providers of this build.
 #[derive(Debug, Clone)]
 pub struct OrtEngine {
@@ -51,6 +61,7 @@ impl OrtEngine {
     }
 
     fn session(&self, model: ModelSource<'_>, provider: Provider) -> Result<Session, String> {
+        let _creating = CREATING.lock().unwrap_or_else(|e| e.into_inner());
         let mut builder = Session::builder()
             .and_then(|b| b.with_intra_threads(self.threads).map_err(Into::into))
             .map_err(|e| e.to_string())?;
@@ -160,6 +171,9 @@ fn to_value(tensor: Tensor) -> Result<(String, DynValue), InferenceError> {
         TensorData::F32(data) => OrtTensor::from_array((shape, data))
             .map_err(error)?
             .into_dyn(),
+        TensorData::I32(data) => OrtTensor::from_array((shape, data))
+            .map_err(error)?
+            .into_dyn(),
         TensorData::I64(data) => OrtTensor::from_array((shape, data))
             .map_err(error)?
             .into_dyn(),
@@ -181,6 +195,8 @@ impl Model for OrtModel {
             .into_iter()
             .map(to_value)
             .collect::<Result<Vec<_>, _>>()?;
+        let _gpu =
+            (self.provider != Provider::Cpu).then(|| GPU.lock().unwrap_or_else(|e| e.into_inner()));
         let mut session = self.session.lock().expect("session lock");
         let outputs = session.run(inputs).map_err(error)?;
         outputs
@@ -194,6 +210,10 @@ impl Model for OrtModel {
                     TensorElementType::Float32 => {
                         let (shape, data) = value.try_extract_tensor::<f32>().map_err(error)?;
                         (shape.to_vec(), TensorData::F32(data.to_vec()))
+                    }
+                    TensorElementType::Int32 => {
+                        let (shape, data) = value.try_extract_tensor::<i32>().map_err(error)?;
+                        (shape.to_vec(), TensorData::I32(data.to_vec()))
                     }
                     TensorElementType::Int64 => {
                         let (shape, data) = value.try_extract_tensor::<i64>().map_err(error)?;

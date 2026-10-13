@@ -32,5 +32,45 @@
         "size": 158
       }
     ]
+  },
+  {
+    "id": "clip-image",
+    "name": "Test CLIP image encoder",
+    "purpose": "Stands in for CLIP in end-to-end tests",
+    "version": 1,
+    "license": "MIT",
+    "license_url": "https://opensource.org/license/mit",
+    "homepage": "https://github.com/denyszorinets/picturesque",
+    "files": [
+      {
+        "name": "visual/model.onnx",
+        "url": "http://127.0.0.1:5175/tiny_clip.onnx",
+        "sha256": "17af5f0a559cee429f80678a7bc9b55843393cd6f9e8069cdcc146b9f02e44f6",
+        "size": 9451
+      }
+    ]
+  },
+  {
+    "id": "clip-text",
+    "name": "Test CLIP text encoder",
+    "purpose": "Stands in for CLIP in end-to-end tests",
+    "version": 1,
+    "license": "MIT",
+    "license_url": "https://opensource.org/license/mit",
+    "homepage": "https://github.com/denyszorinets/picturesque",
+    "files": [
+      {
+        "name": "textual/model.onnx",
+        "url": "http://127.0.0.1:5175/tiny_clip_text.onnx",
+        "sha256": "f7d33308be6213571531b1cb4b94c2932639a8d46811d7edc7dcbafd1e83d694",
+        "size": 9520
+      },
+      {
+        "name": "textual/merges.txt",
+        "url": "http://127.0.0.1:5175/tiny_merges.txt",
+        "sha256": "dff2d06a4f304a99a0514344317f67d23c4ab95c3844e911ac0aaa7021a1af09",
+        "size": 27
+      }
+    ]
   }
 ]

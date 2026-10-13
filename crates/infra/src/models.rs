@@ -134,6 +134,13 @@ impl ModelStore for HttpModelStore {
         result
     }
 
+    fn read(&self, model: &ModelSpec, file: &ModelFile) -> Result<Vec<u8>, String> {
+        if !self.has(model, file) {
+            return Err(format!("{} is not downloaded", file.name));
+        }
+        fs::read(self.path(model, file)).map_err(|e| e.to_string())
+    }
+
     fn prune(&self, model: &ModelSpec) -> Result<(), String> {
         let keep = format!("v{}", model.version);
         let Ok(entries) = fs::read_dir(self.root.join(&model.id)) else {

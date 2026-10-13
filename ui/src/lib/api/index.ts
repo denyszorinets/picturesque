@@ -1,6 +1,7 @@
 import type { AiStatus } from "./generated/AiStatus";
 import type { AnalysisStatus } from "./generated/AnalysisStatus";
 import type { ModelView } from "./generated/ModelView";
+import type { SimilarPhoto } from "./generated/SimilarPhoto";
 import type { AppEvent } from "./generated/AppEvent";
 import type { AppInfo } from "./generated/AppInfo";
 import type { ImportPlanView } from "./generated/ImportPlanView";
@@ -23,6 +24,7 @@ export { ApiError } from "./error";
 export type { AiStatus } from "./generated/AiStatus";
 export type { AnalysisStatus } from "./generated/AnalysisStatus";
 export type { ModelView } from "./generated/ModelView";
+export type { SimilarPhoto } from "./generated/SimilarPhoto";
 export type { Provider } from "./generated/Provider";
 export type { ProviderChoice } from "./generated/ProviderChoice";
 export type { AppEvent } from "./generated/AppEvent";
@@ -203,4 +205,9 @@ export function cancelModel(id: string): Promise<ModelView> {
 /** Deletes a downloaded model. */
 export function removeModel(id: string): Promise<ModelView> {
   return transport.call<ModelView>("remove_model", { id });
+}
+
+/** Photos matching a description, best first (needs the CLIP models). */
+export function searchPhotos(text: string): Promise<SimilarPhoto[]> {
+  return transport.call<SimilarPhoto[]>("search_photos", { text });
 }

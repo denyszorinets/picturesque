@@ -37,6 +37,7 @@ use crate::ports::models::{ModelSpec, ModelStore};
 use crate::ports::pixels::PixelLoader;
 use crate::ports::settings::SettingsStore;
 use crate::ports::sidecars::SidecarStore;
+use crate::search::{DEFAULT_LIMIT as SEARCH_LIMIT, SearchArgs, SearchError, TextSearch};
 use crate::series::{ChooseBestArgs, EditSeriesArgs, SeriesService};
 use crate::settings::{SettingsError, SettingsService, SettingsUpdate};
 use crate::sidecars::SidecarService;
@@ -133,6 +134,7 @@ pub struct Api {
     ai: AiService,
     models: Arc<ModelService>,
     embeddings: Arc<EmbeddingIndex>,
+    search: TextSearch,
 }
 
 impl fmt::Debug for Api {
@@ -199,7 +201,14 @@ impl Api {
             events,
         })
         .map_err(import_error)?;
+        let search = TextSearch::new(
+            Arc::clone(&models),
+            Arc::clone(&ctx.inference),
+            Arc::clone(&ctx.settings_store),
+            Arc::clone(&embeddings),
+        );
         Ok(Self {
+            search,
             ai: AiService::new(ctx.inference, Arc::clone(&ctx.settings_store)),
             settings: SettingsService::new(ctx.settings_store, ctx.fs, Arc::clone(&catalog)),
             imports,
@@ -446,6 +455,14 @@ impl Api {
                         .map_err(catalog_error)?,
                 )
             }
+            "search_photos" => {
+                let SearchArgs { text, limit } = parse_args(command, args)?;
+                respond(
+                    self.search
+                        .search(&text, limit.unwrap_or(SEARCH_LIMIT))
+                        .map_err(search_error)?,
+                )
+            }
             "list_models" => {
                 no_args(command, &args)?;
                 respond(self.models.list())
@@ -533,6 +550,15 @@ impl Api {
 /// Half the cores (at least one), leaving the rest for the UI and imports.
 fn analysis_workers() -> usize {
     std::thread::available_parallelism().map_or(1, |n| (n.get() / 2).max(1))
+}
+
+fn search_error(e: SearchError) -> ApiError {
+    match e {
+        SearchError::Invalid(_) | SearchError::ModelMissing(_) => {
+            ApiError::new(ApiErrorCode::InvalidArguments, e.to_string())
+        }
+        SearchError::Failed(_) => ApiError::internal(e.to_string()),
+    }
 }
 
 fn model_error(e: ModelError) -> ApiError {

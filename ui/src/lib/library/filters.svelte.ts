@@ -42,6 +42,7 @@ interface Saved {
   place: PlaceFilter | null;
   minScores: Record<Score, number>;
   bestOnly: boolean;
+  search: string;
   stacked: boolean;
   sort: PhotoSort;
 }
@@ -66,6 +67,8 @@ export class Filters {
   minScores = $state<Record<Score, number>>({ ...NO_SCORES });
   /** Hide series members other than the best photo. */
   bestOnly = $state(false);
+  /** A description to search for; results replace the timeline. */
+  search = $state("");
   /** Timeline order. Not a filter: kept by `clear`. */
   sort = $state<PhotoSort>("captured_desc");
   /** Show each series as its best photo. Not a filter: kept by `clear`. */
@@ -93,6 +96,7 @@ export class Filters {
         this.place = saved.place ?? null;
         this.minScores = { ...NO_SCORES, ...saved.minScores };
         this.bestOnly = saved.bestOnly ?? false;
+        this.search = saved.search ?? "";
         this.stacked = saved.stacked ?? false;
         this.sort = saved.sort ?? "captured_desc";
       }
@@ -173,6 +177,11 @@ export class Filters {
     }
     if (this.bestOnly)
       chips.push({ label: "Best only", clear: () => (this.bestOnly = false) });
+    if (this.search)
+      chips.push({
+        label: `“${this.search}”`,
+        clear: () => (this.search = ""),
+      });
     return chips;
   }
 
@@ -197,6 +206,7 @@ export class Filters {
     this.place = null;
     this.minScores = { ...NO_SCORES };
     this.bestOnly = false;
+    this.search = "";
   }
 
   /** Saves the filters for the rest of the session. */
@@ -211,6 +221,7 @@ export class Filters {
       place: this.place,
       minScores: this.minScores,
       bestOnly: this.bestOnly,
+      search: this.search,
       stacked: this.stacked,
       sort: this.sort,
     };

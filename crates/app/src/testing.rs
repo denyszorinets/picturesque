@@ -932,7 +932,8 @@ impl crate::ports::pixels::PixelLoader for FakePixels {
 }
 
 /// An inference engine whose GPU providers always work and whose models
-/// echo their inputs; other providers fall back to CPU.
+/// echo their inputs (integers as floats); other providers fall back to
+/// CPU.
 #[derive(Debug, Default)]
 pub struct FakeInference {
     gpus: Vec<crate::ports::inference::Provider>,
@@ -980,7 +981,23 @@ impl crate::ports::inference::Model for EchoModel {
         &self,
         inputs: Vec<crate::ports::inference::Tensor>,
     ) -> Result<Vec<crate::ports::inference::Tensor>, crate::ports::inference::InferenceError> {
-        Ok(inputs)
+        use crate::ports::inference::TensorData;
+        // Integer inputs (token ids) come back as floats, like embeddings.
+        Ok(inputs
+            .into_iter()
+            .map(|mut t| {
+                t.data = match t.data {
+                    TensorData::I32(v) => {
+                        TensorData::F32(v.into_iter().map(|x| x as f32).collect())
+                    }
+                    TensorData::I64(v) => {
+                        TensorData::F32(v.into_iter().map(|x| x as f32).collect())
+                    }
+                    f => f,
+                };
+                t
+            })
+            .collect())
     }
 }
 
@@ -1036,9 +1053,27 @@ pub struct MemoryModelStore {
     pub served: Mutex<HashMap<String, Vec<u8>>>,
     /// Stored files: (model id, version, file name) → bytes.
     pub files: Mutex<HashMap<(String, u32, String), Vec<u8>>>,
+    /// Files that count as stored whatever their bytes (see `install`).
+    pub installed: Mutex<std::collections::HashSet<(String, u32, String)>>,
     /// Blocks fetches until set to `false` (to observe downloads).
     pub hold: std::sync::atomic::AtomicBool,
     pub fetches: Mutex<Vec<String>>,
+}
+
+impl MemoryModelStore {
+    /// Marks every file of `model` as downloaded, with `contents` for the
+    /// files that need them (others read as empty).
+    pub fn install(&self, model: &crate::ports::models::ModelSpec, contents: &[(&str, &[u8])]) {
+        for f in &model.files {
+            let key = (model.id.clone(), model.version, f.name.clone());
+            let bytes = contents
+                .iter()
+                .find(|(name, _)| *name == f.name)
+                .map_or_else(Vec::new, |(_, b)| b.to_vec());
+            self.files.lock().unwrap().insert(key.clone(), bytes);
+            self.installed.lock().unwrap().insert(key);
+        }
+    }
 }
 
 impl crate::ports::models::ModelStore for MemoryModelStore {
@@ -1058,11 +1093,14 @@ impl crate::ports::models::ModelStore for MemoryModelStore {
         model: &crate::ports::models::ModelSpec,
         file: &crate::ports::models::ModelFile,
     ) -> bool {
-        self.files
-            .lock()
-            .unwrap()
-            .get(&(model.id.clone(), model.version, file.name.clone()))
-            .is_some_and(|b| b.len() as u64 == file.size)
+        let key = (model.id.clone(), model.version, file.name.clone());
+        self.installed.lock().unwrap().contains(&key)
+            || self
+                .files
+                .lock()
+                .unwrap()
+                .get(&key)
+                .is_some_and(|b| b.len() as u64 == file.size)
     }
 
     fn fetch(
@@ -1101,11 +1139,28 @@ impl crate::ports::models::ModelStore for MemoryModelStore {
         Ok(())
     }
 
+    fn read(
+        &self,
+        model: &crate::ports::models::ModelSpec,
+        file: &crate::ports::models::ModelFile,
+    ) -> Result<Vec<u8>, String> {
+        self.files
+            .lock()
+            .unwrap()
+            .get(&(model.id.clone(), model.version, file.name.clone()))
+            .cloned()
+            .ok_or_else(|| "not downloaded".into())
+    }
+
     fn prune(&self, model: &crate::ports::models::ModelSpec) -> Result<(), String> {
         self.files
             .lock()
             .unwrap()
             .retain(|(id, version, _), _| id != &model.id || *version == model.version);
+        self.installed
+            .lock()
+            .unwrap()
+            .retain(|(id, version, _)| id != &model.id || *version == model.version);
         Ok(())
     }
 
@@ -1114,6 +1169,10 @@ impl crate::ports::models::ModelStore for MemoryModelStore {
             .lock()
             .unwrap()
             .retain(|(id, _, _), _| id != &model.id);
+        self.installed
+            .lock()
+            .unwrap()
+            .retain(|(id, _, _)| id != &model.id);
         Ok(())
     }
 }

@@ -1,4 +1,5 @@
-import { utimesSync } from "node:fs";
+import { readFileSync, utimesSync } from "node:fs";
+import { createServer, type Server } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, type APIRequestContext } from "@playwright/test";
@@ -66,4 +67,35 @@ export async function importFiles(
   await waitFor(request, plan.run_id, "planned");
   await call(request, "start_import", { run_id: plan.run_id });
   await waitFor(request, plan.run_id, "completed");
+}
+
+/**
+ * Serves the ONNX test fixtures at the URLs of fixtures/models.json
+ * (http://127.0.0.1:5175/<file>).
+ */
+export async function serveModels(): Promise<Server> {
+  const fixtures = new URL(
+    "../../crates/infra/tests/fixtures/onnx/",
+    import.meta.url,
+  );
+  const files = [
+    "affine.onnx",
+    "tiny_clip.onnx",
+    "tiny_clip_text.onnx",
+    "tiny_merges.txt",
+  ];
+  const server = createServer((req, res) => {
+    const name = files.find((f) => req.url === `/${f}`);
+    if (!name) {
+      res.writeHead(404).end();
+      return;
+    }
+    const body = readFileSync(new URL(name, fixtures));
+    res.writeHead(200, { "content-length": body.length });
+    res.end(body);
+  });
+  await new Promise<void>((resolve) =>
+    server.listen(5175, "127.0.0.1", resolve),
+  );
+  return server;
 }

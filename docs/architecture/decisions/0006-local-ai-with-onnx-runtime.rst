@@ -158,6 +158,9 @@ predictor (Apache-2.0) on **OpenAI CLIP ViT-L/14** (MIT) 0.80. The app
 therefore uses ViT-L/14, exported to ONNX by the Immich project and pinned
 to a commit: a 1.2 GB download and about 0.3 s per photo on a laptop CPU.
 Its 768-dimensional embeddings still fit in memory for the whole library.
+:issue:`45` added the matching text encoder (496 MB) for text search, with
+CLIP's byte-pair tokenizer reimplemented in ``picturesque-core`` (its
+vocabulary is rebuilt from the merge list, as in OpenAI's reference code).
 
 Follow-up
 ~~~~~~~~~

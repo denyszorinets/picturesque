@@ -93,6 +93,9 @@ even when a change covered photos that had different ones.
 Filters
 -------
 
+The **search box** above the timeline finds photos by describing them
+(:ref:`features-ai-search`).
+
 The **Filters** panel beside the timeline (toggle it with the
 **Filters** button) narrows the timeline to matching photos:
 

@@ -85,6 +85,8 @@ pub trait ModelStore: Send + Sync {
         file: &ModelFile,
         progress: &mut dyn FnMut(u64) -> bool,
     ) -> Result<(), FetchError>;
+    /// The contents of a stored file (small files such as tokenizers).
+    fn read(&self, model: &ModelSpec, file: &ModelFile) -> Result<Vec<u8>, String>;
     /// Deletes the files of other versions of `model`.
     fn prune(&self, model: &ModelSpec) -> Result<(), String>;
     /// Deletes every version of `model`.
