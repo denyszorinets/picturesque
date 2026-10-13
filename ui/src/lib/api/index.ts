@@ -1,6 +1,8 @@
 import type { AiStatus } from "./generated/AiStatus";
 import type { AnalysisStatus } from "./generated/AnalysisStatus";
 import type { ModelView } from "./generated/ModelView";
+import type { ExportArgs } from "./generated/ExportArgs";
+import type { ExportStatus } from "./generated/ExportStatus";
 import type { RejectMovePlan } from "./generated/RejectMovePlan";
 import type { RejectMoveResult } from "./generated/RejectMoveResult";
 import type { SimilarPhoto } from "./generated/SimilarPhoto";
@@ -26,6 +28,8 @@ export { ApiError } from "./error";
 export type { AiStatus } from "./generated/AiStatus";
 export type { AnalysisStatus } from "./generated/AnalysisStatus";
 export type { ModelView } from "./generated/ModelView";
+export type { ExportArgs } from "./generated/ExportArgs";
+export type { ExportStatus } from "./generated/ExportStatus";
 export type { RejectMovePlan } from "./generated/RejectMovePlan";
 export type { RejectMoveResult } from "./generated/RejectMoveResult";
 export type { SimilarPhoto } from "./generated/SimilarPhoto";
@@ -229,4 +233,18 @@ export function moveRejects(): Promise<RejectMoveResult> {
 /** Moves the latest batch of moved rejects back. */
 export function undoRejectMove(batch: number): Promise<RejectMoveResult> {
   return transport.call<RejectMoveResult>("undo_reject_move", { batch });
+}
+
+/** Starts exporting photos (by default the picks); progress arrives as
+ * `export_progress`. */
+export function startExport(args: ExportArgs): Promise<ExportStatus> {
+  return transport.call<ExportStatus>("start_export", args);
+}
+
+export function exportStatus(): Promise<ExportStatus> {
+  return transport.call<ExportStatus>("export_status");
+}
+
+export function cancelExport(): Promise<ExportStatus> {
+  return transport.call<ExportStatus>("cancel_export");
 }

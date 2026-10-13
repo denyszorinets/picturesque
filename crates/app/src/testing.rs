@@ -431,13 +431,70 @@ impl PhotoCatalog for MemoryCatalog {
         Ok(())
     }
 
+    /// Only the flag and photo-id filters, newest (or oldest) first, in one
+    /// page;
+    /// queries are tested in full against SQLite.
     fn query(
         &self,
-        _query: &crate::library::PhotoQuery,
+        query: &crate::library::PhotoQuery,
     ) -> Result<crate::library::PhotoPage, CatalogError> {
-        Err(CatalogError::Storage(
-            "queries are tested against SQLite".into(),
-        ))
+        let decisions = self.decisions.lock().unwrap().clone();
+        let mut photos: Vec<Photo> = self
+            .photos
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|p| {
+                let flag = decisions.get(&p.id).map(|d| d.flag).unwrap_or_default();
+                query.flags.as_ref().is_none_or(|f| f.contains(&flag))
+                    && query
+                        .photo_ids
+                        .as_ref()
+                        .is_none_or(|ids| ids.contains(&p.id.0))
+            })
+            .cloned()
+            .collect();
+        photos.sort_by(|a, b| {
+            let t = |p: &Photo| p.metadata.captured_at.map(|t| t.local);
+            t(b).cmp(&t(a)).then(b.id.cmp(&a.id))
+        });
+        if query.sort == Some(crate::library::PhotoSort::CapturedAsc) {
+            photos.reverse();
+        }
+        let summaries: Vec<crate::library::PhotoSummary> = photos
+            .iter()
+            .map(|p| {
+                let d = decisions.get(&p.id).copied().unwrap_or_default();
+                crate::library::PhotoSummary {
+                    id: p.id.0,
+                    captured_at: None,
+                    day: None,
+                    camera: None,
+                    lens: None,
+                    city: None,
+                    country: None,
+                    flag: d.flag,
+                    rating: d.rating.stars(),
+                    width: None,
+                    height: None,
+                    has_raw: p.assets.raw().is_some(),
+                    file_name: String::new(),
+                    series_id: None,
+                    best_in_series: false,
+                    series_size: 0,
+                    quality: None,
+                    aesthetic: None,
+                    eyes_closed: None,
+                    faces: 0,
+                }
+            })
+            .collect();
+        let total = summaries.len();
+        Ok(crate::library::PhotoPage {
+            photos: summaries,
+            next_cursor: None,
+            total,
+        })
     }
 
     fn facets(

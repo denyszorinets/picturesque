@@ -82,7 +82,8 @@ impl EventSink for EventHooks {
             }
             AppEvent::ImportProgress(_)
             | AppEvent::SeriesChanged(_)
-            | AppEvent::ModelProgress(_) => {}
+            | AppEvent::ModelProgress(_)
+            | AppEvent::ExportProgress(_) => {}
         }
     }
 }

@@ -20,6 +20,7 @@ use crate::analysis::technical::{QualityView, TechnicalAnalyzer};
 use crate::analysis::{AnalysisService, Analyzer, PrioritizeArgs};
 use crate::embeddings::{DEFAULT_LIMIT, EmbeddingIndex, MAX_LIMIT, SimilarArgs};
 use crate::explain::{self, SeriesPlace, Signals};
+use crate::export::{ExportArgs, ExportError, ExportService};
 use crate::hooks::EventHooks;
 use crate::import::{Deps, ImportError, ImportService, PlanImportArgs, RunArgs};
 use crate::info;
@@ -158,6 +159,7 @@ pub struct Api {
     embeddings: Arc<EmbeddingIndex>,
     search: TextSearch,
     rejects: RejectsService,
+    export: Arc<ExportService>,
 }
 
 impl fmt::Debug for Api {
@@ -170,6 +172,7 @@ impl Api {
     /// Fails only if import runs left over from a previous session cannot
     /// be marked interrupted (the catalog is unusable).
     pub fn new(ctx: AppContext) -> Result<Self, ApiError> {
+        let decoder = Arc::clone(&ctx.decoder);
         let thumbnails = Arc::new(ThumbnailService::new(
             Arc::clone(&ctx.catalog),
             Arc::clone(&ctx.settings_store),
@@ -196,6 +199,14 @@ impl Api {
             Arc::clone(&ctx.inference),
             Arc::clone(&ctx.settings_store),
         )));
+        let export = Arc::new(ExportService::new(
+            Arc::clone(&ctx.catalog),
+            Arc::clone(&ctx.fs),
+            decoder,
+            Arc::clone(&ctx.pixels),
+            Arc::clone(&ctx.settings_store),
+            Arc::clone(&events) as Arc<dyn EventSink>,
+        ));
         let analysis = Arc::new(AnalysisService::new(
             Arc::clone(&ctx.catalog),
             Arc::clone(&thumbnails),
@@ -241,6 +252,7 @@ impl Api {
             Arc::clone(&ctx.settings_store),
         );
         Ok(Self {
+            export,
             search,
             rejects,
             ai: AiService::new(ctx.inference, Arc::clone(&ctx.settings_store)),
@@ -528,6 +540,18 @@ impl Api {
                         .map_err(catalog_error)?,
                 )
             }
+            "start_export" => {
+                let export: ExportArgs = parse_args(command, args)?;
+                respond(self.export.start(export).map_err(export_error)?)
+            }
+            "export_status" => {
+                no_args(command, &args)?;
+                respond(self.export.status())
+            }
+            "cancel_export" => {
+                no_args(command, &args)?;
+                respond(self.export.cancel())
+            }
             "plan_reject_move" => {
                 no_args(command, &args)?;
                 respond(self.rejects.plan().map_err(rejects_error)?)
@@ -635,6 +659,15 @@ impl Api {
 /// Half the cores (at least one), leaving the rest for the UI and imports.
 fn analysis_workers() -> usize {
     std::thread::available_parallelism().map_or(1, |n| (n.get() / 2).max(1))
+}
+
+fn export_error(e: ExportError) -> ApiError {
+    match e {
+        ExportError::Invalid(_) | ExportError::Busy => {
+            ApiError::new(ApiErrorCode::InvalidArguments, e.to_string())
+        }
+        ExportError::Failed(_) => ApiError::internal(e.to_string()),
+    }
 }
 
 fn rejects_error(e: RejectsError) -> ApiError {

@@ -4,6 +4,7 @@ use serde::Serialize;
 use ts_rs::TS;
 
 use crate::analysis::AnalysisStatus;
+use crate::export::ExportStatus;
 use crate::import::ImportStatus;
 use crate::models::ModelView;
 use crate::series::SeriesStatus;
@@ -18,6 +19,7 @@ pub enum AppEvent {
     AnalysisProgress(AnalysisStatus),
     SeriesChanged(SeriesStatus),
     ModelProgress(ModelView),
+    ExportProgress(ExportStatus),
 }
 
 /// Delivers events to the UI: Tauri events in the desktop app,

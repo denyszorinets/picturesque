@@ -2,6 +2,7 @@
   import * as api from "../api";
   import { AnalysisProgress } from "./analysis.svelte";
   import Compare from "./Compare.svelte";
+  import ExportDialog from "./ExportDialog.svelte";
   import RejectsMove from "./RejectsMove.svelte";
   import { Culling } from "./culling.svelte";
   import FilterPanel from "./FilterPanel.svelte";
@@ -150,6 +151,7 @@
   }
 
   let seriesError = $state<string | null>(null);
+  let exporting = $state(false);
 
   /** `s` / `j`: splits the series before the target photo, or joins it to
    * the photo taken before it; again removes the correction. */
@@ -258,7 +260,7 @@
       return;
     // The library is hidden while the Import tab is shown; the compare
     // view handles its own keys.
-    if (!section?.offsetParent || compare) return;
+    if (!section?.offsetParent || compare || exporting) return;
     if (e.key === "/" && loupe === null) {
       e.preventDefault();
       searchInput?.focus();
@@ -406,6 +408,12 @@
         title="Compare the selected photos, or the selected photo's series (C)"
         data-testid="open-compare">Compare</button
       >
+      <button
+        class="small"
+        onclick={() => (exporting = true)}
+        title="Copy picks, the photos in view or the selection to a folder"
+        data-testid="open-export">Export…</button
+      >
       <RejectsMove
         rejected={store.facets.flags.find((f) => f.flag === "reject")?.count ??
           0}
@@ -467,6 +475,19 @@
         {/if}
       </div>
     </div>
+    {#if exporting}
+      <ExportDialog
+        view={filters.search
+          ? { photo_ids: store.photos.map((p) => p.id) }
+          : filters.toQuery()}
+        viewCount={store.total}
+        selected={[...selection.selected]
+          .map((i) => store.photos[i]?.id)
+          .filter((id): id is number => id !== undefined)}
+        picks={store.facets.flags.find((f) => f.flag === "pick")?.count ?? 0}
+        onclose={() => (exporting = false)}
+      />
+    {/if}
     {#if compare}
       <Compare
         ids={compare.ids}

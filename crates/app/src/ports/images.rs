@@ -29,4 +29,19 @@ pub trait ImageDecoder: Send + Sync {
         max_edge: u32,
         dest: &Path,
     ) -> Result<Rendered, String>;
+
+    /// Like `render`, for exporting: JPEG `quality` (1–100) and the
+    /// source's metadata (EXIF, XMP, colour profile) kept where possible.
+    fn export_jpeg(
+        &self,
+        source: &Path,
+        format: MediaFormat,
+        orientation: Orientation,
+        max_edge: u32,
+        quality: u8,
+        dest: &Path,
+    ) -> Result<Rendered, String> {
+        let _ = quality;
+        self.render(source, format, orientation, max_edge, dest)
+    }
 }
