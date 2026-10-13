@@ -48,4 +48,9 @@ aesthetic: AestheticView | null,
  * Faces found, largest first; `null` until the face models analyzed
  * the photo.
  */
-faces: Array<FaceView> | null, };
+faces: Array<FaceView> | null, 
+/**
+ * Combined quality, 0–1, from every analysis so far
+ * (`core::ranking::photo_quality`); `null` before technical analysis.
+ */
+score: number | null, };

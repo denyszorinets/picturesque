@@ -347,6 +347,8 @@ pub struct MemoryCatalog {
     pub series_edits: Mutex<HashMap<PhotoId, picturesque_core::series::SeriesEdit>>,
     pub series: Mutex<Vec<crate::ports::catalog::StoredSeries>>,
     pub best_choices: Mutex<Vec<PhotoId>>,
+    /// Combined quality scores.
+    pub scores: Mutex<HashMap<PhotoId, f32>>,
 }
 
 impl MemoryCatalog {
@@ -706,6 +708,11 @@ impl PhotoCatalog for MemoryCatalog {
             .collect();
         ids.sort();
         Ok(ids)
+    }
+
+    fn replace_scores(&self, scores: &[(PhotoId, f32)]) -> Result<(), CatalogError> {
+        *self.scores.lock().unwrap() = scores.iter().copied().collect();
+        Ok(())
     }
 
     fn media_sizes(&self) -> Result<StdHashSet<u64>, CatalogError> {

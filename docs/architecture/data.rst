@@ -146,6 +146,9 @@ how many have run. Each migration runs in its own transaction.
      - ``0008_series_ranking.sql``
      - ``series_member.rank`` / ``score`` / ``best``; ``best_choice``
        (the user's best-photo choices)
+   * - 9
+     - ``0009_photo_score.sql``
+     - ``photo_score`` (each photo's combined quality score, derived)
 
 Conventions:
 

@@ -45,6 +45,7 @@ use crate::sidecars::SidecarService;
 use crate::templates::{self, PreviewTemplateArgs};
 use crate::thumbnails::{ImageSize, ThumbnailError, ThumbnailService};
 use picturesque_core::photo::PhotoId;
+use picturesque_core::ranking::Candidate;
 
 /// Category of an API failure. Transports map it to their own error form
 /// (for example an HTTP status code).
@@ -421,6 +422,17 @@ impl Api {
                 detail.quality = current(TechnicalAnalyzer::ID).and_then(QualityView::from_result);
                 detail.aesthetic = current(ClipAnalyzer::ID).and_then(AestheticView::from_result);
                 detail.faces = current(FaceAnalyzer::ID).and_then(crate::analysis::faces::faces);
+                detail.score = picturesque_core::ranking::photo_quality(&Candidate {
+                    id,
+                    scores: current(TechnicalAnalyzer::ID)
+                        .and_then(|r| serde_json::from_value(r.clone()).ok()),
+                    rejected: false,
+                    aesthetic: detail.aesthetic.map(|a| a.score),
+                    face: detail
+                        .faces
+                        .as_deref()
+                        .and_then(crate::analysis::faces::signal),
+                });
                 respond(detail)
             }
             "set_decisions" => {
@@ -689,7 +701,7 @@ mod tests {
                 "path_template": crate::settings::DEFAULT_PATH_TEMPLATE,
                 "sidecar_naming": "file_extension",
                 "series": { "max_gap_seconds": 30, "max_distance": 16 },
-                "ranking": { "sharpness": 0.6, "exposure": 0.3, "noise": 0.1 },
+                "ranking": { "sharpness": 0.6, "exposure": 0.3, "noise": 0.1, "aesthetic": 0.4 },
                 "ai": { "provider": "auto" }
             })
         );

@@ -11,8 +11,14 @@ use std::collections::HashMap;
 use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 
+use crate::clip::Embedding;
 use crate::photo::PhotoId;
 use crate::similarity::Signature;
+
+/// Photos whose CLIP embeddings are at least this similar look alike even
+/// when their perceptual hashes differ (zoomed or reframed retakes;
+/// `spikes/series/results.md`).
+pub const EMBEDDING_SIMILARITY: f32 = 0.87;
 
 /// How close photos must be to form a series.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -63,12 +69,32 @@ impl SeriesEdit {
 
 /// What series detection knows about a photo.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct SeriesInput {
+pub struct SeriesInput<'a> {
     pub id: PhotoId,
     pub captured: Option<NaiveDateTime>,
-    /// `None` until analyzed (or if analysis failed); such photos are
-    /// grouped by time alone.
+    /// `None` until analyzed (or if analysis failed).
     pub signature: Option<Signature>,
+    /// The CLIP embedding, once computed. Photos with neither signal are
+    /// grouped by time alone.
+    pub embedding: Option<&'a Embedding>,
+}
+
+impl SeriesInput<'_> {
+    /// Whether two photos look alike; `None` when no signal compares them.
+    fn alike(&self, other: &Self, max_distance: u32) -> Option<bool> {
+        let hash = match (self.signature, other.signature) {
+            (Some(a), Some(b)) => Some(a.distance(&b) <= max_distance),
+            _ => None,
+        };
+        let embedding = match (self.embedding, other.embedding) {
+            (Some(a), Some(b)) => Some(a.similarity(b) >= EMBEDDING_SIMILARITY),
+            _ => None,
+        };
+        match (hash, embedding) {
+            (None, None) => None,
+            (a, b) => Some(a == Some(true) || b == Some(true)),
+        }
+    }
 }
 
 /// How many of a series' latest photos a new photo is compared with, so
@@ -79,7 +105,7 @@ const LOOKBACK: usize = 3;
 /// series ordered by their first photo. Undated photos are never in a
 /// series. The result does not depend on the order of `photos`.
 pub fn detect_series(
-    photos: &[SeriesInput],
+    photos: &[SeriesInput<'_>],
     edits: &HashMap<PhotoId, SeriesEdit>,
     thresholds: SeriesThresholds,
 ) -> Vec<Vec<PhotoId>> {
@@ -107,7 +133,7 @@ pub fn detect_series(
                         || dated.get(i + 1).is_some_and(|&(next_time, next)| {
                             close_in_time(time, next_time)
                                 && !edits.contains_key(&next.id)
-                                && next.signature.is_some()
+                                && (next.signature.is_some() || next.embedding.is_some())
                                 && looks_alike(&current, next, thresholds.max_distance)
                         }))
             }
@@ -121,25 +147,19 @@ pub fn detect_series(
     series
 }
 
-/// Whether `photo` resembles one of the last few photos of `series`. Without
-/// signatures to compare, time decides alone.
-fn looks_alike(series: &[&SeriesInput], photo: &SeriesInput, max_distance: u32) -> bool {
-    let Some(signature) = photo.signature else {
-        return true;
-    };
-    let mut recent = series
+/// Whether `photo` resembles one of the last few photos of `series`. When
+/// nothing compares them (no hashes or embeddings yet), time decides alone.
+fn looks_alike(series: &[&SeriesInput<'_>], photo: &SeriesInput<'_>, max_distance: u32) -> bool {
+    let mut compared = series
         .iter()
         .rev()
         .take(LOOKBACK)
-        .filter_map(|p| p.signature)
+        .filter_map(|p| p.alike(photo, max_distance))
         .peekable();
-    if recent.peek().is_none() {
-        return true;
-    }
-    recent.any(|s| s.distance(&signature) <= max_distance)
+    compared.peek().is_none() || compared.any(|alike| alike)
 }
 
-fn close(series: &mut Vec<Vec<PhotoId>>, members: Vec<&SeriesInput>) {
+fn close(series: &mut Vec<Vec<PhotoId>>, members: Vec<&SeriesInput<'_>>) {
     if members.len() >= 2 {
         series.push(members.iter().map(|p| p.id).collect());
     }
@@ -173,11 +193,12 @@ mod tests {
         })
     }
 
-    fn photo(id: i64, seconds: i64, signature: Option<Signature>) -> SeriesInput {
+    fn photo(id: i64, seconds: i64, signature: Option<Signature>) -> SeriesInput<'static> {
         SeriesInput {
             id: PhotoId(id),
             captured: at(seconds),
             signature,
+            embedding: None,
         }
     }
 
@@ -257,6 +278,7 @@ mod tests {
             id: PhotoId(9),
             captured: None,
             signature: look(1, 0),
+            embedding: None,
         };
         let photos = [photo(1, 0, look(1, 0)), undated, photo(2, 1, look(1, 0))];
         assert_eq!(
@@ -315,6 +337,34 @@ mod tests {
         assert!(detect_series(&photos, &edits, strict).is_empty());
         assert_eq!(ids(&detect_series(&photos, &edits, loose)), [vec![1, 2]]);
         assert!(detect_series(&photos, &edits, tight_look).is_empty());
+    }
+
+    #[test]
+    fn embeddings_group_reframed_shots_that_hashes_miss() {
+        let near = Embedding::new(&[1.0, 0.1, 0.0]).unwrap();
+        let near2 = Embedding::new(&[1.0, 0.0, 0.1]).unwrap();
+        let far = Embedding::new(&[0.0, 1.0, 0.0]).unwrap();
+        // Hashes 30 bits apart (a zoomed retake), embeddings close.
+        let with = |id, s, sig, e| SeriesInput {
+            embedding: Some(e),
+            ..photo(id, s, sig)
+        };
+        let photos = [
+            with(1, 0, look(1, 0), &near),
+            with(2, 5, look(3, 0), &near2),
+            with(3, 10, look(5, 0), &far),
+        ];
+        assert_eq!(detect(&photos, &[]), [vec![1, 2]]);
+        // Close hashes still group photos whose embeddings differ.
+        let photos = [with(1, 0, look(1, 0), &near), with(2, 5, look(1, 2), &far)];
+        assert_eq!(detect(&photos, &[]), [vec![1, 2]]);
+        // Embeddings alone, without hashes, also decide.
+        let only = |id, s, e| SeriesInput {
+            embedding: Some(e),
+            ..photo(id, s, None)
+        };
+        let photos = [only(1, 0, &near), only(2, 5, &near2), only(3, 10, &far)];
+        assert_eq!(detect(&photos, &[]), [vec![1, 2]]);
     }
 
     #[test]

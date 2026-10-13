@@ -272,6 +272,9 @@ pub struct PhotoDetail {
     /// Faces found, largest first; `null` until the face models analyzed
     /// the photo.
     pub faces: Option<Vec<crate::analysis::faces::FaceView>>,
+    /// Combined quality, 0–1, from every analysis so far
+    /// (`core::ranking::photo_quality`); `null` before technical analysis.
+    pub score: Option<f32>,
 }
 
 /// Arguments of commands that act on one photo.
@@ -398,6 +401,7 @@ impl PhotoDetail {
             quality: None,
             aesthetic: None,
             faces: None,
+            score: None,
             files: photo
                 .assets
                 .iter()

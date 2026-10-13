@@ -49,8 +49,8 @@ pub struct AiSettings {
     pub provider: ProviderChoice,
 }
 
-/// How much each technical score counts when choosing the best photo of a
-/// series (`docs/features/series.rst`). Only the ratios matter.
+/// How much each score counts when choosing the best photo of a series
+/// (`docs/features/series.rst`). Only the ratios matter.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, TS)]
 #[serde(default)]
 #[ts(export)]
@@ -58,6 +58,8 @@ pub struct RankingSettings {
     pub sharpness: f64,
     pub exposure: f64,
     pub noise: f64,
+    /// The aesthetic score (when the CLIP model ran).
+    pub aesthetic: f64,
 }
 
 impl Default for RankingSettings {
@@ -67,6 +69,7 @@ impl Default for RankingSettings {
             sharpness: 0.6,
             exposure: 0.3,
             noise: 0.1,
+            aesthetic: 0.4,
         }
     }
 }
@@ -77,6 +80,7 @@ impl RankingSettings {
             sharpness: self.sharpness as f32,
             exposure: self.exposure as f32,
             noise: self.noise as f32,
+            aesthetic: self.aesthetic as f32,
         }
     }
 }

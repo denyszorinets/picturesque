@@ -140,9 +140,9 @@ The menu above the timeline orders it:
 
 - **Newest first** (default) and **Oldest first** group photos by day.
 - **Recently imported** lists the latest imports first.
-- **Best quality first** orders by the overall technical score
-  (:doc:`/reference/quality-scores`) and shows each photo's score on its
-  tile; photos not analyzed yet come last.
+- **Best quality first** orders by the combined score
+  (:ref:`features-series-score`: technical, aesthetic and faces) and shows
+  each photo's score on its tile; photos not analyzed yet come last.
 
 The last two show one list without day headers. Sorting works with every
 filter and with **Stack series**, and is kept while the app is open.
