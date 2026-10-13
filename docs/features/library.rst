@@ -111,6 +111,13 @@ The **Filters** panel beside the timeline (toggle it with the
      - A country, or one city in it
    * - Camera, Lens
      - Photos taken with that camera or lens
+   * - Quality
+     - Photos whose sharpness, exposure and/or low-noise score is at least
+       25, 50 or 75% (:doc:`/reference/quality-scores`). Photos not analyzed
+       yet are hidden while a quality filter is on.
+   * - Best of each series only
+     - Hides photos that are in a series but are not its best photo
+       (:ref:`features-series`); photos in no series stay.
 
 Filters combine: *Picks* with *3★+* in *Lisbon* shows picked photos of
 three stars or more taken in Lisbon. Every option shows how many photos
@@ -123,7 +130,19 @@ change while filtering (for example rejecting it while showing only
 picks) stays in view until the filters change, so it does not jump away
 mid-cull.
 
-.. _features-library-sidecars:
+Sorting
+-------
+
+The menu above the timeline orders it:
+
+- **Newest first** (default) and **Oldest first** group photos by day.
+- **Recently imported** lists the latest imports first.
+- **Best quality first** orders by the overall technical score
+  (:doc:`/reference/quality-scores`) and shows each photo's score on its
+  tile; photos not analyzed yet come last.
+
+The last two show one list without day headers. Sorting works with every
+filter and with **Stack series**, and is kept while the app is open.
 
 .. _features-library-analysis:
 
@@ -139,6 +158,8 @@ into :doc:`series </features/series>`. The loupe shows the scores under
 **Analyzing 120 / 300**. Photos on screen are analyzed first, so scrolling
 to a day gets its results within seconds. Analysis continues where it left
 off after the app restarts.
+
+.. _features-library-sidecars:
 
 XMP sidecars
 ------------

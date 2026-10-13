@@ -111,4 +111,32 @@ describe("Filters", () => {
     // Stacking is kept; which series were expanded is not.
     expect(reopened.toQuery()).toEqual({ collapse_series: true });
   });
+
+  it("filters on scores and best photos, and sorts", () => {
+    const storage = memoryStorage();
+    const f = new Filters(storage);
+    f.minScores = { sharpness: 0.5, exposure: 0, noise: 0.25 };
+    f.bestOnly = true;
+    f.sort = "quality_desc";
+
+    expect(f.toQuery()).toEqual({
+      min_sharpness: 0.5,
+      min_noise: 0.25,
+      best_only: true,
+      sort: "quality_desc",
+    });
+    expect(f.chips.map((c) => c.label)).toEqual([
+      "Sharpness ≥ 50%",
+      "Low noise ≥ 25%",
+      "Best only",
+    ]);
+    f.save();
+    expect(new Filters(storage).toQuery()).toEqual(f.toQuery());
+
+    f.chips[0]!.clear();
+    expect(f.minScores.sharpness).toBe(0);
+    f.clear();
+    // Sorting is not a filter.
+    expect(f.toQuery()).toEqual({ sort: "quality_desc" });
+  });
 });

@@ -40,14 +40,20 @@ Commands
         "lens": "RF50mm F1.2 L USM", "flags": ["pick", "unflagged"],
         "min_rating": 3, "sort": "captured_desc", "limit": 200, "cursor": null }
 
-   ``sort`` is ``captured_desc`` (default), ``captured_asc`` or
-   ``imported_desc``; photos without a capture date always come last.
+   ``sort`` is ``captured_desc`` (default), ``captured_asc``,
+   ``imported_desc`` or ``quality_desc`` (overall technical score, best
+   first; photos not analyzed last). With the capture-date sorts, photos
+   without a capture date come last.
    Returns ``{ "photos": [PhotoSummary], "next_cursor": "...", "total": 1234 }``.
    Pass ``next_cursor`` back as ``cursor`` for the next page; it is
    ``null`` on the last page. Paging is keyset-based, so later pages are as
    fast as the first. ``limit`` is 1–1000.
 
-   ``photo_ids`` (at most 1000) limits the result to those photos.
+   ``min_sharpness``, ``min_exposure`` and ``min_noise`` (0–1) keep photos
+   whose technical score is at least that (:doc:`quality-scores`); photos
+   not analyzed yet never match. ``best_only: true`` hides photos that are
+   in a series but not its best photo. ``photo_ids`` (at most 1000) limits
+   the result to those photos.
    ``collapse_series: true`` lists one photo per series: the user's chosen
    best photo if it matches the other filters, else the best-ranked
    matching one. Series listed in ``expanded_series`` (by ``series_id``)
@@ -58,8 +64,9 @@ Commands
    (``YYYY-MM-DD``, for grouping), ``camera``, ``lens``, ``city``,
    ``country``, ``flag``, ``rating``, displayed ``width``/``height``,
    ``has_raw``, ``file_name``, ``series_id`` (the first photo of its
-   series, or ``null``), ``best_in_series`` and ``series_size`` (0 when
-   in no series).
+   series, or ``null``), ``best_in_series``, ``series_size`` (0 when
+   in no series) and ``quality`` (overall technical score, ``null`` until
+   analyzed).
 
 ``get_photo``
    ``{ "photo_id": 7 }``. A ``PhotoDetail``: capture time and UTC offset,

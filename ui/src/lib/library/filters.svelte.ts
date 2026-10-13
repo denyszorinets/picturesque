@@ -1,5 +1,5 @@
 import { SvelteSet } from "svelte/reactivity";
-import type { CameraKey, PhotoQuery, PhotoSummary } from "../api";
+import type { CameraKey, PhotoQuery, PhotoSort, PhotoSummary } from "../api";
 
 type Flag = PhotoSummary["flag"];
 
@@ -23,6 +23,15 @@ const FLAG_LABELS: Record<Flag, string> = {
   reject: "Rejects",
 };
 
+/** A technical score that can be filtered on. */
+export type Score = "sharpness" | "exposure" | "noise";
+
+export const SCORE_LABELS: Record<Score, string> = {
+  sharpness: "Sharpness",
+  exposure: "Exposure",
+  noise: "Low noise",
+};
+
 interface Saved {
   from: string;
   to: string;
@@ -31,8 +40,17 @@ interface Saved {
   camera: CameraKey | null;
   lens: string | null;
   place: PlaceFilter | null;
+  minScores: Record<Score, number>;
+  bestOnly: boolean;
   stacked: boolean;
+  sort: PhotoSort;
 }
+
+const NO_SCORES: Record<Score, number> = {
+  sharpness: 0,
+  exposure: 0,
+  noise: 0,
+};
 
 /** The library's filters. Kept for the session (sessionStorage). */
 export class Filters {
@@ -44,6 +62,12 @@ export class Filters {
   cameraLabel = $state("");
   lens = $state<string | null>(null);
   place = $state<PlaceFilter | null>(null);
+  /** Minimum technical scores, 0–1 (0: any). */
+  minScores = $state<Record<Score, number>>({ ...NO_SCORES });
+  /** Hide series members other than the best photo. */
+  bestOnly = $state(false);
+  /** Timeline order. Not a filter: kept by `clear`. */
+  sort = $state<PhotoSort>("captured_desc");
   /** Show each series as its best photo. Not a filter: kept by `clear`. */
   stacked = $state(false);
   /** Stacked series shown in full; not saved. */
@@ -67,7 +91,10 @@ export class Filters {
         this.camera = saved.camera ?? null;
         this.lens = saved.lens ?? null;
         this.place = saved.place ?? null;
+        this.minScores = { ...NO_SCORES, ...saved.minScores };
+        this.bestOnly = saved.bestOnly ?? false;
         this.stacked = saved.stacked ?? false;
+        this.sort = saved.sort ?? "captured_desc";
       }
     } catch {
       // Unreadable saved filters: start without filters.
@@ -87,6 +114,12 @@ export class Filters {
       q.country_code = this.place.country_code;
       if (this.place.city) q.city = this.place.city;
     }
+    if (this.minScores.sharpness > 0)
+      q.min_sharpness = this.minScores.sharpness;
+    if (this.minScores.exposure > 0) q.min_exposure = this.minScores.exposure;
+    if (this.minScores.noise > 0) q.min_noise = this.minScores.noise;
+    if (this.bestOnly) q.best_only = true;
+    if (this.sort !== "captured_desc") q.sort = this.sort;
     if (this.stacked) {
       q.collapse_series = true;
       if (this.expanded.size > 0)
@@ -130,6 +163,16 @@ export class Filters {
       chips.push({ label: this.lens, clear: () => (this.lens = null) });
     if (this.place)
       chips.push({ label: this.place.label, clear: () => (this.place = null) });
+    for (const score of Object.keys(SCORE_LABELS) as Score[]) {
+      const min = this.minScores[score];
+      if (min > 0)
+        chips.push({
+          label: `${SCORE_LABELS[score]} ≥ ${Math.round(min * 100)}%`,
+          clear: () => (this.minScores = { ...this.minScores, [score]: 0 }),
+        });
+    }
+    if (this.bestOnly)
+      chips.push({ label: "Best only", clear: () => (this.bestOnly = false) });
     return chips;
   }
 
@@ -152,6 +195,8 @@ export class Filters {
     this.camera = null;
     this.lens = null;
     this.place = null;
+    this.minScores = { ...NO_SCORES };
+    this.bestOnly = false;
   }
 
   /** Saves the filters for the rest of the session. */
@@ -164,7 +209,10 @@ export class Filters {
       camera: this.camera,
       lens: this.lens,
       place: this.place,
+      minScores: this.minScores,
+      bestOnly: this.bestOnly,
       stacked: this.stacked,
+      sort: this.sort,
     };
     try {
       this.storage?.setItem(STORAGE_KEY, JSON.stringify(saved));

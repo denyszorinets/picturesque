@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { PhotoFacets } from "../api";
-  import type { Filters } from "./filters.svelte";
+  import { SCORE_LABELS, type Filters, type Score } from "./filters.svelte";
 
   interface Props {
     filters: Filters;
@@ -14,6 +14,9 @@
     { flag: "unflagged", label: "Unflagged" },
     { flag: "reject", label: "Rejects" },
   ] as const;
+
+  const SCORES = Object.entries(SCORE_LABELS) as [Score, string][];
+  const STEPS = [0, 0.25, 0.5, 0.75];
 
   const flagCount = (flag: string) =>
     facets.flags.find((f) => f.flag === flag)?.count ?? 0;
@@ -97,6 +100,35 @@
         </button>
       {/each}
     </div>
+  </section>
+
+  <section data-testid="filter-quality">
+    <h3>Quality</h3>
+    {#each SCORES as [score, label] (score)}
+      <div class="score">
+        <span>{label}</span>
+        <div class="toggles" role="radiogroup" aria-label={`Minimum ${label}`}>
+          {#each STEPS as min (min)}
+            <button
+              role="radio"
+              aria-checked={filters.minScores[score] === min}
+              class:on={filters.minScores[score] === min}
+              onclick={() =>
+                (filters.minScores = { ...filters.minScores, [score]: min })}
+              data-testid={`min-${score}-${min * 100}`}
+              >{min === 0 ? "Any" : `${min * 100}%`}</button
+            >
+          {/each}
+        </div>
+      </div>
+    {/each}
+    <label class="check"
+      ><input
+        type="checkbox"
+        bind:checked={filters.bestOnly}
+        data-testid="filter-best-only"
+      /> Best of each series only</label
+    >
   </section>
 
   <section>
@@ -201,6 +233,22 @@
     text-transform: uppercase;
     letter-spacing: 0.04em;
     color: var(--muted);
+  }
+
+  .score {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    margin-bottom: 0.4rem;
+    font-size: 0.85rem;
+  }
+
+  .check {
+    display: flex;
+    justify-content: flex-start;
+    gap: 0.4rem;
+    align-items: center;
+    font-size: 0.85rem;
   }
 
   .toggles {

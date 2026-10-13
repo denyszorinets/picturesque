@@ -1,4 +1,10 @@
-import type { PhotoFacets, PhotoPage, PhotoQuery, PhotoSummary } from "../api";
+import type {
+  PhotoFacets,
+  PhotoPage,
+  PhotoQuery,
+  PhotoSort,
+  PhotoSummary,
+} from "../api";
 import { ApiError } from "../api";
 import { buildSections, type Section } from "./layout";
 
@@ -26,8 +32,10 @@ export class LibraryStore {
   private complete = false;
   private queue: Promise<void> = Promise.resolve();
   private generation = 0;
-  /** Filters applied to the timeline. */
+  /** Filters (and sort) applied to the timeline. */
   private filter: PhotoQuery = {};
+  /** The sort `facets` were loaded for (sections follow it). */
+  private sort = $state<PhotoSort | undefined>();
 
   constructor(private readonly api: LibraryApi) {}
 
@@ -37,7 +45,7 @@ export class LibraryStore {
 
   get sections(): Section[] {
     return this.facets
-      ? buildSections(this.facets.days, this.facets.total)
+      ? buildSections(this.facets.days, this.facets.total, this.sort)
       : [];
   }
 
@@ -58,6 +66,7 @@ export class LibraryStore {
         this.api.queryPhotos({ ...this.filter, limit: PAGE }),
       ]);
       if (generation !== this.generation) return;
+      this.sort = this.filter.sort;
       this.facets = facets;
       this.photos = page.photos;
       this.cursor = page.next_cursor;
@@ -91,6 +100,7 @@ export class LibraryStore {
         photos.push(...page.photos);
         cursor = page.next_cursor;
       } while (cursor !== null && photos.length < want);
+      this.sort = this.filter.sort;
       this.facets = facets;
       this.photos = photos;
       this.cursor = cursor;

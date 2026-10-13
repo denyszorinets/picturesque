@@ -11,6 +11,8 @@
     /** A stacked series' size and whether it is expanded (stacking only). */
     stack?: { count: number; expanded: boolean } | null;
     onstack?: () => void;
+    /** Show the quality score on the tile (when sorting by it). */
+    showQuality?: boolean;
   }
 
   let {
@@ -22,7 +24,12 @@
     ondblclick,
     stack = null,
     onstack,
+    showQuality = false,
   }: Props = $props();
+
+  const quality = $derived(
+    photo.quality === null ? null : `${Math.round(photo.quality * 100)}%`,
+  );
   let failed = $state(false);
 
   const title = $derived(
@@ -31,6 +38,7 @@
       photo.captured_at?.replace("T", " "),
       photo.camera,
       photo.city,
+      quality && `Quality ${quality}`,
     ]
       .filter(Boolean)
       .join(" · "),
@@ -71,6 +79,11 @@
           >✕</span
         >{/if}
       {#if photo.has_raw}<span class="badge raw">RAW</span>{/if}
+      {#if showQuality && quality}<span
+          class="badge"
+          title="Overall technical quality"
+          data-testid="tile-quality">{quality}</span
+        >{/if}
     </span>
     {#if photo.best_in_series}
       <span class="best-mark" title="Best of the series" data-testid="best-mark"
