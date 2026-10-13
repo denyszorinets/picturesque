@@ -19,6 +19,7 @@ analysis and on-device AI.
    concepts/index
    features/index
    reference/index
+   troubleshooting
 
 .. toctree::
    :maxdepth: 2
