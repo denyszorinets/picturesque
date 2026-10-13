@@ -1,6 +1,7 @@
 <script lang="ts">
   import * as api from "../api";
   import { AnalysisProgress } from "./analysis.svelte";
+  import Compare from "./Compare.svelte";
   import { Culling } from "./culling.svelte";
   import FilterPanel from "./FilterPanel.svelte";
   import { Filters } from "./filters.svelte";
@@ -118,6 +119,82 @@
 
   let seriesError = $state<string | null>(null);
 
+  /** `s` / `j`: splits the series before the target photo, or joins it to
+   * the photo taken before it; again removes the correction. */
+  async function correctSeries(edit: api.SeriesEditView) {
+    const [index] = targets();
+    const photo = index === undefined ? undefined : store.photos[index];
+    if (!photo) return;
+    seriesError = null;
+    try {
+      const current = await api.photoSeries(photo.id);
+      await api.editSeries(photo.id, current.edit === edit ? null : edit);
+      await store.refresh();
+    } catch (e) {
+      seriesError = api.ApiError.from(e).message;
+    }
+  }
+
+  /** The open comparison. */
+  let compare = $state<{
+    ids: number[];
+    activeId?: number;
+    scores?: Record<number, number | null>;
+  } | null>(null);
+
+  /** `c`: compares the selected photos, or else the series of the target
+   * photo (best first). */
+  async function openCompare() {
+    seriesError = null;
+    const focusId =
+      (loupe !== null ? store.photos[loupe]?.id : undefined) ??
+      (selection.focus !== null
+        ? store.photos[selection.focus]?.id
+        : undefined);
+    if (loupe === null && selection.size >= 2) {
+      const ids = [...selection.selected]
+        .sort((a, b) => a - b)
+        .map((i) => store.photos[i]?.id)
+        .filter((id): id is number => id !== undefined);
+      compare = { ids, activeId: focusId };
+      return;
+    }
+    const [index] = targets();
+    const photo = index === undefined ? undefined : store.photos[index];
+    if (!photo || photo.series_id === null) {
+      seriesError =
+        "Select two or more photos, or a photo in a series, to compare.";
+      return;
+    }
+    try {
+      const series = await api.photoSeries(photo.id);
+      if (series.ranking.length < 2) return;
+      compare = {
+        ids: series.ranking.map((r) => r.photo_id),
+        activeId: photo.id,
+        scores: Object.fromEntries(
+          series.ranking.map((r) => [r.photo_id, r.score]),
+        ),
+      };
+      loupe = null;
+    } catch (e) {
+      seriesError = api.ApiError.from(e).message;
+    }
+  }
+
+  const SERIES_KEYS: Record<string, () => Promise<void>> = {
+    b: chooseBest,
+    c: openCompare,
+    s: () => correctSeries("split"),
+    j: () => correctSeries("join"),
+  };
+
+  function closeCompare(activeId: number | undefined) {
+    compare = null;
+    const index = store.photos.findIndex((p) => p.id === activeId);
+    if (index >= 0) selection.click(index);
+  }
+
   /** `b`: makes the target photo the best of its series, or withdraws
    * the choice when it already is. */
   async function chooseBest() {
@@ -147,17 +224,13 @@
       target?.closest("input, select, textarea, [contenteditable]")
     )
       return;
-    // The library is hidden while the Import tab is shown.
-    if (!section?.offsetParent) return;
+    // The library is hidden while the Import tab is shown; the compare
+    // view handles its own keys.
+    if (!section?.offsetParent || compare) return;
     let used = cull(e);
-    if (
-      !used &&
-      !e.ctrlKey &&
-      !e.metaKey &&
-      !e.altKey &&
-      e.key.toLowerCase() === "b"
-    ) {
-      void chooseBest();
+    const seriesAction = SERIES_KEYS[e.key.toLowerCase()];
+    if (!used && !e.ctrlKey && !e.metaKey && !e.altKey && seriesAction) {
+      void seriesAction();
       used = true;
     }
     if (!used && loupe === null) {
@@ -244,6 +317,13 @@
         title="Show each series as its best photo"
         data-testid="toggle-stack">Stack series</button
       >
+      <button
+        class="small"
+        onclick={() => openCompare()}
+        disabled={selection.focus === null && selection.size === 0}
+        title="Compare the selected photos, or the selected photo's series (C)"
+        data-testid="open-compare">Compare</button
+      >
       <span class="spacer"></span>
       {#if analysis.status && analysis.remaining > 0}
         <span
@@ -297,6 +377,15 @@
         {/if}
       </div>
     </div>
+    {#if compare}
+      <Compare
+        ids={compare.ids}
+        activeId={compare.activeId}
+        scores={compare.scores}
+        {culling}
+        onclose={closeCompare}
+      />
+    {/if}
     {#if loupe !== null}
       <Loupe
         {store}

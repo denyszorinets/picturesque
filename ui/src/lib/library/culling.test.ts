@@ -121,4 +121,21 @@ describe("Culling", () => {
     expect(culling.canUndo).toBe(false);
     expect(list.photos[0]!.flag).toBe("unflagged");
   });
+
+  it("culls photos outside the list and tells subscribers", async () => {
+    const list = { photos: [photo(1)] };
+    const api = backend({ photos: [photo(1), photo(7)] });
+    const culling = new Culling(api, list);
+    const seen: number[][] = [];
+    const stop = culling.subscribe((d) => seen.push(d.map((v) => v.photo_id)));
+
+    await culling.flagPhotos([photo(7), photo(1)], "reject");
+    await culling.ratePhotos([photo(7)], 3);
+    await culling.undo();
+    stop();
+    await culling.redo();
+
+    expect(list.photos[0]!.flag).toBe("reject");
+    expect(seen).toEqual([[7, 1], [7], [7]]);
+  });
 });

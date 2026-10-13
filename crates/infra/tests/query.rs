@@ -223,6 +223,15 @@ fn filters_combine() {
         }),
         [1]
     );
+    assert_eq!(q(|q| q.photo_ids = Some(vec![5, 1, 42])), [1, 5]);
+    assert_eq!(
+        q(|q| {
+            q.photo_ids = Some(vec![1, 3, 5]);
+            q.country_code = Some("PT".into())
+        }),
+        [1, 3]
+    );
+    assert!(q(|q| q.photo_ids = Some(Vec::new())).is_empty());
 }
 
 #[test]

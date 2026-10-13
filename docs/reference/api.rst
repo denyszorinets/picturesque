@@ -47,11 +47,19 @@ Commands
    ``null`` on the last page. Paging is keyset-based, so later pages are as
    fast as the first. ``limit`` is 1–1000.
 
+   ``photo_ids`` (at most 1000) limits the result to those photos.
+   ``collapse_series: true`` lists one photo per series: the user's chosen
+   best photo if it matches the other filters, else the best-ranked
+   matching one. Series listed in ``expanded_series`` (by ``series_id``)
+   are shown whole. Facets (``photo_facets``) take the same fields, so day
+   counts match the list.
+
    A ``PhotoSummary`` has ``id``, ``captured_at``, ``day``
    (``YYYY-MM-DD``, for grouping), ``camera``, ``lens``, ``city``,
    ``country``, ``flag``, ``rating``, displayed ``width``/``height``,
    ``has_raw``, ``file_name``, ``series_id`` (the first photo of its
-   series, or ``null``) and ``best_in_series``.
+   series, or ``null``), ``best_in_series`` and ``series_size`` (0 when
+   in no series).
 
 ``get_photo``
    ``{ "photo_id": 7 }``. A ``PhotoDetail``: capture time and UTC offset,

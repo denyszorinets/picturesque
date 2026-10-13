@@ -73,8 +73,10 @@ When the automatic grouping is wrong, mark a photo:
 Corrections are saved per photo and applied every time series are
 recomputed, so they survive re-analysis, new imports and threshold
 changes. Removing a correction returns that photo to automatic grouping.
-Corrections are made through the ``edit_series`` command
-(:doc:`/reference/api`) until the compare view (:issue:`37`) offers them.
+
+In the Library, select a photo and press **S** to split before it or
+**J** to join it to the photo taken before it; pressing the same key again
+removes the correction (:doc:`/reference/keyboard-shortcuts`).
 
 Series in the grid
 ------------------
@@ -85,6 +87,8 @@ In the Library timeline:
   on the next row, the frame's edge there is dashed and open.
 - The best photo has a **green border** and a **★** badge. Rejected
   photos stay dimmed.
+- Press **C** to compare the photos of the selected photo's series side by
+  side, best first (:ref:`features-compare`).
 - Press **B** to make the selected photo (or the photo in the loupe) the
   best of its series; press it again on that photo to withdraw the choice
   (:doc:`/reference/keyboard-shortcuts`).
