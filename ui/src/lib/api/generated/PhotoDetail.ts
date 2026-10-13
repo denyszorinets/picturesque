@@ -3,6 +3,7 @@ import type { AestheticView } from "./AestheticView";
 import type { FaceView } from "./FaceView";
 import type { PhotoFileView } from "./PhotoFileView";
 import type { QualityView } from "./QualityView";
+import type { ReasonView } from "./ReasonView";
 
 /**
  * Everything known about a photo, formatted for display.
@@ -53,4 +54,8 @@ faces: Array<FaceView> | null,
  * Combined quality, 0–1, from every analysis so far
  * (`core::ranking::photo_quality`); `null` before technical analysis.
  */
-score: number | null, };
+score: number | null, 
+/**
+ * Why the photo scored as it did, most important first.
+ */
+reasons: Array<ReasonView>, };

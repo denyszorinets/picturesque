@@ -336,7 +336,10 @@ impl PhotoCatalog for SqliteCatalog {
         self.load_rejected()
     }
 
-    fn replace_scores(&self, scores: &[(PhotoId, f32)]) -> Result<(), CatalogError> {
+    fn replace_scores(
+        &self,
+        scores: &[picturesque_app::ports::catalog::PhotoScore],
+    ) -> Result<(), CatalogError> {
         self.save_scores(scores)
     }
 

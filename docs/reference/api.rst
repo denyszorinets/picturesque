@@ -51,7 +51,10 @@ Commands
 
    ``min_sharpness``, ``min_exposure`` and ``min_noise`` (0–1) keep photos
    whose technical score is at least that (:doc:`quality-scores`); photos
-   not analyzed yet never match. ``best_only: true`` hides photos that are
+   not analyzed yet never match. ``min_aesthetic`` (0–1) does the same for
+   the aesthetic score, ``hide_closed_eyes: true`` hides photos where
+   someone important has closed eyes, and ``people`` keeps only photos with
+   (``true``) or without (``false``) faces. ``best_only: true`` hides photos that are
    in a series but not its best photo. ``photo_ids`` (at most 1000) limits
    the result to those photos.
    ``collapse_series: true`` lists one photo per series: the user's chosen
@@ -66,7 +69,9 @@ Commands
    ``has_raw``, ``file_name``, ``series_id`` (the first photo of its
    series, or ``null``), ``best_in_series``, ``series_size`` (0 when
    in no series) and ``quality`` (the combined score,
-   :ref:`features-series-score`; ``null`` until analyzed).
+   :ref:`features-series-score`; ``null`` until analyzed), ``aesthetic``
+   (0–1 or ``null``), ``eyes_closed`` (``true``/``false``, ``null`` when
+   undecided) and ``faces`` (count).
 
 ``get_photo``
    ``{ "photo_id": 7 }``. A ``PhotoDetail``: capture time and UTC offset,
@@ -82,8 +87,10 @@ Commands
    fractions of the photo, detector ``score``, ``eyes_closed`` —
    ``true``, ``false`` or ``null`` when undecided — ``eye_openness`` and
    ``sharpness`` 0–1; ``null`` until the face models analyzed the photo, see
-   :ref:`features-ai-faces`) and ``score``, the combined quality 0–1
-   (:ref:`features-series-score`). Unknown photos are ``not_found``.
+   :ref:`features-ai-faces`), ``score``, the combined quality 0–1
+   (:ref:`features-series-score`), and ``reasons``: why it scored so,
+   most important first, each ``{ "tone": "good" | "bad" | "info",
+   "text": "Eyes closed: the score is halved" }``. Unknown photos are ``not_found``.
 
 ``set_decisions``
    ``{ "changes": [{ "photo_id": 7, "flag": "pick" }, { "photo_id": 8, "rating": 4 }] }``.

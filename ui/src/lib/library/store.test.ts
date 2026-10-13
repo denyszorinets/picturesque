@@ -21,6 +21,9 @@ function photo(id: number, city: string | null = null): PhotoSummary {
     best_in_series: false,
     series_size: 0,
     quality: null,
+    aesthetic: null,
+    eyes_closed: null,
+    faces: 0,
   };
 }
 

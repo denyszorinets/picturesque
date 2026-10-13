@@ -297,6 +297,22 @@
       {:else if detailError}
         <p class="error-text">{detailError}</p>
       {/if}
+      {#if detail && detail.reasons.length > 0}
+        <h3 class="why">Why this score</h3>
+        <ul class="reasons" data-testid="loupe-reasons">
+          {#each detail.reasons as reason (reason.text)}
+            <li class={reason.tone}>
+              <span class="mark" aria-hidden="true"
+                >{reason.tone === "good"
+                  ? "✓"
+                  : reason.tone === "bad"
+                    ? "✕"
+                    : "•"}</span
+              >{reason.text}
+            </li>
+          {/each}
+        </ul>
+      {/if}
       <p class="keys muted">← → move · Z zoom · I info · Esc close</p>
     </aside>
   {/if}
@@ -415,6 +431,47 @@
 
   .file {
     margin-bottom: 0.2rem;
+  }
+
+  .why {
+    margin: 1.2rem 0 0.4rem;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #9a9a94;
+  }
+
+  .reasons {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+  }
+
+  .reasons li {
+    display: flex;
+    gap: 0.5rem;
+  }
+
+  .mark {
+    width: 1rem;
+    flex-shrink: 0;
+    text-align: center;
+    font-weight: 700;
+  }
+
+  .reasons .good .mark {
+    color: #3fb36b;
+  }
+
+  .reasons .bad .mark {
+    color: #ef6a5b;
+  }
+
+  .reasons .info .mark {
+    color: #9a9a94;
   }
 
   .keys {

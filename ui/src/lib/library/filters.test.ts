@@ -115,7 +115,7 @@ describe("Filters", () => {
   it("filters on scores and best photos, and sorts", () => {
     const storage = memoryStorage();
     const f = new Filters(storage);
-    f.minScores = { sharpness: 0.5, exposure: 0, noise: 0.25 };
+    f.minScores = { sharpness: 0.5, exposure: 0, noise: 0.25, aesthetic: 0 };
     f.bestOnly = true;
     f.sort = "quality_desc";
 
@@ -148,5 +148,27 @@ describe("Filters", () => {
     expect(f.chips.map((c) => c.label)).toEqual(["“dog on a beach”"]);
     f.chips[0]!.clear();
     expect(f.search).toBe("");
+  });
+
+  it("filters on AI signals", () => {
+    const storage = memoryStorage();
+    const f = new Filters(storage);
+    f.minScores = { ...f.minScores, aesthetic: 0.5 };
+    f.hideClosedEyes = true;
+    f.people = false;
+    expect(f.toQuery()).toEqual({
+      min_aesthetic: 0.5,
+      hide_closed_eyes: true,
+      people: false,
+    });
+    expect(f.chips.map((c) => c.label)).toEqual([
+      "Aesthetic ≥ 50%",
+      "No closed eyes",
+      "Without people",
+    ]);
+    f.save();
+    expect(new Filters(storage).toQuery()).toEqual(f.toQuery());
+    f.clear();
+    expect(f.toQuery()).toEqual({});
   });
 });

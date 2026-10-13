@@ -23,10 +23,10 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use crate::analysis::clip::{ClipAnalyzer, aesthetic_score};
-use crate::analysis::faces::{FaceAnalyzer, faces as faces_of, signal as face_signal};
+use crate::analysis::faces::{FaceAnalyzer, FaceView, faces as faces_of, signal as face_signal};
 use crate::analysis::similarity::SimilarityAnalyzer;
 use crate::analysis::technical::TechnicalAnalyzer;
-use crate::ports::catalog::{CatalogError, PhotoCatalog, StoredSeries};
+use crate::ports::catalog::{CatalogError, PhotoCatalog, PhotoScore, StoredSeries};
 use crate::ports::events::{AppEvent, EventSink};
 use crate::ports::settings::SettingsStore;
 
@@ -131,7 +131,7 @@ pub struct EditSeriesArgs {
 }
 
 /// Series and every photo's combined score, as last stored.
-type Stored = (Vec<StoredSeries>, Vec<(PhotoId, f32)>);
+type Stored = (Vec<StoredSeries>, Vec<PhotoScore>);
 
 /// Recomputes and stores series.
 pub struct SeriesService {
@@ -187,11 +187,19 @@ impl SeriesService {
                 Some((*id, aesthetic_score(ClipAnalyzer::aesthetic(result)?)))
             })
             .collect();
-        let faces: HashMap<PhotoId, FaceSignal> = self
+        let found_faces: HashMap<PhotoId, Vec<FaceView>> = self
             .catalog
             .analysis_results(FaceAnalyzer::ID)?
             .into_iter()
-            .filter_map(|(id, result)| Some((id, face_signal(&faces_of(&result)?)?)))
+            .filter_map(|(id, result)| Some((id, faces_of(&result)?)))
+            .collect();
+        let faces: HashMap<PhotoId, FaceSignal> = found_faces
+            .iter()
+            .filter_map(|(id, f)| Some((*id, face_signal(f)?)))
+            .collect();
+        let face_counts: HashMap<PhotoId, u32> = found_faces
+            .iter()
+            .map(|(id, f)| (*id, f.len() as u32))
             .collect();
         let inputs: Vec<SeriesInput> = self
             .catalog
@@ -237,11 +245,19 @@ impl SeriesService {
                 })
             })
             .collect();
-        let mut qualities: Vec<(PhotoId, f32)> = scores
+        let mut qualities: Vec<PhotoScore> = scores
             .keys()
-            .filter_map(|id| Some((*id, photo_quality(&candidate(*id))?)))
+            .filter_map(|id| {
+                Some(PhotoScore {
+                    id: *id,
+                    score: photo_quality(&candidate(*id))?,
+                    aesthetic: aesthetic.get(id).copied(),
+                    eyes_closed: faces.get(id).and_then(|f| f.eyes_closed),
+                    faces: face_counts.get(id).copied().unwrap_or(0),
+                })
+            })
             .collect();
-        qualities.sort_by_key(|(id, _)| *id);
+        qualities.sort_by_key(|s| s.id);
 
         let count = series.len();
         let (old_series, old_qualities) = match last.as_ref() {

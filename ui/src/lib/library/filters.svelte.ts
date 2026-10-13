@@ -24,12 +24,13 @@ const FLAG_LABELS: Record<Flag, string> = {
 };
 
 /** A technical score that can be filtered on. */
-export type Score = "sharpness" | "exposure" | "noise";
+export type Score = "sharpness" | "exposure" | "noise" | "aesthetic";
 
 export const SCORE_LABELS: Record<Score, string> = {
   sharpness: "Sharpness",
   exposure: "Exposure",
   noise: "Low noise",
+  aesthetic: "Aesthetic",
 };
 
 interface Saved {
@@ -42,6 +43,8 @@ interface Saved {
   place: PlaceFilter | null;
   minScores: Record<Score, number>;
   bestOnly: boolean;
+  hideClosedEyes: boolean;
+  people: boolean | null;
   search: string;
   stacked: boolean;
   sort: PhotoSort;
@@ -51,6 +54,7 @@ const NO_SCORES: Record<Score, number> = {
   sharpness: 0,
   exposure: 0,
   noise: 0,
+  aesthetic: 0,
 };
 
 /** The library's filters. Kept for the session (sessionStorage). */
@@ -67,6 +71,10 @@ export class Filters {
   minScores = $state<Record<Score, number>>({ ...NO_SCORES });
   /** Hide series members other than the best photo. */
   bestOnly = $state(false);
+  /** Hide photos where someone has closed eyes. */
+  hideClosedEyes = $state(false);
+  /** Only photos with (`true`) or without (`false`) people. */
+  people = $state<boolean | null>(null);
   /** A description to search for; results replace the timeline. */
   search = $state("");
   /** Timeline order. Not a filter: kept by `clear`. */
@@ -97,6 +105,8 @@ export class Filters {
         this.minScores = { ...NO_SCORES, ...saved.minScores };
         this.bestOnly = saved.bestOnly ?? false;
         this.search = saved.search ?? "";
+        this.hideClosedEyes = saved.hideClosedEyes ?? false;
+        this.people = saved.people ?? null;
         this.stacked = saved.stacked ?? false;
         this.sort = saved.sort ?? "captured_desc";
       }
@@ -122,6 +132,10 @@ export class Filters {
       q.min_sharpness = this.minScores.sharpness;
     if (this.minScores.exposure > 0) q.min_exposure = this.minScores.exposure;
     if (this.minScores.noise > 0) q.min_noise = this.minScores.noise;
+    if (this.minScores.aesthetic > 0)
+      q.min_aesthetic = this.minScores.aesthetic;
+    if (this.hideClosedEyes) q.hide_closed_eyes = true;
+    if (this.people !== null) q.people = this.people;
     if (this.bestOnly) q.best_only = true;
     if (this.sort !== "captured_desc") q.sort = this.sort;
     if (this.stacked) {
@@ -177,6 +191,16 @@ export class Filters {
     }
     if (this.bestOnly)
       chips.push({ label: "Best only", clear: () => (this.bestOnly = false) });
+    if (this.hideClosedEyes)
+      chips.push({
+        label: "No closed eyes",
+        clear: () => (this.hideClosedEyes = false),
+      });
+    if (this.people !== null)
+      chips.push({
+        label: this.people ? "With people" : "Without people",
+        clear: () => (this.people = null),
+      });
     if (this.search)
       chips.push({
         label: `“${this.search}”`,
@@ -206,6 +230,8 @@ export class Filters {
     this.place = null;
     this.minScores = { ...NO_SCORES };
     this.bestOnly = false;
+    this.hideClosedEyes = false;
+    this.people = null;
     this.search = "";
   }
 
@@ -221,6 +247,8 @@ export class Filters {
       place: this.place,
       minScores: this.minScores,
       bestOnly: this.bestOnly,
+      hideClosedEyes: this.hideClosedEyes,
+      people: this.people,
       search: this.search,
       stacked: this.stacked,
       sort: this.sort,

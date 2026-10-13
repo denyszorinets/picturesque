@@ -80,12 +80,24 @@ fn every_choice_probes_to_a_working_provider() {
         if choice == ProviderChoice::Cpu {
             assert_eq!(probe.provider, Provider::Cpu);
         }
-        if probe.provider == Provider::Cpu && choice != ProviderChoice::Cpu {
-            assert!(
-                probe.fallback.is_some() || engine.available() == [Provider::Cpu],
-                "{choice:?}"
-            );
+        // An explicitly chosen GPU provider that ends up on CPU says why.
+        // (Automatic may simply prefer the CPU, as it does on Linux.)
+        if probe.provider == Provider::Cpu
+            && !matches!(choice, ProviderChoice::Cpu | ProviderChoice::Auto)
+        {
+            assert!(probe.fallback.is_some(), "{choice:?}");
         }
+    }
+}
+
+#[test]
+fn automatic_leaves_webgpu_to_an_explicit_choice() {
+    let engine = OrtEngine::new(1);
+    if cfg!(target_os = "linux") {
+        assert_eq!(
+            engine.probe(ProviderChoice::Auto).unwrap().provider,
+            Provider::Cpu
+        );
     }
 }
 

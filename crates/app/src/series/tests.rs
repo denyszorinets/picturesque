@@ -471,6 +471,27 @@ fn a_blink_loses_to_open_eyes() {
     set_faces(&world, ids[1], false, 0.9);
     api.recompute_series().unwrap();
     assert_eq!(best_of(&api, ids[0]).0, json!(ids[1]));
+
+    // The loupe explains it.
+    let reasons = |id: i64| -> Vec<String> {
+        api.call("get_photo", json!({ "photo_id": id })).unwrap()["reasons"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|r| {
+                format!(
+                    "{}: {}",
+                    r["tone"].as_str().unwrap(),
+                    r["text"].as_str().unwrap()
+                )
+            })
+            .collect()
+    };
+    let blink = reasons(ids[0]);
+    assert_eq!(blink[0], "info: Ranked 2 of 2 in its series");
+    assert!(blink.contains(&"bad: The best photo of the series has open eyes".to_owned()));
+    assert!(blink.contains(&"bad: Eyes closed: the score is halved".to_owned()));
+    assert_eq!(reasons(ids[1])[0], "good: Best of its series of 2");
 }
 
 #[test]
@@ -492,7 +513,7 @@ fn embeddings_join_retakes_and_scores_are_stored() {
     // Combined scores: technical overall 1.0 averaged with the aesthetic
     // score (6.5 → 1.0, 4.5 → 0.0, 5.5 → 0.5).
     let scores = world.catalog.scores.lock().unwrap().clone();
-    let score = |id: i64| scores[&PhotoId(id)];
+    let score = |id: i64| scores[&PhotoId(id)].score;
     assert!((score(ids[0]) - 1.0).abs() < 1e-6);
     assert!((score(ids[1]) - 0.5).abs() < 1e-6);
     assert!((score(ids[2]) - 0.75).abs() < 1e-6);
