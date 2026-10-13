@@ -493,6 +493,10 @@ fn queries_over_ten_thousand_photos_are_fast() {
         )
         .unwrap();
     }
+    let all_scores: Vec<(PhotoId, f32)> = (0..10_000u64)
+        .map(|n| (PhotoId(n as i64 + 1), ((n * 7919) % 1000) as f32 / 1000.0))
+        .collect();
+    c.replace_scores(&all_scores).unwrap();
     let queries = [
         PhotoQuery::default(),
         PhotoQuery {
@@ -871,7 +875,10 @@ fn score_thresholds_best_only_and_quality_sort() {
         .unwrap();
     assert_eq!(facets.total, 2);
 
-    // Best first, unanalyzed (and failed) last, newest id first among them.
+    // Sorting uses the combined scores the series service stores; best
+    // first, photos without a score last, newest id first among them.
+    c.replace_scores(&[(PhotoId(1), 0.85), (PhotoId(2), 0.55), (PhotoId(3), 0.6)])
+        .unwrap();
     let sorted = |limit| {
         let mut all = Vec::new();
         let mut cursor = None;

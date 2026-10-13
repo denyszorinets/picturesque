@@ -145,6 +145,10 @@ fn score_sql(field: &str) -> String {
     )
 }
 
+/// SQL for a photo's combined quality score (`photo_score`); NULL until
+/// computed.
+const QUALITY_SQL: &str = "(SELECT ps.score FROM photo_score ps WHERE ps.photo_id = p.id)";
+
 /// A position in a result list: the last row of the previous page.
 #[derive(Debug, PartialEq)]
 enum Cursor {
@@ -221,7 +225,7 @@ impl Cursor {
                 },
                 PhotoSort::QualityDesc,
             ) => {
-                let s = score_sql("overall");
+                let s = QUALITY_SQL;
                 (
                     format!("({s} IS NULL OR {s} < ? OR ({s} = ? AND p.id < ?))"),
                     vec![
@@ -232,7 +236,7 @@ impl Cursor {
                 )
             }
             (Self::Scored { score: None, id }, PhotoSort::QualityDesc) => (
-                format!("({} IS NULL AND p.id < ?)", score_sql("overall")),
+                format!("({QUALITY_SQL} IS NULL AND p.id < ?)"),
                 vec![Value::Integer(*id)],
             ),
             (Self::Dated { local, id }, PhotoSort::CapturedDesc | PhotoSort::CapturedAsc) => (
@@ -309,9 +313,8 @@ fn query_page(conn: &Connection, query: &PhotoQuery) -> Result<PhotoPage, Catalo
                  ORDER BY a.role = 'raw' LIMIT 1),
                 sm.series_id, sm.best IS NOT NULL,
                 (SELECT count(*) FROM series_member x WHERE x.series_id = sm.series_id),
-                {} AS quality
+                {QUALITY_SQL} AS quality
          {FROM} LEFT JOIN series_member sm ON sm.photo_id = p.id {} ORDER BY {} LIMIT ?",
-        score_sql("overall"),
         where_sql(&clauses),
         order_by(sort)
     );

@@ -41,8 +41,8 @@ Commands
         "min_rating": 3, "sort": "captured_desc", "limit": 200, "cursor": null }
 
    ``sort`` is ``captured_desc`` (default), ``captured_asc``,
-   ``imported_desc`` or ``quality_desc`` (overall technical score, best
-   first; photos not analyzed last). With the capture-date sorts, photos
+   ``imported_desc`` or ``quality_desc`` (combined score, best first;
+   photos not analyzed last). With the capture-date sorts, photos
    without a capture date come last.
    Returns ``{ "photos": [PhotoSummary], "next_cursor": "...", "total": 1234 }``.
    Pass ``next_cursor`` back as ``cursor`` for the next page; it is
@@ -65,8 +65,8 @@ Commands
    ``country``, ``flag``, ``rating``, displayed ``width``/``height``,
    ``has_raw``, ``file_name``, ``series_id`` (the first photo of its
    series, or ``null``), ``best_in_series``, ``series_size`` (0 when
-   in no series) and ``quality`` (overall technical score, ``null`` until
-   analyzed).
+   in no series) and ``quality`` (the combined score,
+   :ref:`features-series-score`; ``null`` until analyzed).
 
 ``get_photo``
    ``{ "photo_id": 7 }``. A ``PhotoDetail``: capture time and UTC offset,
@@ -82,7 +82,8 @@ Commands
    fractions of the photo, detector ``score``, ``eyes_closed`` —
    ``true``, ``false`` or ``null`` when undecided — ``eye_openness`` and
    ``sharpness`` 0–1; ``null`` until the face models analyzed the photo, see
-   :ref:`features-ai-faces`). Unknown photos are ``not_found``.
+   :ref:`features-ai-faces`) and ``score``, the combined quality 0–1
+   (:ref:`features-series-score`). Unknown photos are ``not_found``.
 
 ``set_decisions``
    ``{ "changes": [{ "photo_id": 7, "flag": "pick" }, { "photo_id": 8, "rating": 4 }] }``.

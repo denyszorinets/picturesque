@@ -336,6 +336,10 @@ impl PhotoCatalog for SqliteCatalog {
         self.load_rejected()
     }
 
+    fn replace_scores(&self, scores: &[(PhotoId, f32)]) -> Result<(), CatalogError> {
+        self.save_scores(scores)
+    }
+
     fn photo_count(&self) -> Result<u64, CatalogError> {
         self.conn()
             .query_row("SELECT count(*) FROM photo", [], |row| row.get::<_, i64>(0))

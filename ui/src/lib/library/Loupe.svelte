@@ -235,6 +235,15 @@
                 .join(" · ")}
             </dd>
           {/if}
+          {#if detail.score !== null}
+            <dt>Score</dt>
+            <dd
+              data-testid="loupe-score"
+              title="Combined quality: technical, aesthetic and faces"
+            >
+              {percent(detail.score)}
+            </dd>
+          {/if}
           {#if detail.quality}
             <dt>Quality</dt>
             <dd

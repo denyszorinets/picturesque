@@ -434,3 +434,70 @@ fn a_steady_stream_of_requests_waits_at_most_max_wait() {
         Duration::from_secs(5)
     ));
 }
+
+fn set_faces(world: &TestWorld, id: i64, eyes_closed: bool, sharpness: f32) {
+    world
+        .catalog
+        .store_analysis(
+            PhotoId(id),
+            crate::analysis::faces::FaceAnalyzer::ID,
+            &json!({ "faces": [{
+                "x": 0.3, "y": 0.2, "width": 0.3, "height": 0.4, "score": 0.9,
+                "eyes_closed": eyes_closed, "eye_openness": 0.3, "sharpness": sharpness,
+            }] }),
+        )
+        .unwrap();
+}
+
+fn set_clip(world: &TestWorld, id: i64, embedding: &[f32], rating: f32) {
+    let e = picturesque_core::clip::Embedding::new(embedding).unwrap();
+    world
+        .catalog
+        .store_analysis(
+            PhotoId(id),
+            crate::analysis::clip::ClipAnalyzer::ID,
+            &json!({ "embedding": e.encode(), "aesthetic": rating }),
+        )
+        .unwrap();
+}
+
+#[test]
+fn a_blink_loses_to_open_eyes() {
+    let (world, api, ids) = setup(&[0, 1]);
+    // The crispest frame has closed eyes.
+    set_scores(&world, ids[0], 8_000.0, 1.0);
+    set_scores(&world, ids[1], 6_000.0, 1.0);
+    set_faces(&world, ids[0], true, 0.9);
+    set_faces(&world, ids[1], false, 0.9);
+    api.recompute_series().unwrap();
+    assert_eq!(best_of(&api, ids[0]).0, json!(ids[1]));
+}
+
+#[test]
+fn embeddings_join_retakes_and_scores_are_stored() {
+    let (world, api, ids) = setup(&[0, 5, 10]);
+    // Hashes far apart: only the embeddings say the first two match.
+    set_signature(&world, PhotoId(ids[0]), 0);
+    set_signature(&world, PhotoId(ids[1]), u64::MAX);
+    set_signature(&world, PhotoId(ids[2]), 0xFFFF_FFFF);
+    set_clip(&world, ids[0], &[1.0, 0.05, 0.0], 6.5);
+    set_clip(&world, ids[1], &[1.0, 0.0, 0.05], 4.5);
+    set_clip(&world, ids[2], &[0.0, 1.0, 0.0], 5.5);
+    for id in &ids {
+        set_scores(&world, *id, 1_000.0, 1.0);
+    }
+    api.recompute_series().unwrap();
+    assert_eq!(series(&world), [vec![ids[0], ids[1]]]);
+
+    // Combined scores: technical overall 1.0 averaged with the aesthetic
+    // score (6.5 → 1.0, 4.5 → 0.0, 5.5 → 0.5).
+    let scores = world.catalog.scores.lock().unwrap().clone();
+    let score = |id: i64| scores[&PhotoId(id)];
+    assert!((score(ids[0]) - 1.0).abs() < 1e-6);
+    assert!((score(ids[1]) - 0.5).abs() < 1e-6);
+    assert!((score(ids[2]) - 0.75).abs() < 1e-6);
+    let detail = api
+        .call("get_photo", json!({ "photo_id": ids[2] }))
+        .unwrap();
+    assert!((detail["score"].as_f64().unwrap() - 0.75).abs() < 1e-6);
+}

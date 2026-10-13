@@ -167,6 +167,10 @@ pub trait PhotoCatalog: Send + Sync {
     /// Photos flagged as rejected.
     fn rejected_photos(&self) -> Result<Vec<PhotoId>, CatalogError>;
 
+    /// Sets the combined quality scores (0–1) of photos; other photos'
+    /// scores are removed.
+    fn replace_scores(&self, scores: &[(PhotoId, f32)]) -> Result<(), CatalogError>;
+
     /// Sizes of all catalogued RAW and image files. A new file can only be
     /// a duplicate if its size is in this set, so only those are hashed.
     fn media_sizes(&self) -> Result<HashSet<u64>, CatalogError>;

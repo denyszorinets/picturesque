@@ -16,7 +16,11 @@ both are true:
 - it was taken at most **30 seconds** after the previous photo, and
 - it **looks like** one of the series' last three photos: their
   perceptual hashes differ by at most **16 bits**
-  (:doc:`/reference/similarity`).
+  (:doc:`/reference/similarity`), or, once the CLIP model has analyzed
+  them, their image embeddings are at least **0.87** similar
+  (:ref:`features-ai-embeddings`). Embeddings recognize zoomed-in and
+  reframed retakes that hashes miss
+  (:repo:`spikes/series/results.md`).
 
 Otherwise it starts a new series. A single odd frame (someone walking
 through the shot) stays in the series when the next photo looks like the
@@ -38,21 +42,35 @@ The best photo
 --------------
 
 Each series has a **best photo**, ranked from the technical scores
-(:doc:`/reference/quality-scores`):
+(:doc:`/reference/quality-scores`) and, once the AI models have run, the
+aesthetic score and faces (:doc:`/features/ai`):
 
 .. code-block:: text
 
-   score = (wₛ · relative sharpness + wₑ · exposure + wₙ · low noise) / (wₛ + wₑ + wₙ)
+   score = (wₛ · sharpness + wₑ · exposure + wₙ · low noise + wₐ · aesthetic)
+           / (wₛ + wₑ + wₙ + wₐ)
+   score × 0.5 when someone important has closed eyes
 
-- **Relative sharpness** compares detail with the sharpest photo of the
-  series: 1 for the sharpest, 0.25 less for each halving of detail. In a
-  burst every frame may be "sharp"; the crispest one still wins.
-- The weights default to 0.6 (sharpness), 0.3 (exposure) and 0.1 (noise)
-  and can be changed in **Import → Library → Series**
-  (:ref:`reference-settings-ranking`). Only their ratios matter.
+- **Sharpness** is relative to the sharpest photo of the series: 1 for the
+  sharpest, 0.25 less for each halving of detail. In a burst every frame
+  may be "sharp"; the crispest one still wins. With faces, the face's
+  sharpness relative to the sharpest face of the series counts as much as
+  the whole photo's, so the frame where the face is in focus wins.
+- The **aesthetic** term counts only for photos the CLIP model has
+  analyzed (:ref:`features-ai-aesthetic`).
+- **Closed eyes** of the largest face, or of any face at least half its
+  size, halve the score: a sharp blink loses to a slightly softer frame
+  with open eyes (:ref:`features-ai-faces`).
+- The weights default to 0.6 (sharpness), 0.3 (exposure), 0.1 (noise) and
+  0.4 (aesthetic) and can be changed in **Import → Library → Series**
+  (:ref:`reference-settings-ranking`). Only their ratios matter; an
+  aesthetic weight of 0 ranks by technical scores alone.
 - **Rejected** photos rank last, and photos not analyzed yet just before
   them.
 - Ties go to the earlier photo, so the ranking never changes by itself.
+
+Whether this matches your own choices can be measured on a shoot of yours
+with :repo:`spikes/ranking/README.md`.
 
 You can **choose the best photo** yourself. Your choice wins over the
 ranking and is kept when photos are re-analyzed; if a series contains
@@ -60,6 +78,17 @@ several photos you chose (after joining series), the latest choice wins.
 Withdrawing a choice returns the series to the ranking. The best photo is
 recomputed when scores arrive, when you reject a photo and when the
 weights change.
+
+.. _features-series-score:
+
+Combined score
+--------------
+
+Every photo also gets a combined **score** (0–1) for comparing photos
+across the library: the technical overall score, scaled by the face's
+sharpness when there are faces, averaged with the aesthetic score when
+there is one, and halved for closed eyes. The loupe shows it as
+**Score**, and **Best quality first** sorts by it.
 
 Correcting series
 -----------------

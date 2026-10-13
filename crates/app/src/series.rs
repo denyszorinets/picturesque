@@ -2,23 +2,28 @@
 //! (`docs/features/series.rst`).
 //!
 //! Series are recomputed from scratch (capture times, perceptual hashes,
-//! technical scores, decisions, the user's edits and choices, settings)
-//! whenever an input changes: right away after an edit, a choice or a
-//! settings change, and debounced while analysis, imports and culling
-//! change data. With 10,000 photos a run takes milliseconds.
+//! CLIP embeddings, technical and aesthetic scores, faces, decisions, the
+//! user's edits and choices, settings), together with every photo's
+//! combined quality score, whenever an input changes: right away after an
+//! edit, a choice or a settings change, and debounced while analysis,
+//! imports and culling change data. With 10,000 photos a run takes
+//! milliseconds.
 
 use std::collections::{HashMap, HashSet};
 use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender, channel};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+use picturesque_core::clip::Embedding;
 use picturesque_core::photo::PhotoId;
 use picturesque_core::quality::TechnicalScores;
-use picturesque_core::ranking::{Candidate, best, rank};
+use picturesque_core::ranking::{Candidate, FaceSignal, best, photo_quality, rank};
 use picturesque_core::series::{SeriesEdit, SeriesInput, detect_series};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
+use crate::analysis::clip::{ClipAnalyzer, aesthetic_score};
+use crate::analysis::faces::{FaceAnalyzer, faces as faces_of, signal as face_signal};
 use crate::analysis::similarity::SimilarityAnalyzer;
 use crate::analysis::technical::TechnicalAnalyzer;
 use crate::ports::catalog::{CatalogError, PhotoCatalog, StoredSeries};
@@ -125,13 +130,16 @@ pub struct EditSeriesArgs {
     pub edit: Option<SeriesEditView>,
 }
 
+/// Series and every photo's combined score, as last stored.
+type Stored = (Vec<StoredSeries>, Vec<(PhotoId, f32)>);
+
 /// Recomputes and stores series.
 pub struct SeriesService {
     catalog: Arc<dyn PhotoCatalog>,
     settings: Arc<dyn SettingsStore>,
     events: Arc<dyn EventSink>,
-    /// The last stored series; also serializes recomputes.
-    last: Mutex<Option<Vec<StoredSeries>>>,
+    /// The last stored series and scores; also serializes recomputes.
+    last: Mutex<Option<Stored>>,
     notify: Mutex<Option<Sender<()>>>,
 }
 
@@ -156,9 +164,9 @@ impl SeriesService {
         }
     }
 
-    /// Recomputes series and their best photos now. Stores them and sends
-    /// `series_changed` only when something changed. Returns the number of
-    /// series.
+    /// Recomputes series, their best photos and every photo's combined
+    /// quality score now. Stores them and sends `series_changed` only when
+    /// something changed. Returns the number of series.
     pub fn recompute(&self) -> Result<usize, CatalogError> {
         let mut last = self.last.lock().expect("series lock");
         let settings = self.settings.load_settings()?;
@@ -168,6 +176,23 @@ impl SeriesService {
             .into_iter()
             .filter_map(|(id, result)| Some((id, SimilarityAnalyzer::signature(&result)?)))
             .collect();
+        let clip = self.catalog.analysis_results(ClipAnalyzer::ID)?;
+        let embeddings: HashMap<PhotoId, Embedding> = clip
+            .iter()
+            .filter_map(|(id, result)| Some((*id, ClipAnalyzer::embedding(result)?)))
+            .collect();
+        let aesthetic: HashMap<PhotoId, f32> = clip
+            .iter()
+            .filter_map(|(id, result)| {
+                Some((*id, aesthetic_score(ClipAnalyzer::aesthetic(result)?)))
+            })
+            .collect();
+        let faces: HashMap<PhotoId, FaceSignal> = self
+            .catalog
+            .analysis_results(FaceAnalyzer::ID)?
+            .into_iter()
+            .filter_map(|(id, result)| Some((id, face_signal(&faces_of(&result)?)?)))
+            .collect();
         let inputs: Vec<SeriesInput> = self
             .catalog
             .capture_times()?
@@ -176,6 +201,7 @@ impl SeriesService {
                 id,
                 captured,
                 signature: signatures.get(&id).copied(),
+                embedding: embeddings.get(&id),
             })
             .collect();
         let edits = self.catalog.series_edits()?.into_iter().collect();
@@ -188,19 +214,19 @@ impl SeriesService {
             .filter_map(|(id, result)| Some((id, serde_json::from_value(result).ok()?)))
             .collect();
         let rejected: HashSet<PhotoId> = self.catalog.rejected_photos()?.into_iter().collect();
+        let candidate = |id: PhotoId| Candidate {
+            id,
+            scores: scores.get(&id).copied(),
+            rejected: rejected.contains(&id),
+            aesthetic: aesthetic.get(&id).copied(),
+            face: faces.get(&id).copied(),
+        };
         let choices = self.catalog.best_choices()?;
         let weights = settings.ranking.weights();
         let series: Vec<StoredSeries> = groups
             .into_iter()
             .filter_map(|members| {
-                let candidates: Vec<Candidate> = members
-                    .iter()
-                    .map(|id| Candidate {
-                        id: *id,
-                        scores: scores.get(id).copied(),
-                        rejected: rejected.contains(id),
-                    })
-                    .collect();
+                let candidates: Vec<Candidate> = members.iter().map(|id| candidate(*id)).collect();
                 let ranking = rank(&candidates, weights);
                 let (best, best_chosen) = best(&ranking, &choices)?;
                 Some(StoredSeries {
@@ -211,15 +237,31 @@ impl SeriesService {
                 })
             })
             .collect();
+        let mut qualities: Vec<(PhotoId, f32)> = scores
+            .keys()
+            .filter_map(|id| Some((*id, photo_quality(&candidate(*id))?)))
+            .collect();
+        qualities.sort_by_key(|(id, _)| *id);
 
         let count = series.len();
-        if last.as_ref() != Some(&series) {
+        let (old_series, old_qualities) = match last.as_ref() {
+            Some((s, q)) => (Some(s), Some(q)),
+            None => (None, None),
+        };
+        let series_changed = old_series != Some(&series);
+        let scores_changed = old_qualities != Some(&qualities);
+        if series_changed {
             self.catalog.replace_series(&series)?;
+        }
+        if scores_changed {
+            self.catalog.replace_scores(&qualities)?;
+        }
+        if series_changed || scores_changed {
             self.events.emit(&AppEvent::SeriesChanged(SeriesStatus {
                 series: count,
                 photos: series.iter().map(|s| s.members.len()).sum(),
             }));
-            *last = Some(series);
+            *last = Some((series, qualities));
         }
         Ok(count)
     }

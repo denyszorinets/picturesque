@@ -1,24 +1,30 @@
-//! Ranking the photos of a series to find the best one.
+//! Ranking the photos of a series to find the best one, and the combined
+//! quality of single photos.
 //!
-//! Each photo gets a score from its technical scores, weighted by the
-//! user's preferences. Sharpness counts relative to the sharpest photo of
-//! the series: in a burst every frame may score as "sharp", and the one
-//! with the crispest detail should still win. Rejected photos rank last,
-//! photos not analyzed yet just before them. The user can choose the best
-//! photo themselves; their latest choice in a series wins.
+//! Each photo gets a score from its technical scores and, once AI models
+//! ran, its aesthetic score and faces, weighted by the user's preferences.
+//! Sharpness counts relative to the sharpest photo of the series: in a
+//! burst every frame may score as "sharp", and the one with the crispest
+//! detail should still win; with faces, the face's sharpness counts as
+//! much as the whole photo's. Closed eyes halve a photo's score. Rejected
+//! photos rank last, photos not analyzed yet just before them. The user
+//! can choose the best photo themselves; their latest choice in a series
+//! wins.
 
 use serde::{Deserialize, Serialize};
 
 use crate::photo::PhotoId;
 use crate::quality::TechnicalScores;
 
-/// How much each technical score counts. Only the ratios matter.
+/// How much each score counts. Only the ratios matter.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct RankWeights {
     pub sharpness: f32,
     pub exposure: f32,
     pub noise: f32,
+    /// The aesthetic score, when the CLIP model ran.
+    pub aesthetic: f32,
 }
 
 impl Default for RankWeights {
@@ -27,16 +33,35 @@ impl Default for RankWeights {
             sharpness: 0.6,
             exposure: 0.3,
             noise: 0.1,
+            aesthetic: 0.4,
         }
     }
 }
 
 impl RankWeights {
-    /// Weights must be finite, non-negative and not all zero.
+    /// Weights must be finite, non-negative and the technical ones not all
+    /// zero.
     pub fn is_valid(&self) -> bool {
-        let all = [self.sharpness, self.exposure, self.noise];
-        all.iter().all(|w| w.is_finite() && *w >= 0.0) && all.iter().sum::<f32>() > 0.0
+        let technical = [self.sharpness, self.exposure, self.noise];
+        technical
+            .iter()
+            .chain([&self.aesthetic])
+            .all(|w| w.is_finite() && *w >= 0.0)
+            && technical.iter().sum::<f32>() > 0.0
     }
+}
+
+/// Closed eyes multiply a photo's score by this.
+pub const CLOSED_EYES_FACTOR: f32 = 0.5;
+
+/// What the face models say about a photo's people.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct FaceSignal {
+    /// Whether someone important (the largest face, or one at least half
+    /// its size) has closed eyes; `None` when no eyes could be judged.
+    pub eyes_closed: Option<bool>,
+    /// Sharpness (0–1) of the largest face.
+    pub sharpness: f32,
 }
 
 /// A photo of a series, as ranking sees it.
@@ -46,6 +71,30 @@ pub struct Candidate {
     /// `None` until analyzed (or if analysis failed).
     pub scores: Option<TechnicalScores>,
     pub rejected: bool,
+    /// Aesthetic score 0–1, once the CLIP model ran.
+    pub aesthetic: Option<f32>,
+    /// `None` without faces (or before the face models ran).
+    pub face: Option<FaceSignal>,
+}
+
+/// A photo's combined quality, 0–1, for comparing photos across the
+/// library: the technical score (scaled by the face's sharpness when
+/// there are faces) averaged with the aesthetic score, halved when eyes
+/// are closed. `None` before technical analysis.
+pub fn photo_quality(c: &Candidate) -> Option<f32> {
+    let scores = c.scores?;
+    let mut technical = scores.overall;
+    if let Some(face) = c.face {
+        technical *= 0.5 + 0.5 * face.sharpness;
+    }
+    let mut quality = match c.aesthetic {
+        Some(aesthetic) => (technical + aesthetic) / 2.0,
+        None => technical,
+    };
+    if c.face.and_then(|f| f.eyes_closed) == Some(true) {
+        quality *= CLOSED_EYES_FACTOR;
+    }
+    Some(quality.clamp(0.0, 1.0))
 }
 
 /// A photo's place in its series.
@@ -71,19 +120,37 @@ fn relative_sharpness(variance: f32, sharpest: f32) -> f32 {
 /// Orders `candidates` best first. Ties go to the earlier photo id, so the
 /// result never depends on input order.
 pub fn rank(candidates: &[Candidate], weights: RankWeights) -> Vec<Ranked> {
-    let total = weights.sharpness + weights.exposure + weights.noise;
     let sharpest = candidates
         .iter()
         .filter_map(|c| c.scores.map(|s| s.laplacian_variance))
+        .fold(0.0f32, f32::max);
+    let sharpest_face = candidates
+        .iter()
+        .filter_map(|c| c.face.map(|f| f.sharpness))
         .fold(0.0f32, f32::max);
     let mut ranked: Vec<(&Candidate, Option<f32>)> = candidates
         .iter()
         .map(|c| {
             let score = c.scores.map(|s| {
-                let sum = weights.sharpness * relative_sharpness(s.laplacian_variance, sharpest)
+                let mut sharpness = relative_sharpness(s.laplacian_variance, sharpest);
+                if let Some(face) = c.face
+                    && sharpest_face > 0.0
+                {
+                    sharpness = (sharpness + face.sharpness / sharpest_face) / 2.0;
+                }
+                let mut sum = weights.sharpness * sharpness
                     + weights.exposure * s.exposure
                     + weights.noise * s.noise;
-                if total > 0.0 { sum / total } else { 0.0 }
+                let mut total = weights.sharpness + weights.exposure + weights.noise;
+                if let Some(aesthetic) = c.aesthetic {
+                    sum += weights.aesthetic * aesthetic;
+                    total += weights.aesthetic;
+                }
+                let mut score = if total > 0.0 { sum / total } else { 0.0 };
+                if c.face.and_then(|f| f.eyes_closed) == Some(true) {
+                    score *= CLOSED_EYES_FACTOR;
+                }
+                score
             });
             (c, score)
         })
@@ -136,6 +203,8 @@ mod tests {
             id: PhotoId(id),
             scores,
             rejected: false,
+            aesthetic: None,
+            face: None,
         }
     }
 
@@ -169,6 +238,7 @@ mod tests {
             sharpness: 1.0,
             exposure: 0.0,
             noise: 0.0,
+            aesthetic: 0.0,
         };
         assert_eq!(order(&rank(&photos, sharpness_only)), [1, 2]);
     }
@@ -237,6 +307,11 @@ mod tests {
                 sharpness: 0.0,
                 exposure: 0.0,
                 noise: 0.0,
+                aesthetic: 1.0,
+            },
+            RankWeights {
+                aesthetic: -1.0,
+                ..Default::default()
             },
             RankWeights {
                 noise: f32::NAN,
@@ -245,6 +320,89 @@ mod tests {
         ] {
             assert!(!bad.is_valid(), "{bad:?}");
         }
+    }
+
+    #[test]
+    fn closed_eyes_and_soft_faces_lose_to_open_sharp_faces() {
+        let face = |eyes_closed, sharpness| {
+            Some(FaceSignal {
+                eyes_closed: Some(eyes_closed),
+                sharpness,
+            })
+        };
+        let photos = [
+            // The crispest frame, but a blink.
+            Candidate {
+                face: face(true, 0.9),
+                ..candidate(1, scores(8_000.0, 1.0, 1.0))
+            },
+            // A bit softer overall, eyes open, face sharp.
+            Candidate {
+                face: face(false, 0.9),
+                ..candidate(2, scores(6_000.0, 1.0, 1.0))
+            },
+            // Sharp background, soft face.
+            Candidate {
+                face: face(false, 0.3),
+                ..candidate(3, scores(8_000.0, 1.0, 1.0))
+            },
+        ];
+        assert_eq!(order(&rank(&photos, RankWeights::default())), [2, 3, 1]);
+    }
+
+    #[test]
+    fn the_aesthetic_score_breaks_close_calls() {
+        let photos = [
+            Candidate {
+                aesthetic: Some(0.3),
+                ..candidate(1, scores(8_000.0, 1.0, 1.0))
+            },
+            Candidate {
+                aesthetic: Some(0.8),
+                ..candidate(2, scores(7_000.0, 1.0, 1.0))
+            },
+        ];
+        assert_eq!(order(&rank(&photos, RankWeights::default())), [2, 1]);
+        let technical_only = RankWeights {
+            aesthetic: 0.0,
+            ..Default::default()
+        };
+        assert_eq!(order(&rank(&photos, technical_only)), [1, 2]);
+    }
+
+    #[test]
+    fn photo_quality_combines_every_signal() {
+        let base = candidate(1, scores(1_000.0, 1.0, 1.0));
+        let overall = |c: Candidate| photo_quality(&c).unwrap();
+        let mut s = scores(1_000.0, 1.0, 1.0).unwrap();
+        s.overall = 0.8;
+        let c = Candidate {
+            scores: Some(s),
+            ..base
+        };
+        assert!((overall(c) - 0.8).abs() < 1e-6);
+        let pretty = Candidate {
+            aesthetic: Some(0.4),
+            ..c
+        };
+        assert!((overall(pretty) - 0.6).abs() < 1e-6);
+        let soft_face = Candidate {
+            face: Some(FaceSignal {
+                eyes_closed: Some(false),
+                sharpness: 0.0,
+            }),
+            ..c
+        };
+        assert!((overall(soft_face) - 0.4).abs() < 1e-6);
+        let blink = Candidate {
+            face: Some(FaceSignal {
+                eyes_closed: Some(true),
+                sharpness: 1.0,
+            }),
+            ..c
+        };
+        assert!((overall(blink) - 0.4).abs() < 1e-6);
+        assert_eq!(photo_quality(&candidate(2, None)), None);
     }
 
     #[test]

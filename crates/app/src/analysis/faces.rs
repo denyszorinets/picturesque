@@ -13,6 +13,7 @@ use picturesque_core::faces::{
 };
 use picturesque_core::pixels::RgbImage;
 use picturesque_core::quality::technical_scores;
+use picturesque_core::ranking::FaceSignal;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use ts_rs::TS;
@@ -54,6 +55,29 @@ pub struct FaceView {
 /// The faces of an analysis result (empty when none were found).
 pub fn faces(result: &Value) -> Option<Vec<FaceView>> {
     serde_json::from_value(result.get("faces")?.clone()).ok()
+}
+
+/// What ranking needs to know about a photo's faces: whether the largest
+/// face, or one at least half its size, has closed eyes, and how sharp the
+/// largest face is. `None` without faces.
+pub fn signal(faces: &[FaceView]) -> Option<FaceSignal> {
+    let area = |f: &FaceView| f.width * f.height;
+    let largest = faces.iter().max_by(|a, b| area(a).total_cmp(&area(b)))?;
+    let important: Vec<&FaceView> = faces
+        .iter()
+        .filter(|f| area(f) >= area(largest) / 2.0)
+        .collect();
+    let eyes_closed = if important.iter().any(|f| f.eyes_closed == Some(true)) {
+        Some(true)
+    } else if important.iter().any(|f| f.eyes_closed == Some(false)) {
+        Some(false)
+    } else {
+        None
+    };
+    Some(FaceSignal {
+        eyes_closed,
+        sharpness: largest.sharpness,
+    })
 }
 
 /// Finds faces and judges their eyes and focus.
@@ -343,6 +367,29 @@ mod tests {
         assert_eq!(face.eyes_closed, Some(true));
         assert!((face.eye_openness.unwrap() - 0.08).abs() < 1e-4);
         assert!((0.0..=1.0).contains(&face.sharpness));
+    }
+
+    #[test]
+    fn the_signal_looks_at_important_faces() {
+        let face = |size: f32, eyes_closed, sharpness| FaceView {
+            x: 0.0,
+            y: 0.0,
+            width: size,
+            height: size,
+            score: 0.9,
+            eyes_closed,
+            eye_openness: None,
+            sharpness,
+        };
+        assert_eq!(signal(&[]), None);
+        // A small face in the background blinking does not count.
+        let s = signal(&[face(0.4, Some(false), 0.8), face(0.1, Some(true), 0.2)]).unwrap();
+        assert_eq!(s.eyes_closed, Some(false));
+        assert_eq!(s.sharpness, 0.8);
+        // Two people of similar size: one blink counts.
+        let s = signal(&[face(0.4, Some(false), 0.8), face(0.35, Some(true), 0.9)]).unwrap();
+        assert_eq!(s.eyes_closed, Some(true));
+        assert_eq!(signal(&[face(0.4, None, 0.5)]).unwrap().eyes_closed, None);
     }
 
     #[test]

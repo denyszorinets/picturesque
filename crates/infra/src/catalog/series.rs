@@ -204,6 +204,23 @@ impl SqliteCatalog {
         Ok(())
     }
 
+    pub(super) fn save_scores(&self, scores: &[(PhotoId, f32)]) -> Result<(), CatalogError> {
+        let mut conn = self.conn();
+        let tx = conn.transaction().map_err(storage)?;
+        tx.execute("DELETE FROM photo_score", []).map_err(storage)?;
+        {
+            let mut insert = tx
+                .prepare("INSERT INTO photo_score (photo_id, score) VALUES (?1, ?2)")
+                .map_err(storage)?;
+            for (id, score) in scores {
+                insert
+                    .execute(params![id.0, f64::from(*score)])
+                    .map_err(storage)?;
+            }
+        }
+        tx.commit().map_err(storage)
+    }
+
     pub(super) fn load_rejected(&self) -> Result<Vec<PhotoId>, CatalogError> {
         let conn = self.conn();
         let mut stmt = conn

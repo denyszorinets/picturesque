@@ -31,11 +31,17 @@
   let sidecarNaming = $state<Settings["sidecar_naming"]>("file_extension");
   let maxGap = $state(30);
   let maxDistance = $state(16);
-  let weights = $state({ sharpness: 0.6, exposure: 0.3, noise: 0.1 });
+  let weights = $state({
+    sharpness: 0.6,
+    exposure: 0.3,
+    noise: 0.1,
+    aesthetic: 0.4,
+  });
   const WEIGHT_LABELS = {
     sharpness: "Sharpness",
     exposure: "Exposure",
     noise: "Low noise",
+    aesthetic: "Aesthetic",
   } as const;
   let provider = $state<ProviderChoice>("auto");
   let ai = $state<AiStatus | null>(null);
@@ -63,7 +69,8 @@
     saved !== null &&
       (weights.sharpness !== saved.ranking.sharpness ||
         weights.exposure !== saved.ranking.exposure ||
-        weights.noise !== saved.ranking.noise),
+        weights.noise !== saved.ranking.noise ||
+        weights.aesthetic !== saved.ranking.aesthetic),
   );
   const dirty = $derived(
     saved !== null &&
@@ -249,7 +256,7 @@
     </p>
     <span class="label">Best photo of a series</span>
     <div class="weights">
-      {#each ["sharpness", "exposure", "noise"] as const as key (key)}
+      {#each ["sharpness", "exposure", "noise", "aesthetic"] as const as key (key)}
         <label class="inline">
           {WEIGHT_LABELS[key]}
           <input
