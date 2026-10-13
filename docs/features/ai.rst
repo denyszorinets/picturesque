@@ -79,6 +79,9 @@ Available models:
    * - CLIP ViT-L/14 text encoder (OpenAI; MIT)
      - 496 MB
      - Text search (with the image encoder)
+   * - YuNet face detector (MIT) and MediaPipe face mesh (Apache-2.0)
+     - 5 MB
+     - Faces, closed eyes and face sharpness
 
 Models are stored in the ``models`` folder of the application data folder
 (:doc:`/reference/data-locations`), one folder per model and version.
@@ -153,3 +156,28 @@ analysis has computed their embeddings.
 
 Text search also needs the image encoder; without either model the search
 box says which one to download.
+
+.. _features-ai-faces:
+
+Faces and closed eyes
+---------------------
+
+With the face models downloaded, background analysis finds the faces in
+every photo and judges each one:
+
+- **Closed eyes.** The face mesh places landmarks on the eyelids; the
+  *eye aspect ratio* (the lids' opening relative to the eye's width) is
+  about 0.3 for open eyes and falls under 0.17 when they close. Eyes are
+  judged only on faces at least 40 pixels tall in the 1024-pixel analysis
+  image, and only when the face mesh is confident it sees a face; otherwise
+  they are left undecided rather than guessed.
+- **Face sharpness.** The technical sharpness measure
+  (:doc:`/reference/quality-scores`) applied to the face alone, so a photo
+  whose background is sharp but whose face is soft is caught.
+
+The loupe lists the faces, how many have closed eyes and how sharp the
+sharpest face is. Up to eight faces per photo are examined, largest first.
+The test photos (two with closed eyes, two with open eyes, from Wikimedia
+Commons) are all judged correctly
+(:repo:`crates/infra/tests/fixtures/faces/SOURCES.md`). Squinting, deep
+shadows and sunglasses can still fool it.

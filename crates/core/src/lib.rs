@@ -8,6 +8,7 @@
 pub mod clip;
 pub mod clip_tokenizer;
 pub mod decision;
+pub mod faces;
 pub mod grouping;
 pub mod hash;
 pub mod media;

@@ -77,7 +77,12 @@ Commands
    ``highlights_clipped``, ``shadows_clipped``; ``null`` until analyzed,
    see :doc:`quality-scores`) and ``aesthetic`` (``score`` 0–1 and the
    predictor's ``rating``, about 1–10; ``null`` until the CLIP model
-   analyzed the photo, see :ref:`features-ai-aesthetic`). Unknown photos are ``not_found``.
+   analyzed the photo, see :ref:`features-ai-aesthetic`) and ``faces``
+   (largest first; each with ``x``, ``y``, ``width``, ``height`` as
+   fractions of the photo, detector ``score``, ``eyes_closed`` —
+   ``true``, ``false`` or ``null`` when undecided — ``eye_openness`` and
+   ``sharpness`` 0–1; ``null`` until the face models analyzed the photo, see
+   :ref:`features-ai-faces`). Unknown photos are ``not_found``.
 
 ``set_decisions``
    ``{ "changes": [{ "photo_id": 7, "flag": "pick" }, { "photo_id": 8, "rating": 4 }] }``.

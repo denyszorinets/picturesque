@@ -22,6 +22,7 @@ use crate::ports::pixels::PixelLoader;
 use crate::thumbnails::{ImageSize, ThumbnailService};
 
 pub mod clip;
+pub mod faces;
 pub mod similarity;
 pub mod technical;
 

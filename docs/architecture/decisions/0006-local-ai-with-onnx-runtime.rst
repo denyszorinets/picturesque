@@ -161,6 +161,11 @@ Its 768-dimensional embeddings still fit in memory for the whole library.
 :issue:`45` added the matching text encoder (496 MB) for text search, with
 CLIP's byte-pair tokenizer reimplemented in ``picturesque-core`` (its
 vocabulary is rebuilt from the merge list, as in OpenAI's reference code).
+:issue:`46` added faces: the **YuNet** detector from OpenCV Zoo (MIT,
+233 KB) and the **MediaPipe Face Landmarker** mesh (Apache-2.0, converted to
+ONNX, 5 MB), from whose eyelid landmarks the eye aspect ratio tells open
+from closed eyes. Eye-state classifiers found on Hugging Face were licensed
+non-commercially (CC BY-NC-ND) and could not be used.
 
 Follow-up
 ~~~~~~~~~

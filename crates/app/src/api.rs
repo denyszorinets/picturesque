@@ -15,6 +15,7 @@ use ts_rs::TS;
 
 use crate::ai::AiService;
 use crate::analysis::clip::{AestheticView, ClipAnalyzer};
+use crate::analysis::faces::FaceAnalyzer;
 use crate::analysis::technical::{QualityView, TechnicalAnalyzer};
 use crate::analysis::{AnalysisService, Analyzer, PrioritizeArgs};
 use crate::embeddings::{DEFAULT_LIMIT, EmbeddingIndex, MAX_LIMIT, SimilarArgs};
@@ -164,6 +165,11 @@ impl Api {
         // AI analyzers join once their models are downloaded.
         let mut analyzers = ctx.analyzers;
         analyzers.push(Arc::new(ClipAnalyzer::new(
+            Arc::clone(&models),
+            Arc::clone(&ctx.inference),
+            Arc::clone(&ctx.settings_store),
+        )));
+        analyzers.push(Arc::new(FaceAnalyzer::new(
             Arc::clone(&models),
             Arc::clone(&ctx.inference),
             Arc::clone(&ctx.settings_store),
@@ -414,6 +420,7 @@ impl Api {
                 };
                 detail.quality = current(TechnicalAnalyzer::ID).and_then(QualityView::from_result);
                 detail.aesthetic = current(ClipAnalyzer::ID).and_then(AestheticView::from_result);
+                detail.faces = current(FaceAnalyzer::ID).and_then(crate::analysis::faces::faces);
                 respond(detail)
             }
             "set_decisions" => {

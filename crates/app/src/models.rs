@@ -32,6 +32,11 @@ pub const CLIP_TEXT_FILE: &str = "textual/model.onnx";
 /// The tokenizer's merge list.
 pub const CLIP_MERGES_FILE: &str = "textual/merges.txt";
 
+/// Face detection and face landmarks (`analysis::faces`).
+pub const FACES: &str = "faces";
+pub const FACE_DETECTOR_FILE: &str = "face_detection_yunet_2023mar.onnx";
+pub const FACE_MESH_FILE: &str = "face_mesh.onnx";
+
 /// Immich's ONNX export of OpenAI CLIP ViT-L/14, pinned to a commit. The
 /// improved LAION aesthetic predictor was trained on its embeddings; with
 /// the smaller ViT-B/32 the aesthetic score barely beat chance
@@ -83,6 +88,40 @@ pub fn catalog() -> Vec<ModelSpec> {
                     sha256: "9fd691f7c8039210e0fced15865466c65820d09b63988b0174bfe25de299051a"
                         .into(),
                     size: 524_619,
+                },
+            ],
+        },
+        ModelSpec {
+            id: FACES.into(),
+            name: "YuNet face detector and MediaPipe face mesh".into(),
+            purpose: "Finds faces and checks whether eyes are closed and faces are sharp.".into(),
+            version: 1,
+            license: "MIT AND Apache-2.0".into(),
+            license_url:
+                "https://github.com/opencv/opencv_zoo/blob/main/models/face_detection_yunet/LICENSE"
+                    .into(),
+            homepage: "https://github.com/opencv/opencv_zoo/tree/main/models/face_detection_yunet"
+                .into(),
+            files: vec![
+                ModelFile {
+                    name: FACE_DETECTOR_FILE.into(),
+                    url: format!(
+                        "https://huggingface.co/opencv/face_detection_yunet/resolve/\
+                         3cc26e7f1014a5ee5d74a42acee58bafc9d0a310/{FACE_DETECTOR_FILE}"
+                    ),
+                    sha256: "8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa4"
+                        .into(),
+                    size: 232_589,
+                },
+                ModelFile {
+                    // MediaPipe Face Landmarker v2 (Apache-2.0), converted to ONNX.
+                    name: FACE_MESH_FILE.into(),
+                    url: "https://huggingface.co/astaileyyoung/FaceMeshONNX/resolve/\
+                          71a6de2112ae66337e098bff6cfcdb3905899207/mesh.onnx"
+                        .into(),
+                    sha256: "c334c26b128dfc709da0f353c6157ac340b785f5f25cdab5dbea12bbea243172"
+                        .into(),
+                    size: 5_133_323,
                 },
             ],
         },
