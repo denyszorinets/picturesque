@@ -1,4 +1,4 @@
-.PHONY: help format format-check test lint build doc check clean ui-deps ui-check e2e bindings-check dev-web app-dev docs docs-serve docs-check
+.PHONY: smoke help format format-check test lint build doc check clean ui-deps ui-check e2e bindings-check dev-web app-dev docs docs-serve docs-check
 
 DOCS_DIR := docs
 SPHINX := uv run --project $(DOCS_DIR) --frozen
@@ -20,6 +20,7 @@ help:
 	@echo "  bindings-check Fail if generated TypeScript API types are out of date"
 	@echo "  dev-web       Run the UI in a browser against the dev server (no display needed)"
 	@echo "  app-dev       Run the desktop app with hot reload (needs a display)"
+	@echo "  smoke         Build the desktop app and smoke-test it on Xvfb (tauri-driver)"
 	@echo "  clean         Remove build artifacts"
 	@echo "  docs          Build documentation into docs/_build/html"
 	@echo "  docs-serve    Live-reloading documentation preview on http://127.0.0.1:8000"
@@ -70,6 +71,14 @@ dev-web:
 	trap 'kill 0' EXIT INT TERM; \
 		cargo run --quiet -p picturesque-devserver & \
 		npm run dev -w ui
+
+# The real app on a virtual display; WAYLAND_DISPLAY is cleared so no
+# window reaches a real screen.
+smoke:
+	npx tauri build --no-bundle
+	@test -e /tmp/.X11-unix/X99 || (Xvfb :99 -screen 0 1280x800x24 >/dev/null 2>&1 &) ; sleep 1
+	env -u WAYLAND_DISPLAY DISPLAY=:99 GDK_BACKEND=x11 \
+		node ui/smoke/app-smoke.mjs target/release/picturesque-desktop target/smoke-results
 
 app-dev:
 	npx tauri dev
