@@ -88,4 +88,27 @@ describe("Filters", () => {
 
     expect(new Filters(storage).active).toBe(false);
   });
+
+  it("stacks series, expands some, and keeps stacking on clear", () => {
+    const storage = memoryStorage();
+    const f = new Filters(storage);
+    f.stacked = true;
+    f.toggleExpanded(9);
+    f.toggleExpanded(3);
+    f.toggleExpanded(5);
+    f.toggleExpanded(5);
+
+    expect(f.toQuery()).toEqual({
+      collapse_series: true,
+      expanded_series: [3, 9],
+    });
+    expect(f.active).toBe(false);
+    f.clear();
+    expect(f.stacked).toBe(true);
+
+    f.save();
+    const reopened = new Filters(storage);
+    // Stacking is kept; which series were expanded is not.
+    expect(reopened.toQuery()).toEqual({ collapse_series: true });
+  });
 });

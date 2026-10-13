@@ -20,7 +20,9 @@ Each tile shows the whole photo (never cropped), with:
   shown),
 - a green **✓** for picks and a red **✕** for rejects (rejected photos are
   dimmed),
-- its star rating.
+- its star rating,
+- a green border and **★** on the best photo of a series; the photos of a
+  series are framed together (:ref:`features-series`).
 
 Hover a tile for its file name, capture time, camera and place.
 

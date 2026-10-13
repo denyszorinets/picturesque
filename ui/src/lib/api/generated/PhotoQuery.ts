@@ -29,4 +29,12 @@ cursor?: string,
 /**
  * Page size, 1–1000 (default 200).
  */
-limit?: number, };
+limit?: number, 
+/**
+ * Show one photo per series: the best one that matches the filters.
+ */
+collapse_series?: boolean, 
+/**
+ * Series (by id) shown whole although `collapse_series` is set.
+ */
+expanded_series?: number[], };

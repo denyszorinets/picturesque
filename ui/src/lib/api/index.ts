@@ -9,6 +9,8 @@ import type { PhotoDetail } from "./generated/PhotoDetail";
 import type { PhotoFacets } from "./generated/PhotoFacets";
 import type { PhotoPage } from "./generated/PhotoPage";
 import type { PhotoQuery } from "./generated/PhotoQuery";
+import type { SeriesEditView } from "./generated/SeriesEditView";
+import type { SeriesView } from "./generated/SeriesView";
 import type { Settings } from "./generated/Settings";
 import type { SettingsUpdate } from "./generated/SettingsUpdate";
 import type { TemplatePresetView } from "./generated/TemplatePresetView";
@@ -30,6 +32,8 @@ export type { PhotoQuery } from "./generated/PhotoQuery";
 export type { PhotoSummary } from "./generated/PhotoSummary";
 export type { PhotoSort } from "./generated/PhotoSort";
 export type { CameraKey } from "./generated/CameraKey";
+export type { SeriesEditView } from "./generated/SeriesEditView";
+export type { SeriesView } from "./generated/SeriesView";
 export type { Settings } from "./generated/Settings";
 export type { SettingsUpdate } from "./generated/SettingsUpdate";
 export type { TemplatePresetView } from "./generated/TemplatePresetView";
@@ -141,5 +145,32 @@ export function prioritizeAnalysis(
 ): Promise<AnalysisStatus> {
   return transport.call<AnalysisStatus>("prioritize_analysis", {
     photo_ids: photoIds,
+  });
+}
+
+/** The series a photo belongs to, with its ranking. */
+export function photoSeries(photoId: number): Promise<SeriesView> {
+  return transport.call<SeriesView>("photo_series", { photo_id: photoId });
+}
+
+/** Splits or joins series before a photo (`null` removes the correction). */
+export function editSeries(
+  photoId: number,
+  edit: SeriesEditView | null,
+): Promise<SeriesView> {
+  return transport.call<SeriesView>("edit_series", {
+    photo_id: photoId,
+    edit,
+  });
+}
+
+/** Makes a photo the best of its series, or withdraws that choice. */
+export function chooseBest(
+  photoId: number,
+  best: boolean,
+): Promise<SeriesView> {
+  return transport.call<SeriesView>("choose_best", {
+    photo_id: photoId,
+    best,
   });
 }

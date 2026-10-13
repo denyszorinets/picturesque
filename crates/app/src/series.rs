@@ -10,7 +10,7 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender, channel};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use picturesque_core::photo::PhotoId;
 use picturesque_core::quality::TechnicalScores;
@@ -27,6 +27,9 @@ use crate::ports::settings::SettingsStore;
 
 /// Quiet time before a requested recompute runs.
 pub const DEBOUNCE: Duration = Duration::from_secs(1);
+/// Longest a requested recompute waits while requests keep coming (during
+/// analysis), so series appear as photos are analyzed.
+pub const MAX_WAIT: Duration = Duration::from_secs(5);
 
 /// Sent when series membership changes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
@@ -291,14 +294,27 @@ impl SeriesService {
 
 fn worker(service: &SeriesService, rx: &Receiver<()>) {
     while rx.recv().is_ok() {
-        loop {
-            match rx.recv_timeout(DEBOUNCE) {
-                Ok(()) => continue,
-                Err(RecvTimeoutError::Timeout) => break,
-                Err(RecvTimeoutError::Disconnected) => return,
-            }
+        if !settle(rx, DEBOUNCE, MAX_WAIT) {
+            return;
         }
         let _ = service.recompute();
+    }
+}
+
+/// After a request, waits until no request came for `quiet`, or `max_wait`
+/// passed. Returns `false` when the sender is gone.
+fn settle(rx: &Receiver<()>, quiet: Duration, max_wait: Duration) -> bool {
+    let deadline = Instant::now() + max_wait;
+    loop {
+        let wait = quiet.min(deadline.saturating_duration_since(Instant::now()));
+        if wait.is_zero() {
+            return true;
+        }
+        match rx.recv_timeout(wait) {
+            Ok(()) => continue,
+            Err(RecvTimeoutError::Timeout) => return true,
+            Err(RecvTimeoutError::Disconnected) => return false,
+        }
     }
 }
 

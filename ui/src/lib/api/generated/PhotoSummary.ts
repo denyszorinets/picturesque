@@ -27,4 +27,8 @@ series_id: number | null,
 /**
  * Whether this is the best photo of its series.
  */
-best_in_series: boolean, };
+best_in_series: boolean, 
+/**
+ * Photos in the photo's series (0 when in none).
+ */
+series_size: number, };

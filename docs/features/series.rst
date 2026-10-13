@@ -73,6 +73,28 @@ When the automatic grouping is wrong, mark a photo:
 Corrections are saved per photo and applied every time series are
 recomputed, so they survive re-analysis, new imports and threshold
 changes. Removing a correction returns that photo to automatic grouping.
-The grid shows series and offers these commands from :issue:`36`; until
-then they are available through the ``edit_series`` and ``choose_best``
-commands (:doc:`/reference/api`).
+Corrections are made through the ``edit_series`` command
+(:doc:`/reference/api`) until the compare view (:issue:`37`) offers them.
+
+Series in the grid
+------------------
+
+In the Library timeline:
+
+- The photos of a series sit inside a **frame**. When a series continues
+  on the next row, the frame's edge there is dashed and open.
+- The best photo has a **green border** and a **★** badge. Rejected
+  photos stay dimmed.
+- Press **B** to make the selected photo (or the photo in the loupe) the
+  best of its series; press it again on that photo to withdraw the choice
+  (:doc:`/reference/keyboard-shortcuts`).
+- **Stack series** (above the timeline) shows each series as its best
+  photo, with a **⧉ n** button giving the series' size. Click it to show
+  all photos of that series; click **−** on its best photo to stack it
+  again. Stacking works with filters: a stacked series shows its
+  best-placed photo among those matching the filters. Whether series are
+  stacked is kept for the session.
+
+The grid updates by itself whenever series or their best photos change:
+during analysis (at least every five seconds while photos are being
+analyzed), after imports, culling and corrections.

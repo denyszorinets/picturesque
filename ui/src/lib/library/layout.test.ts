@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { buildSections, computeLayout, rowTopOf, visibleRows } from "./layout";
+import {
+  buildSections,
+  computeLayout,
+  rowTopOf,
+  seriesSegments,
+  visibleRows,
+} from "./layout";
 
 const metrics = { width: 1000, minTile: 180, gap: 8, headerHeight: 40 };
 
@@ -143,5 +149,39 @@ describe("neighbour", async () => {
   it("stays put at the top and bottom", () => {
     expect(neighbour(layout.rows, 2, "up", 15)).toBe(2);
     expect(neighbour(layout.rows, 13, "down", 15)).toBe(13);
+  });
+});
+
+describe("seriesSegments", () => {
+  const series = [null, 7, 7, 7, null, 9, 9, 9, 9];
+  const of = (i: number) => series[i] ?? null;
+
+  it("frames runs of the same series", () => {
+    expect(seriesSegments(0, 5, of, 100, 10)).toEqual([
+      { seriesId: 7, left: 110, width: 320, openStart: false, openEnd: false },
+    ]);
+  });
+
+  it("leaves edges open where a series continues on another row", () => {
+    expect(seriesSegments(4, 7, of, 100, 10)).toEqual([
+      { seriesId: 9, left: 110, width: 210, openStart: false, openEnd: true },
+    ]);
+    expect(seriesSegments(7, 9, of, 100, 10)).toEqual([
+      { seriesId: 9, left: 0, width: 210, openStart: true, openEnd: false },
+    ]);
+  });
+
+  it("keeps neighbouring series apart", () => {
+    const touching = [1, 1, 2, 2];
+    expect(
+      seriesSegments(0, 4, (i) => touching[i] ?? null, 100, 10).map((s) => [
+        s.seriesId,
+        s.left,
+        s.width,
+      ]),
+    ).toEqual([
+      [1, 0, 210],
+      [2, 220, 210],
+    ]);
   });
 });

@@ -13,12 +13,54 @@ use rusqlite::{Connection, OptionalExtension, params, params_from_iter};
 
 use super::{SqliteCatalog, storage};
 
-/// SQL for the filters of `query`, with their parameters.
+/// SQL for the filters of `query`, with their parameters, including
+/// collapsing series.
 fn filters(query: &PhotoQuery) -> (Vec<String>, Vec<Value>) {
+    let (mut clauses, mut values) = photo_filters(query, "p", "d");
+    if query.collapse_series == Some(true) {
+        // Hide a series member when a better-placed member of the same
+        // series also matches: the best photo (chosen or ranked) first, then
+        // by rank. Expanded series stay whole.
+        let (inner, inner_values) = photo_filters(query, "p2", "d2");
+        let expanded = query.expanded_series.as_deref().unwrap_or_default();
+        let mut clause = String::from(
+            "NOT EXISTS (SELECT 1 FROM series_member me
+                 JOIN series_member o ON o.series_id = me.series_id AND o.photo_id <> me.photo_id
+                     AND ((o.best IS NOT NULL AND me.best IS NULL)
+                          OR ((o.best IS NULL) = (me.best IS NULL) AND o.rank < me.rank))
+                 JOIN photo p2 ON p2.id = o.photo_id
+                 LEFT JOIN decision d2 ON d2.photo_id = p2.id
+                 WHERE me.photo_id = p.id",
+        );
+        if !expanded.is_empty() {
+            clause.push_str(&format!(
+                " AND me.series_id NOT IN ({})",
+                vec!["?"; expanded.len()].join(", ")
+            ));
+            values.extend(expanded.iter().map(|id| Value::Integer(*id)));
+        }
+        for c in &inner {
+            clause.push_str(" AND ");
+            clause.push_str(c);
+        }
+        clause.push(')');
+        values.extend(inner_values);
+        clauses.push(clause);
+    }
+    (clauses, values)
+}
+
+/// SQL for the photo filters of `query`, for the photo table aliased `p`
+/// and the decision table aliased `d`.
+fn photo_filters(query: &PhotoQuery, p: &str, d: &str) -> (Vec<String>, Vec<Value>) {
     let mut clauses = Vec::new();
     let mut values = Vec::new();
     let mut add = |clause: &str, vals: Vec<Value>| {
-        clauses.push(clause.to_owned());
+        clauses.push(
+            clause
+                .replace("p.", &format!("{p}."))
+                .replace("d.", &format!("{d}.")),
+        );
         values.extend(vals);
     };
     if let Some(from) = &query.from {
@@ -181,7 +223,8 @@ fn query_page(conn: &Connection, query: &PhotoQuery) -> Result<PhotoPage, Catalo
                 EXISTS (SELECT 1 FROM asset a WHERE a.photo_id = p.id AND a.role = 'raw'),
                 (SELECT a.path FROM asset a WHERE a.photo_id = p.id AND a.role <> 'sidecar'
                  ORDER BY a.role = 'raw' LIMIT 1),
-                sm.series_id, sm.best IS NOT NULL
+                sm.series_id, sm.best IS NOT NULL,
+                (SELECT count(*) FROM series_member x WHERE x.series_id = sm.series_id)
          {FROM} LEFT JOIN series_member sm ON sm.photo_id = p.id {} ORDER BY {} LIMIT ?",
         where_sql(&clauses),
         order_by(sort)
@@ -219,6 +262,7 @@ fn query_page(conn: &Connection, query: &PhotoQuery) -> Result<PhotoPage, Catalo
                 file_name: path.rsplit('/').next().unwrap_or_default().to_owned(),
                 series_id: row.get(14)?,
                 best_in_series: row.get::<_, Option<bool>>(15)?.unwrap_or(false),
+                series_size: row.get::<_, u32>(16)?,
             })
         })
         .map_err(storage)?

@@ -27,6 +27,9 @@ to every selected photo.
      - Rate one to five stars
    * - 0
      - Remove the rating
+   * - B
+     - Make the photo the best of its series; again to withdraw the choice
+       (:ref:`features-series`)
    * - Ctrl+Z
      - Undo the last change
    * - Ctrl+Shift+Z, Ctrl+Y

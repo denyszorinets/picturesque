@@ -144,3 +144,47 @@ export function neighbour(
   const column = index - tileRows[at]!.start;
   return Math.min(target.start + column, target.end - 1);
 }
+
+/** A frame drawn around consecutive tiles of one series within a row. */
+export interface SeriesSegment {
+  seriesId: number;
+  /** Offset of the first tile from the row's left edge. */
+  left: number;
+  width: number;
+  /** The series continues on the previous / next row. */
+  openStart: boolean;
+  openEnd: boolean;
+}
+
+/**
+ * Runs of consecutive photos of the same series in the row [start, end).
+ * `seriesOf(i)` is the series id of photo i (`null` when in no series or
+ * not loaded yet).
+ */
+export function seriesSegments(
+  start: number,
+  end: number,
+  seriesOf: (index: number) => number | null,
+  tile: number,
+  gap: number,
+): SeriesSegment[] {
+  const segments: SeriesSegment[] = [];
+  let i = start;
+  while (i < end) {
+    const id = seriesOf(i);
+    let j = i + 1;
+    if (id !== null) while (j < end && seriesOf(j) === id) j++;
+    if (id !== null) {
+      const count = j - i;
+      segments.push({
+        seriesId: id,
+        left: (i - start) * (tile + gap),
+        width: count * tile + (count - 1) * gap,
+        openStart: i === start && i > 0 && seriesOf(i - 1) === id,
+        openEnd: j === end && seriesOf(j) === id,
+      });
+    }
+    i = j;
+  }
+  return segments;
+}

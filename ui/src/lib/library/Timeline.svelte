@@ -2,12 +2,14 @@
   import {
     computeLayout,
     rowTopOf,
+    seriesSegments,
     visibleRows,
     type Layout,
     type Section,
   } from "./layout";
   import type { Selection } from "./selection.svelte";
   import type { LibraryStore } from "./store.svelte";
+  import type { PhotoSummary } from "../api";
   import Tile from "./Tile.svelte";
 
   interface Props {
@@ -19,11 +21,29 @@
     onlayout?: (layout: Layout) => void;
     /** Called with the ids of the loaded photos on screen. */
     onvisible?: (photoIds: number[]) => void;
+    /** Whether series are stacked to their best photo. */
+    stacked?: boolean;
+    /** Stacked series the user expanded. */
+    expanded?: ReadonlySet<number>;
+    /** The stack button of a series was pressed. */
+    onstack?: (seriesId: number) => void;
   }
 
-  let { store, selection, onopen, onlayout, onvisible }: Props = $props();
+  let {
+    store,
+    selection,
+    onopen,
+    onlayout,
+    onvisible,
+    stacked = false,
+    expanded = new Set(),
+    onstack,
+  }: Props = $props();
 
-  const GAP = 6;
+  // Leaves room for series frames between tiles.
+  const GAP = 10;
+  /** How far a series frame reaches around its tiles. */
+  const FRAME = 4;
   const HEADER = 44;
   const OVERSCAN = 600;
 
@@ -109,6 +129,18 @@
     return dayFormat.format(new Date(y!, (m ?? 1) - 1, d ?? 1));
   }
 
+  const seriesOf = (index: number) => store.photos[index]?.series_id ?? null;
+
+  /** The stack button of a tile: on every stacked series' visible photo,
+   * and on the best photo of an expanded one. */
+  function stackOf(photo: PhotoSummary) {
+    if (!stacked || photo.series_id === null || photo.series_size < 2)
+      return null;
+    const open = expanded.has(photo.series_id);
+    if (open && !photo.best_in_series) return null;
+    return { count: photo.series_size, expanded: open };
+  }
+
   function select(index: number, e: MouseEvent) {
     selection.click(index, {
       shift: e.shiftKey,
@@ -144,6 +176,18 @@
         </div>
       {:else}
         <div class="row" style:top={`${row.top}px`} style:gap={`${GAP}px`}>
+          {#each seriesSegments(row.start, row.end, seriesOf, computed.tile, GAP) as segment (segment.left)}
+            <div
+              class="series-frame"
+              class:open-start={segment.openStart}
+              class:open-end={segment.openEnd}
+              style:left={`${segment.left - FRAME}px`}
+              style:width={`${segment.width + 2 * FRAME}px`}
+              style:height={`${computed.tile + 2 * FRAME}px`}
+              data-testid="series-frame"
+              data-series-id={segment.seriesId}
+            ></div>
+          {/each}
           {#each { length: row.end - row.start } as _, k (row.start + k)}
             {@const index = row.start + k}
             {@const photo = store.photos[index]}
@@ -155,6 +199,9 @@
                 focused={selection.focus === index}
                 onclick={(e) => select(index, e)}
                 ondblclick={() => onopen?.(index)}
+                stack={stackOf(photo)}
+                onstack={() =>
+                  photo.series_id !== null && onstack?.(photo.series_id)}
               />
             {:else}
               <div
@@ -175,6 +222,8 @@
     position: relative;
     overflow-y: auto;
     height: 100%;
+    /* Room for series frames at the edges. */
+    padding: 0 6px 6px;
     outline: none;
   }
 
@@ -209,6 +258,27 @@
 
   .row {
     display: flex;
+  }
+
+  .series-frame {
+    position: absolute;
+    top: -4px;
+    border: 2px solid color-mix(in srgb, var(--fg) 28%, transparent);
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--fg) 4%, transparent);
+    pointer-events: none;
+  }
+
+  .series-frame.open-start {
+    border-left-style: dashed;
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
+  }
+
+  .series-frame.open-end {
+    border-right-style: dashed;
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
   }
 
   .placeholder {

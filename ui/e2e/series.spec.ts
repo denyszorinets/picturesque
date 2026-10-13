@@ -132,3 +132,65 @@ test("series thresholds are adjustable in settings", async ({ page }) => {
   await page.getByTestId("save-settings").click();
   await expect(page.getByTestId("save-settings")).toBeDisabled();
 });
+
+test("frames series in the grid, marks the best photo and stacks series", async ({
+  page,
+  request,
+}) => {
+  const DAY = "2004-06-06";
+  const at = (s: number) => new Date(`${DAY}T09:00:0${s}`);
+  await importFiles(request, {
+    "frames/a.JPG": { bytes: jpeg(9301), time: at(0) },
+    "frames/b.JPG": { bytes: jpeg(9302), time: at(1) },
+    "frames/c.JPG": { bytes: jpeg(9303), time: at(2) },
+    "frames/d.JPG": { bytes: jpeg(9304), time: new Date(`${DAY}T12:00:00`) },
+  });
+  const query = { from: DAY, to: DAY, sort: "captured_asc" };
+  const ids = (await call<Page>(request, "query_photos", query)).photos.map(
+    (p) => p.id,
+  );
+  const [a, b] = ids;
+  await expect
+    .poll(
+      async () =>
+        (await call<SeriesView>(request, "photo_series", { photo_id: a }))
+          .ranking.length,
+      { timeout: 60_000 },
+    )
+    .toBe(3);
+
+  await page.goto("/");
+  await page.getByTestId("filter-from").fill(DAY);
+  await page.getByTestId("filter-to").fill(DAY);
+  const timeline = page.getByTestId("timeline");
+  const tiles = timeline.locator("button.tile");
+  await expect(tiles).toHaveCount(4);
+  await expect(timeline.getByTestId("series-frame")).toHaveCount(1);
+  await expect(timeline.getByTestId("best-mark")).toHaveCount(1);
+  await page.screenshot({ path: test.info().outputPath("series-frames.png") });
+
+  // `b` makes the focused photo the best of its series.
+  await timeline.locator(`[data-photo-id="${b}"]`).click();
+  await page.keyboard.press("b");
+  await expect(
+    timeline.locator(`[data-photo-id="${b}"]`).getByTestId("best-mark"),
+  ).toBeVisible();
+  await expect(timeline.getByTestId("best-mark")).toHaveCount(1);
+
+  // Stacked, the series shows only its best photo until expanded.
+  await page.getByTestId("toggle-stack").click();
+  await expect(tiles).toHaveCount(2);
+  await expect(timeline.locator(`[data-photo-id="${b}"]`)).toBeVisible();
+  const stack = timeline.getByTestId("stack-toggle");
+  await expect(stack).toHaveText("⧉ 3");
+  await page.screenshot({ path: test.info().outputPath("series-stacked.png") });
+  await stack.click();
+  await expect(tiles).toHaveCount(4);
+  await expect(stack).toHaveAttribute("aria-expanded", "true");
+  await stack.click();
+  await expect(tiles).toHaveCount(2);
+
+  await page.getByTestId("toggle-stack").click();
+  await expect(tiles).toHaveCount(4);
+  await call(request, "choose_best", { photo_id: b, best: false });
+});
