@@ -9,7 +9,7 @@ use picturesque_core::photo::{Asset, NewPhoto, PhotoAssets, PhotoId};
 use picturesque_core::similarity::{Hash64, Signature};
 use serde_json::{Value, json};
 
-use super::{SeriesService, SeriesStatus};
+use super::{SeriesService, SeriesStatus, settle};
 use crate::analysis::AnalysisStatus;
 use crate::analysis::similarity::SimilarityAnalyzer;
 use crate::api::{Api, ApiErrorCode};
@@ -393,4 +393,44 @@ fn ranking_weights_are_settings() {
         )
         .unwrap_err();
     assert_eq!(err.code, ApiErrorCode::InvalidArguments);
+}
+
+#[test]
+fn a_steady_stream_of_requests_waits_at_most_max_wait() {
+    let (tx, rx) = std::sync::mpsc::channel();
+    let sender = std::thread::spawn(move || {
+        for _ in 0..100 {
+            if tx.send(()).is_err() {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
+    });
+    let start = Instant::now();
+    assert!(settle(
+        &rx,
+        Duration::from_millis(50),
+        Duration::from_millis(150)
+    ));
+    let waited = start.elapsed();
+    assert!(waited >= Duration::from_millis(150), "{waited:?}");
+    assert!(waited < Duration::from_millis(400), "{waited:?}");
+    drop(rx);
+    sender.join().unwrap();
+
+    // Quiet: returns after the quiet time; no sender: reports it.
+    let (tx, rx) = std::sync::mpsc::channel::<()>();
+    let start = Instant::now();
+    assert!(settle(
+        &rx,
+        Duration::from_millis(20),
+        Duration::from_secs(5)
+    ));
+    assert!(start.elapsed() < Duration::from_secs(1));
+    drop(tx);
+    assert!(!settle(
+        &rx,
+        Duration::from_millis(20),
+        Duration::from_secs(5)
+    ));
 }

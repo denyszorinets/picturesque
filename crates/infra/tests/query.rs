@@ -713,3 +713,86 @@ fn rankings_best_photos_and_choices_round_trip() {
     .unwrap();
     assert_eq!(c.rejected_photos().unwrap(), [p3]);
 }
+
+#[test]
+fn collapsing_series_shows_the_best_matching_photo_of_each() {
+    use picturesque_app::ports::catalog::StoredSeries;
+    use picturesque_core::ranking::Ranked;
+
+    let c = sample();
+    let ids = |q: PhotoQuery| -> Vec<i64> { ids(&c, q) };
+    let ranked = |order: &[i64]| -> Vec<Ranked> {
+        order
+            .iter()
+            .map(|id| Ranked {
+                id: PhotoId(*id),
+                score: None,
+            })
+            .collect()
+    };
+    // Series A = photos 2, 1 (ranked 1 first); series B = 3, 5 (5 chosen
+    // by the user although ranked second).
+    c.replace_series(&[
+        StoredSeries {
+            members: vec![PhotoId(2), PhotoId(1)],
+            ranking: ranked(&[1, 2]),
+            best: PhotoId(1),
+            best_chosen: false,
+        },
+        StoredSeries {
+            members: vec![PhotoId(5), PhotoId(3)],
+            ranking: ranked(&[3, 5]),
+            best: PhotoId(5),
+            best_chosen: true,
+        },
+    ])
+    .unwrap();
+    let collapsed = PhotoQuery {
+        collapse_series: Some(true),
+        ..Default::default()
+    };
+
+    assert_eq!(ids(PhotoQuery::default()), [1, 2, 3, 5, 6, 4]);
+    assert_eq!(ids(collapsed.clone()), [1, 5, 6, 4]);
+    let page = c.query(&collapsed).unwrap();
+    assert_eq!(page.total, 4);
+    assert_eq!(page.photos[0].series_size, 2);
+    assert!(page.photos[0].best_in_series);
+    assert_eq!(page.photos[2].series_size, 0);
+    // Day counts follow, so the timeline layout stays exact.
+    let facets = c.facets(Some(&collapsed)).unwrap();
+    assert_eq!(facets.total, 4);
+    assert_eq!(
+        facets.days.iter().map(|d| d.count).sum::<usize>(),
+        2,
+        "{:?}",
+        facets.days
+    );
+
+    // Expanding one series shows it whole.
+    assert_eq!(
+        ids(PhotoQuery {
+            expanded_series: Some(vec![2]),
+            ..collapsed.clone()
+        }),
+        [1, 2, 5, 6, 4]
+    );
+
+    // When the best photo does not match the filters, the next matching
+    // member stands in for its series.
+    c.set_decision(
+        PhotoId(2),
+        Decision {
+            flag: Flag::Pick,
+            rating: Rating::new(0).unwrap(),
+        },
+    )
+    .unwrap();
+    assert_eq!(
+        ids(PhotoQuery {
+            flags: Some(vec![Flag::Pick]),
+            ..collapsed.clone()
+        }),
+        [2]
+    );
+}

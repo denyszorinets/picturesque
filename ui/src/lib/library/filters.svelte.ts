@@ -1,3 +1,4 @@
+import { SvelteSet } from "svelte/reactivity";
 import type { CameraKey, PhotoQuery, PhotoSummary } from "../api";
 
 type Flag = PhotoSummary["flag"];
@@ -30,6 +31,7 @@ interface Saved {
   camera: CameraKey | null;
   lens: string | null;
   place: PlaceFilter | null;
+  stacked: boolean;
 }
 
 /** The library's filters. Kept for the session (sessionStorage). */
@@ -42,6 +44,10 @@ export class Filters {
   cameraLabel = $state("");
   lens = $state<string | null>(null);
   place = $state<PlaceFilter | null>(null);
+  /** Show each series as its best photo. Not a filter: kept by `clear`. */
+  stacked = $state(false);
+  /** Stacked series shown in full; not saved. */
+  readonly expanded = new SvelteSet<number>();
 
   constructor(
     private readonly storage: Pick<
@@ -61,6 +67,7 @@ export class Filters {
         this.camera = saved.camera ?? null;
         this.lens = saved.lens ?? null;
         this.place = saved.place ?? null;
+        this.stacked = saved.stacked ?? false;
       }
     } catch {
       // Unreadable saved filters: start without filters.
@@ -79,6 +86,11 @@ export class Filters {
     if (this.place) {
       q.country_code = this.place.country_code;
       if (this.place.city) q.city = this.place.city;
+    }
+    if (this.stacked) {
+      q.collapse_series = true;
+      if (this.expanded.size > 0)
+        q.expanded_series = [...this.expanded].sort((a, b) => a - b);
     }
     return q;
   }
@@ -127,6 +139,11 @@ export class Filters {
       : [...this.flags, flag];
   }
 
+  /** Expands a stacked series, or stacks it again. */
+  toggleExpanded(seriesId: number): void {
+    if (!this.expanded.delete(seriesId)) this.expanded.add(seriesId);
+  }
+
   clear(): void {
     this.from = "";
     this.to = "";
@@ -147,6 +164,7 @@ export class Filters {
       camera: this.camera,
       lens: this.lens,
       place: this.place,
+      stacked: this.stacked,
     };
     try {
       this.storage?.setItem(STORAGE_KEY, JSON.stringify(saved));

@@ -57,6 +57,12 @@ pub struct PhotoQuery {
     /// Page size, 1–1000 (default 200).
     #[ts(optional)]
     pub limit: Option<u32>,
+    /// Show one photo per series: the best one that matches the filters.
+    #[ts(optional)]
+    pub collapse_series: Option<bool>,
+    /// Series (by id) shown whole although `collapse_series` is set.
+    #[ts(optional, type = "number[]")]
+    pub expanded_series: Option<Vec<i64>>,
 }
 
 pub const DEFAULT_PAGE: u32 = 200;
@@ -116,6 +122,8 @@ pub struct PhotoSummary {
     pub series_id: Option<i64>,
     /// Whether this is the best photo of its series.
     pub best_in_series: bool,
+    /// Photos in the photo's series (0 when in none).
+    pub series_size: u32,
 }
 
 /// A page of results.

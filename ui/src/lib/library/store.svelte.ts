@@ -70,6 +70,37 @@ export class LibraryStore {
     }
   }
 
+  /**
+   * Reloads facets and the photos loaded so far, in place, so the view
+   * keeps its scroll position (used when series or best photos change).
+   */
+  async refresh(): Promise<void> {
+    const generation = ++this.generation;
+    const want = Math.max(1, this.photos.length);
+    try {
+      const facets = await this.api.photoFacets(this.filter);
+      const photos: PhotoSummary[] = [];
+      let cursor: string | null = null;
+      do {
+        const page: PhotoPage = await this.api.queryPhotos({
+          ...this.filter,
+          limit: PAGE,
+          cursor: cursor ?? undefined,
+        });
+        if (generation !== this.generation) return;
+        photos.push(...page.photos);
+        cursor = page.next_cursor;
+      } while (cursor !== null && photos.length < want);
+      this.facets = facets;
+      this.photos = photos;
+      this.cursor = cursor;
+      this.complete = cursor === null;
+      this.queue = Promise.resolve();
+    } catch (e) {
+      if (generation === this.generation) this.error = ApiError.from(e).message;
+    }
+  }
+
   /** Loads pages until photo `index` is available (or there are no more). */
   ensureLoaded(index: number): Promise<void> {
     const generation = this.generation;

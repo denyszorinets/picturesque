@@ -116,6 +116,25 @@
     return true;
   }
 
+  let seriesError = $state<string | null>(null);
+
+  /** `b`: makes the target photo the best of its series, or withdraws
+   * the choice when it already is. */
+  async function chooseBest() {
+    const [index] = targets();
+    const photo = index === undefined ? undefined : store.photos[index];
+    if (!photo || photo.series_id === null) return;
+    seriesError = null;
+    try {
+      const series = await api.chooseBest(photo.id, !photo.best_in_series);
+      // Recomputed synchronously: show it without waiting for the event.
+      if (series.series_id !== null) await store.refresh();
+    } catch (e) {
+      seriesError = api.ApiError.from(e).message;
+      return;
+    }
+  }
+
   function open(index: number) {
     selection.click(index);
     loupe = index;
@@ -131,6 +150,16 @@
     // The library is hidden while the Import tab is shown.
     if (!section?.offsetParent) return;
     let used = cull(e);
+    if (
+      !used &&
+      !e.ctrlKey &&
+      !e.metaKey &&
+      !e.altKey &&
+      e.key.toLowerCase() === "b"
+    ) {
+      void chooseBest();
+      used = true;
+    }
     if (!used && loupe === null) {
       if (e.key === "Enter" && selection.focus !== null) {
         open(selection.focus);
@@ -151,6 +180,7 @@
     const unsubscribe = api.onAppEvent((event) => {
       if (event.type === "import_progress" && event.state === "completed")
         void store.load();
+      else if (event.type === "series_changed") void store.refresh();
       analysis.handle(event);
     });
     return () => {
@@ -204,6 +234,16 @@
           >{selection.size} selected</span
         >
       {/if}
+      <button
+        class="small"
+        aria-pressed={filters.stacked}
+        onclick={() => {
+          filters.stacked = !filters.stacked;
+          filters.expanded.clear();
+        }}
+        title="Show each series as its best photo"
+        data-testid="toggle-stack">Stack series</button
+      >
       <span class="spacer"></span>
       {#if analysis.status && analysis.remaining > 0}
         <span
@@ -212,6 +252,9 @@
           title="Scoring photos in the background; photos on screen go first"
           >Analyzing {analysis.status.analyzed} / {analysis.status.total}</span
         >
+      {/if}
+      {#if seriesError}
+        <span class="error-text" role="alert">{seriesError}</span>
       {/if}
       {#if culling.error}
         <span class="error-text" role="alert">{culling.error}</span>
@@ -247,6 +290,9 @@
             onopen={open}
             onlayout={(l) => (layout = l)}
             onvisible={(ids) => analysis.visible(ids)}
+            stacked={filters.stacked}
+            expanded={filters.expanded}
+            onstack={(id) => filters.toggleExpanded(id)}
           />
         {/if}
       </div>

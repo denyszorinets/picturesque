@@ -19,6 +19,7 @@ function photo(id: number, city: string | null = null): PhotoSummary {
     file_name: `${id}.jpg`,
     series_id: null,
     best_in_series: false,
+    series_size: 0,
   };
 }
 
@@ -93,6 +94,23 @@ describe("LibraryStore", () => {
 
     expect(store.photos).toHaveLength(600);
     expect(new Set(store.photos.map((p) => p.id)).size).toBe(600);
+  });
+
+  it("refreshes the loaded photos in place", async () => {
+    const api = backend(1000);
+    const store = new LibraryStore(api);
+    await store.load();
+    await store.ensureLoaded(400);
+
+    vi.mocked(api.photoFacets).mockResolvedValue(facets(999));
+    await store.refresh();
+
+    expect(store.total).toBe(999);
+    expect(store.photos).toHaveLength(600);
+    await store.ensureLoaded(700);
+    expect(store.photos.map((p) => p.id).slice(598, 602)).toEqual([
+      599, 600, 601, 602,
+    ]);
   });
 
   it("lists the cities of a section's loaded photos", async () => {
