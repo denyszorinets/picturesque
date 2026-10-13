@@ -33,6 +33,33 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "category": "Photography",
+    "shortDescription": "Cull photos: series, best shots and local AI",
+    "longDescription": "Picturesque imports photos into a clean library, groups bursts into series, highlights the best shots with technical analysis and on-device AI, and exports your picks.",
+    "license": "GPL-3.0-or-later",
+    "homepage": "https://github.com/denyszorinets/picturesque",
+    "linux": {
+      "deb": {
+        "depends": [
+          "libvips42t64 | libvips42",
+          "libraw23t64 | libraw23",
+          "libheif1"
+        ],
+        "files": {
+          "/usr/lib/picturesque/libwebgpu_dawn.so": "../target/release/libwebgpu_dawn.so"
+        }
+      },
+      "rpm": {
+        "depends": [
+          "vips",
+          "LibRaw",
+          "libheif"
+        ],
+        "files": {
+          "/usr/lib/picturesque/libwebgpu_dawn.so": "../target/release/libwebgpu_dawn.so"
+        }
+      }
+    }
   }
 }
