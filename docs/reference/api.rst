@@ -122,6 +122,22 @@ Commands
    even the CPU failed); ``problem`` says why the chosen provider was not
    used. The check runs once per choice.
 
+``start_export``
+   ``{ "destination": "/home/me/Export", "query": { "flags": ["pick"] },
+   "format": "jpeg", "naming": "{date}_{seq}.{ext}", "include_raw": true,
+   "include_sidecars": true, "max_edge": 2048, "quality": 90 }``; only
+   ``destination`` is required (default: the picks, originals, original
+   names). Starts an export in the background (:doc:`/features/export`)
+   and returns an ``ExportStatus``: ``{ "state": "running", "destination":
+   "...", "done": 0, "total": 12, "files": 0, "failed": [] }`` (``state``
+   is ``idle``, ``running``, ``completed`` or ``cancelled``; ``failed``
+   lists ``{ "photo_id", "error" }``). Invalid options, or an export
+   already running, are ``invalid_arguments``.
+
+``export_status`` / ``cancel_export``
+   No arguments. The current ``ExportStatus``; cancelling stops after the
+   photo being exported.
+
 ``plan_reject_move``
    No arguments. ``{ "photos": 12, "files": 30, "bytes": 912345678,
    "undo_batch": 3, "undo_photos": 8 }``: rejected photos not moved yet,
@@ -298,6 +314,10 @@ events from ``GET /api/events``.
 ``series_changed``
    ``{ "series": 12, "photos": 57 }``: series membership changed (after
    analysis, an import, an edit or a settings change).
+
+``export_progress``
+   An ``ExportStatus`` (see ``start_export``), sent about five times a
+   second during an export and when it ends.
 
 ``model_progress``
    A ``ModelView`` (see ``list_models``), sent about four times a second

@@ -64,29 +64,69 @@ impl ImageDecoder for VipsDecoder {
         max_edge: u32,
         dest: &Path,
     ) -> Result<Rendered, String> {
-        vips();
-        let edge = i32::try_from(max_edge).map_err(|e| e.to_string())?;
-        // libvips reads lazily from buffers it does not copy: `_buffer` must
-        // outlive every use of `image`, including the save below.
-        let mut _buffer: Option<Vec<u8>> = None;
-        let (image, source_size) = match format {
-            MediaFormat::Raw => render_raw(source, orientation, edge, &mut _buffer)?,
-            MediaFormat::Xmp => return Err("XMP sidecars are not images".into()),
-            _ => render_file(source, edge)?,
-        };
-        let options = JpegsaveOptions {
-            q: JPEG_QUALITY,
-            keep: ForeignKeep::None,
-            ..JpegsaveOptions::default()
-        };
-        ops::jpegsave_with_opts(&image, &dest.to_string_lossy(), &options)
-            .map_err(|_| vips_error("save"))?;
-        Ok(Rendered {
-            width: image.get_width() as u32,
-            height: image.get_height() as u32,
-            source_size,
-        })
+        save_jpeg(
+            source,
+            format,
+            orientation,
+            max_edge,
+            JPEG_QUALITY,
+            ForeignKeep::None,
+            dest,
+        )
     }
+
+    fn export_jpeg(
+        &self,
+        source: &Path,
+        format: MediaFormat,
+        orientation: Orientation,
+        max_edge: u32,
+        quality: u8,
+        dest: &Path,
+    ) -> Result<Rendered, String> {
+        save_jpeg(
+            source,
+            format,
+            orientation,
+            max_edge,
+            i32::from(quality.clamp(1, 100)),
+            ForeignKeep::All,
+            dest,
+        )
+    }
+}
+
+fn save_jpeg(
+    source: &Path,
+    format: MediaFormat,
+    orientation: Orientation,
+    max_edge: u32,
+    quality: i32,
+    keep: ForeignKeep,
+    dest: &Path,
+) -> Result<Rendered, String> {
+    vips();
+    let edge = i32::try_from(max_edge).map_err(|e| e.to_string())?;
+    // libvips reads lazily from buffers it does not copy: `_buffer` must
+    // outlive every use of `image`, including the save below.
+    let mut _buffer: Option<Vec<u8>> = None;
+    let (image, source_size) = match format {
+        MediaFormat::Raw => render_raw(source, orientation, edge, &mut _buffer)?,
+        MediaFormat::Xmp => return Err("XMP sidecars are not images".into()),
+        _ => render_file(source, edge)?,
+    };
+    let options = JpegsaveOptions {
+        q: quality,
+        keep,
+        ..JpegsaveOptions::default()
+    };
+    ops::jpegsave_with_opts(&image, &dest.to_string_lossy(), &options)
+        .map_err(|_| vips_error("save"))?;
+    Ok(Rendered {
+        width: image.get_width() as u32,
+        height: image.get_height() as u32,
+        source_size,
+    })
 }
 
 /// [`PixelLoader`] decoding with libvips (used on cached preview JPEGs).

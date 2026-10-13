@@ -10,6 +10,7 @@ pub mod analysis;
 pub mod api;
 pub mod embeddings;
 pub mod explain;
+pub mod export;
 pub mod hooks;
 pub mod import;
 pub mod info;
