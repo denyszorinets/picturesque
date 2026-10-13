@@ -3,6 +3,7 @@ Getting Started
 
 .. toctree::
    :maxdepth: 1
-   :glob:
 
-   *
+   install
+   first-import
+   first-cull
