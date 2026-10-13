@@ -1,0 +1,186 @@
+# Builds installers and drafts a GitHub release (docs/development/releasing.rst).
+#
+# - Push a tag vX.Y.Z on main: builds every installer and creates a draft
+#   release with them and their checksums; a maintainer reviews and
+#   publishes it.
+# - Run manually (workflow_dispatch): a dry run that builds the installers
+#   and keeps them as workflow artifacts, without a release.
+name: Release
+
+on:
+  push:
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  version:
+    name: Check the version
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - id: version
+        name: Version from the tag (or the sources on a dry run)
+        run: |
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            version="${GITHUB_REF_NAME#v}"
+            python3 scripts/set-version.py --check "$version"
+          else
+            version=$(python3 -c "import json; print(json.load(open('src-tauri/tauri.conf.json'))['version'])")
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+  ubuntu:
+    name: deb and AppImage (Ubuntu 24.04)
+    needs: version
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev \
+            libxdo-dev libssl-dev patchelf file \
+            libvips-dev libraw-dev libheif-dev libheif-plugin-libde265
+
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          cache-directories: ~/.cache/ort.pyke.io
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Build deb and AppImage
+        env:
+          # linuxdeploy must find libwebgpu_dawn.so (docs/development/packaging.rst).
+          LD_LIBRARY_PATH: ${{ github.workspace }}/target/release
+          APPIMAGE_EXTRACT_AND_RUN: "1"
+        run: npx tauri build --bundles deb,appimage
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: installers-ubuntu
+          path: |
+            target/release/bundle/deb/*.deb
+            target/release/bundle/appimage/*.AppImage
+          if-no-files-found: error
+
+  fedora:
+    name: rpm (Fedora 44)
+    needs: version
+    runs-on: ubuntu-24.04
+    container: fedora:44
+    steps:
+      - name: Install system dependencies
+        run: |
+          dnf install -y git gcc gcc-c++ make rpm-build nodejs npm \
+            webkit2gtk4.1-devel gtk3-devel libsoup3-devel librsvg2-devel \
+            openssl-devel \
+            vips-devel LibRaw-devel libheif-devel
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - run: npm ci
+
+      - name: Build rpm
+        run: npx tauri build --bundles rpm
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: installers-fedora
+          path: target/release/bundle/rpm/*.rpm
+          if-no-files-found: error
+
+  macos:
+    name: dmg (macOS 15, experimental)
+    needs: version
+    runs-on: macos-15
+    # Not verified yet (#52): does not hold back a release.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install image libraries
+        run: |
+          brew install vips libraw libheif dylibbundler
+          echo "LIBRARY_PATH=$(brew --prefix)/lib" >> "$GITHUB_ENV"
+
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          cache-directories: ~/.cache/ort.pyke.io
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Build the app bundle
+        run: npx tauri build --bundles app
+
+      - name: Bundle Homebrew libraries into the app and make the dmg
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          app=target/release/bundle/macos/Picturesque.app
+          dylibbundler -od -b \
+            -x "$app/Contents/MacOS/picturesque-desktop" \
+            -d "$app/Contents/Frameworks" \
+            -p @executable_path/../Frameworks/
+          codesign --force --deep --sign - "$app"
+          mkdir -p dmg
+          hdiutil create -volname Picturesque -srcfolder "$app" -ov -format UDZO \
+            "dmg/Picturesque_${VERSION}_aarch64.dmg"
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: installers-macos
+          path: dmg/*.dmg
+          if-no-files-found: error
+
+  release:
+    name: Draft the GitHub release
+    needs: [version, ubuntu, fedora, macos]
+    if: always() && github.ref_type == 'tag' && needs.ubuntu.result == 'success' && needs.fedora.result == 'success'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: installers-*
+          path: installers
+          merge-multiple: true
+
+      - name: Checksums
+        working-directory: installers
+        run: sha256sum -- * > SHA256SUMS.txt
+
+      - name: Create the draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          gh release create "$TAG" installers/* \
+            --draft --verify-tag --generate-notes \
+            --title "Picturesque ${TAG#v}"
