@@ -107,6 +107,26 @@ Commands
    even the CPU failed); ``problem`` says why the chosen provider was not
    used. The check runs once per choice.
 
+``list_models``
+   No arguments. The downloadable AI models (:doc:`/features/ai`), each a
+   ``ModelView``:
+
+   .. code-block:: json
+
+      { "id": "clip-vit-b32", "name": "CLIP ViT-B/32", "purpose": "...",
+        "version": 1, "license": "MIT", "license_url": "https://...",
+        "homepage": "https://...", "size": 605807120,
+        "state": "downloading", "downloaded": 12000000, "error": null }
+
+   ``state`` is ``not_installed``, ``downloading``, ``installed`` or
+   ``failed`` (with ``error``). Never uses the network.
+
+``install_model`` / ``cancel_model`` / ``remove_model``
+   ``{ "id": "clip-vit-b32" }``. Start a download in the background, stop
+   it, or delete the model's files; each returns the ``ModelView``.
+   Removing a model while it downloads is ``invalid_arguments``; unknown
+   models are ``not_found``.
+
 ``analysis_status``
    No arguments. ``{ "analyzed": 120, "total": 300, "running": true }``:
    photos with every analysis done, all photos, and whether workers are
@@ -234,6 +254,11 @@ events from ``GET /api/events``.
 ``series_changed``
    ``{ "series": 12, "photos": 57 }``: series membership changed (after
    analysis, an import, an edit or a settings change).
+
+``model_progress``
+   A ``ModelView`` (see ``list_models``), sent about four times a second
+   while a model downloads, and when a download ends or a model is
+   removed.
 
    .. code-block:: json
 

@@ -43,3 +43,25 @@ running a tiny test model, so a provider that is compiled in but does not
 work on your hardware (for example, no Vulkan driver) is detected. If the
 chosen provider fails, models **fall back to the CPU** and the reason is
 shown. Changing the choice takes effect for models loaded afterwards.
+
+Models
+------
+
+Models are not bundled with the app. **Import → Library → AI models**
+lists the models Picturesque can use, what each is for, its download size
+and its **license** (with a link to the full text) and source. Every model
+offered has a license that allows its use in a GPL-3.0 application.
+
+- **Download** fetches the model once. Each file is checked against the
+  size and SHA-256 checksum Picturesque expects; a corrupt or tampered
+  download is rejected, nothing of it is kept, and **Retry** starts over
+  (files that were already complete are kept).
+- After that, models are used **offline**: Picturesque contacts the
+  network only when you press Download.
+- **Cancel** stops a download; **Remove** deletes a model's files.
+- When a model is updated, the new version is downloaded next to the old
+  one, which is then deleted. Results computed with the old version are
+  recomputed.
+
+Models are stored in the ``models`` folder of the application data folder
+(:doc:`/reference/data-locations`), one folder per model and version.

@@ -1,5 +1,6 @@
 import type { AiStatus } from "./generated/AiStatus";
 import type { AnalysisStatus } from "./generated/AnalysisStatus";
+import type { ModelView } from "./generated/ModelView";
 import type { AppEvent } from "./generated/AppEvent";
 import type { AppInfo } from "./generated/AppInfo";
 import type { ImportPlanView } from "./generated/ImportPlanView";
@@ -21,6 +22,7 @@ import { selectTransport, type ImageSize } from "./transport";
 export { ApiError } from "./error";
 export type { AiStatus } from "./generated/AiStatus";
 export type { AnalysisStatus } from "./generated/AnalysisStatus";
+export type { ModelView } from "./generated/ModelView";
 export type { Provider } from "./generated/Provider";
 export type { ProviderChoice } from "./generated/ProviderChoice";
 export type { AppEvent } from "./generated/AppEvent";
@@ -182,4 +184,23 @@ export function chooseBest(
 /** Which hardware local AI models run on (probes it when the choice changed). */
 export function aiStatus(): Promise<AiStatus> {
   return transport.call<AiStatus>("ai_status");
+}
+
+/** The AI models the app offers, with licenses and download state. */
+export function listModels(): Promise<ModelView[]> {
+  return transport.call<ModelView[]>("list_models");
+}
+
+/** Starts downloading a model; progress arrives as `model_progress`. */
+export function installModel(id: string): Promise<ModelView> {
+  return transport.call<ModelView>("install_model", { id });
+}
+
+export function cancelModel(id: string): Promise<ModelView> {
+  return transport.call<ModelView>("cancel_model", { id });
+}
+
+/** Deletes a downloaded model. */
+export function removeModel(id: string): Promise<ModelView> {
+  return transport.call<ModelView>("remove_model", { id });
 }

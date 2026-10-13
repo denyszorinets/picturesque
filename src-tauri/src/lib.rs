@@ -63,6 +63,10 @@ pub fn run() {
                 pixels: Arc::new(picturesque_infra::images::VipsPixels),
                 analyzers: picturesque_app::analysis::default_analyzers(),
                 inference: Arc::new(picturesque_infra::inference::OrtEngine::for_background()),
+                models: picturesque_app::models::catalog(),
+                model_store: Arc::new(picturesque_infra::models::HttpModelStore::new(
+                    data_dir.join("models"),
+                )),
                 cache_dir: app.path().app_cache_dir()?,
             })?;
             api.start_background_work();

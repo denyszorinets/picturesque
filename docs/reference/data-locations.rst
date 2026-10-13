@@ -16,6 +16,9 @@ Picturesque keeps three kinds of data
    * - Catalog (``catalog.sqlite``)
      - Application data folder (below)
      - No: it holds metadata, decisions and import history.
+   * - AI models (``models/``)
+     - Application data folder (below)
+     - Yes, but they must be downloaded again (:doc:`/features/ai`).
    * - Thumbnails and previews
      - Application cache folder (below), in ``v1/grid`` (512 px),
        ``v1/preview`` (2048 px) and ``v1/full`` (photos zoomed to 100%)

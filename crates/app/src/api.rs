@@ -22,6 +22,7 @@ use crate::info;
 use crate::library::{
     DecisionView, FacetsArgs, PhotoArgs, PhotoDetail, PhotoQuery, SetDecisionsArgs,
 };
+use crate::models::{ModelArgs, ModelError, ModelService};
 use crate::ports::catalog::PhotoCatalog;
 use crate::ports::events::EventSink;
 use crate::ports::fs::FileSystem;
@@ -30,6 +31,7 @@ use crate::ports::images::ImageDecoder;
 use crate::ports::imports::ImportStore;
 use crate::ports::inference::InferenceEngine;
 use crate::ports::metadata::MetadataReader;
+use crate::ports::models::{ModelSpec, ModelStore};
 use crate::ports::pixels::PixelLoader;
 use crate::ports::settings::SettingsStore;
 use crate::ports::sidecars::SidecarStore;
@@ -102,6 +104,10 @@ pub struct AppContext {
     pub analyzers: Vec<Arc<dyn Analyzer>>,
     /// Runs local AI models.
     pub inference: Arc<dyn InferenceEngine>,
+    /// Models the app offers for download (`models::catalog()`).
+    pub models: Vec<ModelSpec>,
+    /// Where downloaded models are kept.
+    pub model_store: Arc<dyn ModelStore>,
 }
 
 impl fmt::Debug for AppContext {
@@ -123,6 +129,7 @@ pub struct Api {
     analysis: Arc<AnalysisService>,
     series: Arc<SeriesService>,
     ai: AiService,
+    models: Arc<ModelService>,
 }
 
 impl fmt::Debug for Api {
@@ -158,6 +165,11 @@ impl Api {
             Arc::clone(&events) as Arc<dyn EventSink>,
         ));
         let _ = events.series.set(Arc::clone(&series));
+        let models = Arc::new(ModelService::new(
+            ctx.models,
+            ctx.model_store,
+            Arc::clone(&events) as Arc<dyn EventSink>,
+        ));
         let catalog = Arc::clone(&ctx.catalog);
         let sidecars = Arc::new(SidecarService::new(
             Arc::clone(&ctx.catalog),
@@ -184,6 +196,7 @@ impl Api {
             sidecars,
             analysis,
             series,
+            models,
         })
     }
 
@@ -403,6 +416,22 @@ impl Api {
                         .map_err(catalog_error)?,
                 )
             }
+            "list_models" => {
+                no_args(command, &args)?;
+                respond(self.models.list())
+            }
+            "install_model" => {
+                let ModelArgs { id } = parse_args(command, args)?;
+                respond(self.models.install(&id).map_err(model_error)?)
+            }
+            "cancel_model" => {
+                let ModelArgs { id } = parse_args(command, args)?;
+                respond(self.models.cancel(&id).map_err(model_error)?)
+            }
+            "remove_model" => {
+                let ModelArgs { id } = parse_args(command, args)?;
+                respond(self.models.remove(&id).map_err(model_error)?)
+            }
             "ai_status" => {
                 no_args(command, &args)?;
                 respond(self.ai.status().map_err(catalog_error)?)
@@ -474,6 +503,14 @@ impl Api {
 /// Half the cores (at least one), leaving the rest for the UI and imports.
 fn analysis_workers() -> usize {
     std::thread::available_parallelism().map_or(1, |n| (n.get() / 2).max(1))
+}
+
+fn model_error(e: ModelError) -> ApiError {
+    match e {
+        ModelError::Unknown(_) => ApiError::new(ApiErrorCode::NotFound, e.to_string()),
+        ModelError::Busy(_) => ApiError::new(ApiErrorCode::InvalidArguments, e.to_string()),
+        ModelError::Storage(_) => ApiError::internal(e.to_string()),
+    }
 }
 
 fn catalog_error(e: crate::ports::catalog::CatalogError) -> ApiError {

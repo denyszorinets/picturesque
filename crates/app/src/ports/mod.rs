@@ -9,6 +9,7 @@ pub mod images;
 pub mod imports;
 pub mod inference;
 pub mod metadata;
+pub mod models;
 pub mod pixels;
 pub mod settings;
 pub mod sidecars;

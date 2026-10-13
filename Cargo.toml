@@ -35,6 +35,8 @@ tokio = { version = "1.53.1", features = ["macros", "rt-multi-thread", "net", "s
 tower = { version = "0.5.3", features = ["util"] }
 http-body-util = "0.1"
 futures-util = { version = "0.3.34", default-features = false }
+ureq = { version = "3.4.2", default-features = false, features = ["rustls"] }
+sha2 = "0.10.9"
 # ONNX Runtime, statically linked from prebuilt binaries downloaded at build
 # time; execution-provider features are chosen per target in infra.
 ort = { version = "=2.0.0-rc.13", default-features = false, features = ["std", "download-binaries", "tls-rustls", "copy-dylibs", "api-24"] }

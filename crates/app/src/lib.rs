@@ -12,6 +12,7 @@ pub mod hooks;
 pub mod import;
 pub mod info;
 pub mod library;
+pub mod models;
 pub mod ports;
 pub mod scan;
 pub mod series;

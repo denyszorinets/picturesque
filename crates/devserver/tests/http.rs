@@ -35,6 +35,10 @@ fn api_with(catalog: Arc<SqliteCatalog>, cache_dir: std::path::PathBuf) -> Arc<A
             pixels: Arc::new(picturesque_infra::images::VipsPixels),
             analyzers: Vec::new(),
             inference: Arc::new(picturesque_infra::inference::OrtEngine::new(1)),
+            models: Vec::new(),
+            model_store: Arc::new(picturesque_infra::models::HttpModelStore::new(
+                cache_dir.join("models"),
+            )),
             cache_dir,
         })
         .expect("api"),

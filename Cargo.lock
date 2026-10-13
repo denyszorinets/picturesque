@@ -3027,8 +3027,10 @@ dependencies = [
  "rawler",
  "rusqlite",
  "serde_json",
+ "sha2",
  "tempfile",
  "ts-rs",
+ "ureq",
 ]
 
 [[package]]
