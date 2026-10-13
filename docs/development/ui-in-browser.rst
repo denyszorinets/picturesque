@@ -31,6 +31,9 @@ fresh. It listens on ``127.0.0.1:5174``. Set
 ``PICTURESQUE_DEVSERVER_ADDR`` to change it; non-loopback addresses are
 refused, because the server exposes file-system operations. If you change
 the port, update the ``/api`` proxy in ``ui/vite.config.ts`` to match.
+Set ``PICTURESQUE_MODEL_MANIFEST`` to a JSON file to replace the list of
+downloadable AI models; the end-to-end tests use it to serve a tiny model
+locally (:repo:`ui/e2e/fixtures/models.json`).
 
 HTTP API
 --------

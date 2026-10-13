@@ -21,7 +21,11 @@ export default defineConfig({
       command:
         "node -e \"require('fs').rmSync('target/e2e-data',{recursive:true,force:true})\" && cargo run --quiet -p picturesque-devserver",
       cwd: "..",
-      env: { PICTURESQUE_DATA_DIR: "target/e2e-data" },
+      env: {
+        PICTURESQUE_DATA_DIR: "target/e2e-data",
+        // Models served by the tests themselves (e2e/models.spec.ts).
+        PICTURESQUE_MODEL_MANIFEST: "ui/e2e/fixtures/models.json",
+      },
       url: "http://127.0.0.1:5174/api/health",
       reuseExistingServer: !process.env.CI,
       timeout: 300_000,

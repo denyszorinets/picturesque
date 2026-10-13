@@ -48,6 +48,15 @@ async fn serve() -> Result<(), String> {
         .map_err(|e| format!("create {}: {e}", data_dir.display()))?;
     let catalog =
         Arc::new(SqliteCatalog::open(&data_dir.join("catalog.sqlite")).map_err(|e| e.to_string())?);
+    let models = match std::env::var_os("PICTURESQUE_MODEL_MANIFEST") {
+        // Tests serve their own models.
+        Some(path) => {
+            let text = std::fs::read_to_string(&path)
+                .map_err(|e| format!("read {}: {e}", path.to_string_lossy()))?;
+            serde_json::from_str(&text).map_err(|e| format!("model manifest: {e}"))?
+        }
+        None => picturesque_app::models::catalog(),
+    };
     let events = EventBus::default();
     let api = Api::new(AppContext {
         settings_store: catalog.clone(),
@@ -62,6 +71,10 @@ async fn serve() -> Result<(), String> {
         pixels: Arc::new(picturesque_infra::images::VipsPixels),
         analyzers: picturesque_app::analysis::default_analyzers(),
         inference: Arc::new(picturesque_infra::inference::OrtEngine::for_background()),
+        models,
+        model_store: Arc::new(picturesque_infra::models::HttpModelStore::new(
+            data_dir.join("models"),
+        )),
         cache_dir: data_dir.join("cache"),
     })
     .map_err(|e| e.message)?;

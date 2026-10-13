@@ -142,10 +142,15 @@ Implementation
   WebGPU initializes on a software Vulkan adapter and gives correct results;
   :issue:`42` measures real GPU performance.
 
+:issue:`41` added the model manager: a manifest lists each model's files
+with URL, size and SHA-256, and its license. Files are downloaded on
+request to ``<data>/models/<id>/v<version>/``, verified while streaming,
+and renamed into place only when they match; nothing else touches the
+network.
+
 Follow-up
 ~~~~~~~~~
 
-- Build the model manager (:issue:`41`).
 - Benchmark WebGPU against CPU on an integrated AMD GPU (:issue:`42`).
 
 Validation

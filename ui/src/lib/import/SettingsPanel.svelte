@@ -14,6 +14,7 @@
     type TemplatePresetView,
     type TemplatePreview,
   } from "../api";
+  import ModelList from "../ai/ModelList.svelte";
   import PathInput from "../components/PathInput.svelte";
 
   interface Props {
@@ -291,6 +292,15 @@
     {:else}
       <p class="hint muted">Checking…</p>
     {/if}
+  </div>
+
+  <div class="field">
+    <span class="label">AI models</span>
+    <p class="hint muted">
+      Downloaded once when you ask, then used offline. Each model's license is
+      linked.
+    </p>
+    <ModelList />
   </div>
 
   <div class="actions">

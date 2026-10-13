@@ -1,0 +1,36 @@
+[
+  {
+    "id": "e2e-affine",
+    "name": "Test model",
+    "purpose": "Checks downloads in end-to-end tests",
+    "version": 1,
+    "license": "MIT",
+    "license_url": "https://opensource.org/license/mit",
+    "homepage": "https://github.com/denyszorinets/picturesque",
+    "files": [
+      {
+        "name": "affine.onnx",
+        "url": "http://127.0.0.1:5175/affine.onnx",
+        "sha256": "97059f9ba97a31f01716ed756089a728dcadb98be1347cc5a699a5abb8d1e5f2",
+        "size": 158
+      }
+    ]
+  },
+  {
+    "id": "e2e-corrupt",
+    "name": "Corrupt model",
+    "purpose": "Its download never matches the checksum",
+    "version": 1,
+    "license": "MIT",
+    "license_url": "https://opensource.org/license/mit",
+    "homepage": "https://github.com/denyszorinets/picturesque",
+    "files": [
+      {
+        "name": "affine.onnx",
+        "url": "http://127.0.0.1:5175/affine.onnx",
+        "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+        "size": 158
+      }
+    ]
+  }
+]

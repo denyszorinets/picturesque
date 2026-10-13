@@ -17,6 +17,7 @@ vi.mock("./lib/api", async (importOriginal) => {
         ranking: { sharpness: 0.6, exposure: 0.3, noise: 0.1 },
         ai: { provider: "auto" },
       }),
+    listModels: () => Promise.resolve([]),
     aiStatus: () =>
       Promise.resolve({
         available: ["cpu"],

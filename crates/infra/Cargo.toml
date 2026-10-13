@@ -24,6 +24,8 @@ libvips.workspace = true
 quick-xml.workspace = true
 ts-rs.workspace = true
 ort.workspace = true
+ureq.workspace = true
+sha2.workspace = true
 
 # Execution providers available as prebuilt ONNX Runtime binaries per target
 # (ADR-0006). Intel macOS has no prebuilt binaries.

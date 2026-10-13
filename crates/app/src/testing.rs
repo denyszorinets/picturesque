@@ -1027,6 +1027,102 @@ impl crate::ports::inference::InferenceEngine for FakeInference {
     }
 }
 
+/// Model files kept in memory. Fetches deliver `served` bytes for a URL
+/// (in chunks, so progress and cancelling can be tested), checked against
+/// the expected size and checksum like the real store.
+#[derive(Default)]
+pub struct MemoryModelStore {
+    /// URL → bytes the "server" returns; missing URLs are network errors.
+    pub served: Mutex<HashMap<String, Vec<u8>>>,
+    /// Stored files: (model id, version, file name) → bytes.
+    pub files: Mutex<HashMap<(String, u32, String), Vec<u8>>>,
+    /// Blocks fetches until set to `false` (to observe downloads).
+    pub hold: std::sync::atomic::AtomicBool,
+    pub fetches: Mutex<Vec<String>>,
+}
+
+impl crate::ports::models::ModelStore for MemoryModelStore {
+    fn path(
+        &self,
+        model: &crate::ports::models::ModelSpec,
+        file: &crate::ports::models::ModelFile,
+    ) -> PathBuf {
+        PathBuf::from(format!(
+            "/models/{}/v{}/{}",
+            model.id, model.version, file.name
+        ))
+    }
+
+    fn has(
+        &self,
+        model: &crate::ports::models::ModelSpec,
+        file: &crate::ports::models::ModelFile,
+    ) -> bool {
+        self.files
+            .lock()
+            .unwrap()
+            .get(&(model.id.clone(), model.version, file.name.clone()))
+            .is_some_and(|b| b.len() as u64 == file.size)
+    }
+
+    fn fetch(
+        &self,
+        model: &crate::ports::models::ModelSpec,
+        file: &crate::ports::models::ModelFile,
+        progress: &mut dyn FnMut(u64) -> bool,
+    ) -> Result<(), crate::ports::models::FetchError> {
+        use crate::ports::models::FetchError;
+        self.fetches.lock().unwrap().push(file.url.clone());
+        while self.hold.load(std::sync::atomic::Ordering::SeqCst) {
+            if !progress(0) {
+                return Err(FetchError::Cancelled);
+            }
+            std::thread::sleep(std::time::Duration::from_millis(2));
+        }
+        let bytes = self
+            .served
+            .lock()
+            .unwrap()
+            .get(&file.url)
+            .cloned()
+            .ok_or_else(|| FetchError::Network("404".into()))?;
+        for (i, _) in bytes.chunks(4).enumerate() {
+            if !progress(((i + 1) * 4).min(bytes.len()) as u64) {
+                return Err(FetchError::Cancelled);
+            }
+        }
+        if bytes.len() as u64 != file.size || fake_sha256(&bytes) != file.sha256 {
+            return Err(FetchError::Corrupt("checksum mismatch".into()));
+        }
+        self.files
+            .lock()
+            .unwrap()
+            .insert((model.id.clone(), model.version, file.name.clone()), bytes);
+        Ok(())
+    }
+
+    fn prune(&self, model: &crate::ports::models::ModelSpec) -> Result<(), String> {
+        self.files
+            .lock()
+            .unwrap()
+            .retain(|(id, version, _), _| id != &model.id || *version == model.version);
+        Ok(())
+    }
+
+    fn remove(&self, model: &crate::ports::models::ModelSpec) -> Result<(), String> {
+        self.files
+            .lock()
+            .unwrap()
+            .retain(|(id, _, _), _| id != &model.id);
+        Ok(())
+    }
+}
+
+/// Stand-in checksum for `MemoryModelStore` (the app layer has no SHA-256).
+pub fn fake_sha256(bytes: &[u8]) -> String {
+    format!("{:064x}", bytes.iter().map(|b| u64::from(*b)).sum::<u64>())
+}
+
 /// Sidecars kept in memory: path → decision.
 #[derive(Default)]
 pub struct MemorySidecars(pub Mutex<HashMap<PathBuf, picturesque_core::decision::Decision>>);
@@ -1095,6 +1191,8 @@ impl TestWorld {
             pixels: self.pixels.clone(),
             analyzers: Vec::new(),
             inference: Arc::new(FakeInference::new(&[])),
+            models: Vec::new(),
+            model_store: Arc::new(MemoryModelStore::default()),
         }
     }
 }
