@@ -269,6 +269,9 @@ pub struct PhotoDetail {
     pub quality: Option<crate::analysis::technical::QualityView>,
     /// How good the photo looks, once the CLIP model analyzed it.
     pub aesthetic: Option<crate::analysis::clip::AestheticView>,
+    /// Faces found, largest first; `null` until the face models analyzed
+    /// the photo.
+    pub faces: Option<Vec<crate::analysis::faces::FaceView>>,
 }
 
 /// Arguments of commands that act on one photo.
@@ -394,6 +397,7 @@ impl PhotoDetail {
             rating: decision.rating.stars(),
             quality: None,
             aesthetic: None,
+            faces: None,
             files: photo
                 .assets
                 .iter()

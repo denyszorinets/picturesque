@@ -255,6 +255,18 @@
               {percent(detail.aesthetic.score)}
             </dd>
           {/if}
+          {#if detail.faces && detail.faces.length > 0}
+            {@const closed = detail.faces.filter((f) => f.eyes_closed).length}
+            <dt>Faces</dt>
+            <dd data-testid="loupe-faces">
+              {detail.faces.length}
+              {detail.faces.length === 1 ? "face" : "faces"}{closed > 0
+                ? ` · ${closed} with closed eyes`
+                : ""} · sharpest {percent(
+                Math.max(...detail.faces.map((f) => f.sharpness)),
+              )}
+            </dd>
+          {/if}
           {#if detail.width && detail.height}<dt>Size</dt>
             <dd>{detail.width} × {detail.height}</dd>{/if}
           {#if detail.place}<dt>Place</dt>
