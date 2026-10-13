@@ -336,6 +336,26 @@ impl PhotoCatalog for SqliteCatalog {
         self.load_rejected()
     }
 
+    fn move_assets(
+        &self,
+        id: PhotoId,
+        moves: &[(std::path::PathBuf, std::path::PathBuf)],
+    ) -> Result<(), CatalogError> {
+        self.update_asset_paths(id, moves)
+    }
+
+    fn record_reject_move(&self, batch: i64, ids: &[PhotoId]) -> Result<(), CatalogError> {
+        self.save_reject_move(batch, ids)
+    }
+
+    fn last_reject_move(&self) -> Result<Option<(i64, Vec<PhotoId>)>, CatalogError> {
+        self.load_last_reject_move()
+    }
+
+    fn forget_reject_move(&self, ids: &[PhotoId]) -> Result<(), CatalogError> {
+        self.delete_reject_move(ids)
+    }
+
     fn replace_scores(
         &self,
         scores: &[picturesque_app::ports::catalog::PhotoScore],

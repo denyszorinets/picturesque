@@ -153,6 +153,9 @@ how many have run. Each migration runs in its own transaction.
      - ``0010_photo_signals.sql``
      - ``photo_score.aesthetic`` / ``eyes_closed`` / ``faces`` (for
        filters and badges)
+   * - 11
+     - ``0011_reject_moves.sql``
+     - ``reject_move`` (photos moved to ``_Rejected``, by batch, for undo)
 
 Conventions:
 

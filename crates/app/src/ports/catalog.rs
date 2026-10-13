@@ -2,6 +2,7 @@
 
 use std::collections::HashSet;
 use std::fmt;
+use std::path::PathBuf;
 
 use picturesque_core::decision::Decision;
 use picturesque_core::hash::ContentHash;
@@ -180,6 +181,19 @@ pub trait PhotoCatalog: Send + Sync {
 
     /// Photos flagged as rejected.
     fn rejected_photos(&self) -> Result<Vec<PhotoId>, CatalogError>;
+
+    /// Changes the paths of a photo's assets (`old` → `new`, relative to
+    /// the library), all or none.
+    fn move_assets(&self, id: PhotoId, moves: &[(PathBuf, PathBuf)]) -> Result<(), CatalogError>;
+
+    /// Records that `ids` were moved to the rejected folder in `batch`.
+    fn record_reject_move(&self, batch: i64, ids: &[PhotoId]) -> Result<(), CatalogError>;
+
+    /// The latest batch of moved rejects and its photos.
+    fn last_reject_move(&self) -> Result<Option<(i64, Vec<PhotoId>)>, CatalogError>;
+
+    /// Forgets that `ids` were moved (after moving them back).
+    fn forget_reject_move(&self, ids: &[PhotoId]) -> Result<(), CatalogError>;
 
     /// Sets the combined scores and AI signals of photos; other photos'
     /// are removed.

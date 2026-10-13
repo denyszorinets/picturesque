@@ -1,6 +1,8 @@
 import type { AiStatus } from "./generated/AiStatus";
 import type { AnalysisStatus } from "./generated/AnalysisStatus";
 import type { ModelView } from "./generated/ModelView";
+import type { RejectMovePlan } from "./generated/RejectMovePlan";
+import type { RejectMoveResult } from "./generated/RejectMoveResult";
 import type { SimilarPhoto } from "./generated/SimilarPhoto";
 import type { AppEvent } from "./generated/AppEvent";
 import type { AppInfo } from "./generated/AppInfo";
@@ -24,6 +26,8 @@ export { ApiError } from "./error";
 export type { AiStatus } from "./generated/AiStatus";
 export type { AnalysisStatus } from "./generated/AnalysisStatus";
 export type { ModelView } from "./generated/ModelView";
+export type { RejectMovePlan } from "./generated/RejectMovePlan";
+export type { RejectMoveResult } from "./generated/RejectMoveResult";
 export type { SimilarPhoto } from "./generated/SimilarPhoto";
 export type { Provider } from "./generated/Provider";
 export type { ProviderChoice } from "./generated/ProviderChoice";
@@ -210,4 +214,19 @@ export function removeModel(id: string): Promise<ModelView> {
 /** Photos matching a description, best first (needs the CLIP models). */
 export function searchPhotos(text: string): Promise<SimilarPhoto[]> {
   return transport.call<SimilarPhoto[]>("search_photos", { text });
+}
+
+/** How many rejected photos `moveRejects` would move, and what can be undone. */
+export function planRejectMove(): Promise<RejectMovePlan> {
+  return transport.call<RejectMovePlan>("plan_reject_move");
+}
+
+/** Moves rejected photos into the library's `_Rejected` folder. */
+export function moveRejects(): Promise<RejectMoveResult> {
+  return transport.call<RejectMoveResult>("move_rejects");
+}
+
+/** Moves the latest batch of moved rejects back. */
+export function undoRejectMove(batch: number): Promise<RejectMoveResult> {
+  return transport.call<RejectMoveResult>("undo_reject_move", { batch });
 }

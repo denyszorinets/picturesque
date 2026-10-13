@@ -2,6 +2,7 @@
   import * as api from "../api";
   import { AnalysisProgress } from "./analysis.svelte";
   import Compare from "./Compare.svelte";
+  import RejectsMove from "./RejectsMove.svelte";
   import { Culling } from "./culling.svelte";
   import FilterPanel from "./FilterPanel.svelte";
   import { Filters } from "./filters.svelte";
@@ -405,6 +406,11 @@
         title="Compare the selected photos, or the selected photo's series (C)"
         data-testid="open-compare">Compare</button
       >
+      <RejectsMove
+        rejected={store.facets.flags.find((f) => f.flag === "reject")?.count ??
+          0}
+        onmoved={() => void store.refresh()}
+      />
       <span class="spacer"></span>
       {#if analysis.status && analysis.remaining > 0}
         <span

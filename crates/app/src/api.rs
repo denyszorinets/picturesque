@@ -39,6 +39,7 @@ use crate::ports::models::{ModelSpec, ModelStore};
 use crate::ports::pixels::PixelLoader;
 use crate::ports::settings::SettingsStore;
 use crate::ports::sidecars::SidecarStore;
+use crate::rejects::{RejectsError, RejectsService, UndoRejectMoveArgs};
 use crate::search::{DEFAULT_LIMIT as SEARCH_LIMIT, SearchArgs, SearchError, TextSearch};
 use crate::series::{ChooseBestArgs, EditSeriesArgs, SeriesService};
 use crate::settings::{SettingsError, SettingsService, SettingsUpdate};
@@ -156,6 +157,7 @@ pub struct Api {
     models: Arc<ModelService>,
     embeddings: Arc<EmbeddingIndex>,
     search: TextSearch,
+    rejects: RejectsService,
 }
 
 impl fmt::Debug for Api {
@@ -233,8 +235,14 @@ impl Api {
             Arc::clone(&ctx.settings_store),
             Arc::clone(&embeddings),
         );
+        let rejects = RejectsService::new(
+            Arc::clone(&catalog),
+            Arc::clone(&ctx.fs),
+            Arc::clone(&ctx.settings_store),
+        );
         Ok(Self {
             search,
+            rejects,
             ai: AiService::new(ctx.inference, Arc::clone(&ctx.settings_store)),
             settings: SettingsService::new(ctx.settings_store, ctx.fs, Arc::clone(&catalog)),
             imports,
@@ -520,6 +528,18 @@ impl Api {
                         .map_err(catalog_error)?,
                 )
             }
+            "plan_reject_move" => {
+                no_args(command, &args)?;
+                respond(self.rejects.plan().map_err(rejects_error)?)
+            }
+            "move_rejects" => {
+                no_args(command, &args)?;
+                respond(self.rejects.move_rejects().map_err(rejects_error)?)
+            }
+            "undo_reject_move" => {
+                let UndoRejectMoveArgs { batch } = parse_args(command, args)?;
+                respond(self.rejects.undo(batch).map_err(rejects_error)?)
+            }
             "search_photos" => {
                 let SearchArgs { text, limit } = parse_args(command, args)?;
                 respond(
@@ -615,6 +635,13 @@ impl Api {
 /// Half the cores (at least one), leaving the rest for the UI and imports.
 fn analysis_workers() -> usize {
     std::thread::available_parallelism().map_or(1, |n| (n.get() / 2).max(1))
+}
+
+fn rejects_error(e: RejectsError) -> ApiError {
+    match e {
+        RejectsError::Invalid(_) => ApiError::new(ApiErrorCode::InvalidArguments, e.to_string()),
+        RejectsError::Catalog(e) => catalog_error(e),
+    }
 }
 
 fn search_error(e: SearchError) -> ApiError {
