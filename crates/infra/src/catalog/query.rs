@@ -100,6 +100,13 @@ fn photo_filters(query: &PhotoQuery, p: &str, d: &str) -> (Vec<String>, Vec<Valu
                 .collect(),
         );
     }
+    if let Some(ids) = &query.photo_ids {
+        let marks = vec!["?"; ids.len()].join(", ");
+        add(
+            &format!("p.id IN ({marks})"),
+            ids.iter().map(|id| Value::Integer(*id)).collect(),
+        );
+    }
     if let Some(min) = query.min_rating {
         add(
             "coalesce(d.rating, 0) >= ?",

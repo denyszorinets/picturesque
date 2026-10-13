@@ -63,6 +63,9 @@ pub struct PhotoQuery {
     /// Series (by id) shown whole although `collapse_series` is set.
     #[ts(optional, type = "number[]")]
     pub expanded_series: Option<Vec<i64>>,
+    /// Only these photos (at most 1000).
+    #[ts(optional, type = "number[]")]
+    pub photo_ids: Option<Vec<i64>>,
 }
 
 pub const DEFAULT_PAGE: u32 = 200;
@@ -85,6 +88,13 @@ impl PhotoQuery {
         }
         if self.limit.is_some_and(|l| l == 0 || l > MAX_PAGE) {
             return Err(format!("`limit` must be 1-{MAX_PAGE}."));
+        }
+        if self
+            .photo_ids
+            .as_ref()
+            .is_some_and(|ids| ids.len() > MAX_PAGE as usize)
+        {
+            return Err(format!("`photo_ids` may list at most {MAX_PAGE} photos."));
         }
         Ok(())
     }
@@ -400,6 +410,8 @@ mod tests {
         assert!(q(|q| q.limit = Some(0)).is_err());
         assert!(q(|q| q.limit = Some(1001)).is_err());
         assert!(q(|q| q.limit = Some(1000)).is_ok());
+        assert!(q(|q| q.photo_ids = Some(vec![1; 1001])).is_err());
+        assert!(q(|q| q.photo_ids = Some(vec![1; 1000])).is_ok());
     }
 
     #[test]

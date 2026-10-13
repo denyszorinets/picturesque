@@ -194,3 +194,46 @@ test("frames series in the grid, marks the best photo and stacks series", async 
   await expect(tiles).toHaveCount(4);
   await call(request, "choose_best", { photo_id: b, best: false });
 });
+
+test("S and J correct series from the grid", async ({ page, request }) => {
+  const DAY = "2006-08-08";
+  const at = (s: number) => new Date(`${DAY}T07:00:0${s}`);
+  await importFiles(request, {
+    "fix/a.JPG": { bytes: jpeg(9401), time: at(0) },
+    "fix/b.JPG": { bytes: jpeg(9402), time: at(1) },
+    "fix/c.JPG": { bytes: jpeg(9403), time: at(2) },
+  });
+  const [a, b] = (
+    await call<Page>(request, "query_photos", {
+      from: DAY,
+      to: DAY,
+      sort: "captured_asc",
+    })
+  ).photos.map((p) => p.id);
+  const series = (id: number | undefined) =>
+    call<SeriesView>(request, "photo_series", { photo_id: id });
+  await expect
+    .poll(async () => (await series(a)).photo_ids.length, { timeout: 60_000 })
+    .toBe(3);
+
+  await page.goto("/");
+  await page.getByTestId("filter-from").fill(DAY);
+  await page.getByTestId("filter-to").fill(DAY);
+  const timeline = page.getByTestId("timeline");
+  const frame = timeline.getByTestId("series-frame");
+  await expect(frame).toHaveCount(1);
+  await timeline.locator(`[data-photo-id="${b}"]`).click();
+
+  // S splits before the photo (a is left alone); again undoes it.
+  await page.keyboard.press("s");
+  await expect.poll(async () => (await series(a)).series_id).toBeNull();
+  await expect(frame).toHaveCount(1);
+  await page.keyboard.press("s");
+  await expect.poll(async () => (await series(a)).photo_ids.length).toBe(3);
+
+  // J records a join, again removes it.
+  await page.keyboard.press("j");
+  await expect.poll(async () => (await series(b)).edit).toBe("join");
+  await page.keyboard.press("j");
+  await expect.poll(async () => (await series(b)).edit).toBeNull();
+});

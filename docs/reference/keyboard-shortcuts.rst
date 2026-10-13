@@ -55,8 +55,21 @@ Timeline
      - Open the selected photo in the loupe
    * - Esc
      - Clear the selection
+   * - C
+     - Compare the selected photos, or the selected photo's series
+       (:ref:`features-compare`)
+   * - S
+     - Split the series before the selected photo; again to undo
+   * - J
+     - Join the selected photo to the series of the photo taken before it;
+       again to undo
 
 Loupe
 -----
 
 See :ref:`features-library-loupe`.
+
+Compare
+-------
+
+See :ref:`features-compare`.

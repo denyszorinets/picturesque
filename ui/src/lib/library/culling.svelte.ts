@@ -14,6 +14,9 @@ export interface CullingApi {
   setDecisions(changes: DecisionChange[]): Promise<DecisionView[]>;
 }
 
+/** A photo's current decision, as culling needs it. */
+export type Decided = Pick<PhotoSummary, "id" | "flag" | "rating">;
+
 /** Where culling reads and updates photos (the timeline store). */
 export interface PhotoList {
   photos: PhotoSummary[];
@@ -39,6 +42,7 @@ export class Culling {
   /** Whether there is something to undo / redo. */
   canUndo = $state(false);
   canRedo = $state(false);
+  private listeners: ((decisions: DecisionView[]) => void)[] = [];
 
   constructor(
     private readonly api: CullingApi,
@@ -46,11 +50,29 @@ export class Culling {
   ) {}
 
   flag(indices: Iterable<number>, flag: Flag): Promise<void> {
-    return this.change(indices, { flag });
+    return this.change(this.at(indices), { flag });
   }
 
   rate(indices: Iterable<number>, rating: number): Promise<void> {
-    return this.change(indices, { rating });
+    return this.change(this.at(indices), { rating });
+  }
+
+  /** Like `flag`, for photos that may not be loaded in the list. */
+  flagPhotos(photos: Decided[], flag: Flag): Promise<void> {
+    return this.change(photos, { flag });
+  }
+
+  ratePhotos(photos: Decided[], rating: number): Promise<void> {
+    return this.change(photos, { rating });
+  }
+
+  /** Calls `listener` with every applied change (including undo and
+   * redo); returns a function that stops it. */
+  subscribe(listener: (decisions: DecisionView[]) => void): () => void {
+    this.listeners = [...this.listeners, listener];
+    return () => {
+      this.listeners = this.listeners.filter((l) => l !== listener);
+    };
   }
 
   async undo(): Promise<void> {
@@ -69,13 +91,16 @@ export class Culling {
     this.sync();
   }
 
-  private async change(
-    indices: Iterable<number>,
-    change: { flag?: Flag; rating?: number },
-  ): Promise<void> {
-    const photos = [...indices]
+  private at(indices: Iterable<number>): Decided[] {
+    return [...indices]
       .map((i) => this.list.photos[i])
       .filter((p): p is PhotoSummary => !!p);
+  }
+
+  private async change(
+    photos: Decided[],
+    change: { flag?: Flag; rating?: number },
+  ): Promise<void> {
     // Skip photos the change would not alter, so undo only touches real changes.
     const affected = photos.filter(
       (p) =>
@@ -108,6 +133,7 @@ export class Culling {
         const r = byId[p.id];
         return r ? { ...p, flag: r.flag, rating: r.rating } : p;
       });
+      for (const listener of this.listeners) listener(results);
       return true;
     } catch (e) {
       this.error = ApiError.from(e).message;

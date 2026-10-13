@@ -37,4 +37,8 @@ collapse_series?: boolean,
 /**
  * Series (by id) shown whole although `collapse_series` is set.
  */
-expanded_series?: number[], };
+expanded_series?: number[], 
+/**
+ * Only these photos (at most 1000).
+ */
+photo_ids?: number[], };
