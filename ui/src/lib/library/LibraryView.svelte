@@ -307,6 +307,17 @@
           >{selection.size} selected</span
         >
       {/if}
+      <select
+        class="small"
+        bind:value={filters.sort}
+        aria-label="Sort"
+        data-testid="sort"
+      >
+        <option value="captured_desc">Newest first</option>
+        <option value="captured_asc">Oldest first</option>
+        <option value="imported_desc">Recently imported</option>
+        <option value="quality_desc">Best quality first</option>
+      </select>
       <button
         class="small"
         aria-pressed={filters.stacked}
@@ -373,6 +384,7 @@
             stacked={filters.stacked}
             expanded={filters.expanded}
             onstack={(id) => filters.toggleExpanded(id)}
+            showQuality={filters.sort === "quality_desc"}
           />
         {/if}
       </div>

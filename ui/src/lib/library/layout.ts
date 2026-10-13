@@ -5,10 +5,14 @@
  * rows near the viewport need to be rendered.
  */
 
+import type { PhotoSort } from "../api";
+
 /** A day (or the undated photos) and where its photos start in the list. */
 export interface Section {
   /** `YYYY-MM-DD`, or `null` for photos without a capture date. */
   day: string | null;
+  /** Heading of a section that is not a day (sorts other than by date). */
+  label?: string;
   /** Index of the section's first photo in the newest-first photo list. */
   start: number;
   count: number;
@@ -41,17 +45,29 @@ export interface Layout {
   tile: number;
 }
 
+/** Heading of the single section of sorts that do not group by day. */
+const UNGROUPED: Partial<Record<PhotoSort, string>> = {
+  imported_desc: "Recently imported",
+  quality_desc: "Best quality first",
+};
+
 /**
- * Sections in newest-first order: days as given (newest first), then the
- * undated photos, matching the order `query_photos` returns.
+ * Sections in the order `query_photos` returns photos: days newest first
+ * (oldest first for `captured_asc`), then the undated photos. Sorts that
+ * are not by date get one section.
  */
 export function buildSections(
   days: { value: string; count: number }[],
   total: number,
+  sort: PhotoSort = "captured_desc",
 ): Section[] {
+  const label = UNGROUPED[sort];
+  if (label !== undefined)
+    return total > 0 ? [{ day: null, label, start: 0, count: total }] : [];
+  const ordered = sort === "captured_asc" ? [...days].reverse() : days;
   const sections: Section[] = [];
   let start = 0;
-  for (const d of days) {
+  for (const d of ordered) {
     if (d.count > 0) sections.push({ day: d.value, start, count: d.count });
     start += d.count;
   }

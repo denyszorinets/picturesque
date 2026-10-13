@@ -39,6 +39,15 @@ collapse_series?: boolean,
  */
 expanded_series?: number[], 
 /**
+ * Minimum technical scores, 0–1 (`docs/reference/quality-scores.rst`).
+ * Photos not analyzed yet never match a threshold.
+ */
+min_sharpness?: number, min_exposure?: number, min_noise?: number, 
+/**
+ * Hide photos that are in a series but not its best photo.
+ */
+best_only?: boolean, 
+/**
  * Only these photos (at most 1000).
  */
 photo_ids?: number[], };

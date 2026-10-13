@@ -31,6 +31,22 @@ describe("buildSections", () => {
       1,
     );
   });
+
+  it("follows the sort order", () => {
+    const days = [
+      { value: "2026-10-12", count: 3 },
+      { value: "2026-10-11", count: 2 },
+    ];
+    expect(buildSections(days, 6, "captured_asc")).toEqual([
+      { day: "2026-10-11", start: 0, count: 2 },
+      { day: "2026-10-12", start: 2, count: 3 },
+      { day: null, start: 5, count: 1 },
+    ]);
+    expect(buildSections(days, 6, "quality_desc")).toEqual([
+      { day: null, label: "Best quality first", start: 0, count: 6 },
+    ]);
+    expect(buildSections([], 0, "imported_desc")).toEqual([]);
+  });
 });
 
 describe("computeLayout", () => {

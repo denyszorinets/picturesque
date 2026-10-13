@@ -27,6 +27,8 @@
     expanded?: ReadonlySet<number>;
     /** The stack button of a series was pressed. */
     onstack?: (seriesId: number) => void;
+    /** Show quality scores on tiles. */
+    showQuality?: boolean;
   }
 
   let {
@@ -38,6 +40,7 @@
     stacked = false,
     expanded = new Set(),
     onstack,
+    showQuality = false,
   }: Props = $props();
 
   // Leaves room for series frames between tiles.
@@ -124,6 +127,7 @@
   });
 
   function dayLabel(section: Section): string {
+    if (section.label) return section.label;
     if (section.day === null) return "No date";
     const [y, m, d] = section.day.split("-").map(Number);
     return dayFormat.format(new Date(y!, (m ?? 1) - 1, d ?? 1));
@@ -200,6 +204,7 @@
                 onclick={(e) => select(index, e)}
                 ondblclick={() => onopen?.(index)}
                 stack={stackOf(photo)}
+                {showQuality}
                 onstack={() =>
                   photo.series_id !== null && onstack?.(photo.series_id)}
               />

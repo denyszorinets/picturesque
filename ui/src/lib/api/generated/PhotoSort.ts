@@ -3,4 +3,4 @@
 /**
  * Order of query results. Undated photos always come last.
  */
-export type PhotoSort = "captured_desc" | "captured_asc" | "imported_desc";
+export type PhotoSort = "captured_desc" | "captured_asc" | "imported_desc" | "quality_desc";

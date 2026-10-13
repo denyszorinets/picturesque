@@ -1,5 +1,6 @@
 //! Browsing queries and decisions on SQLite.
 
+use picturesque_app::analysis::technical::TechnicalAnalyzer;
 use picturesque_app::library::{
     CameraFacet, CameraKey, Counted, FlagCount, PhotoFacets, PhotoPage, PhotoQuery, PhotoSort,
     PhotoSummary, PlaceFacet,
@@ -100,6 +101,24 @@ fn photo_filters(query: &PhotoQuery, p: &str, d: &str) -> (Vec<String>, Vec<Valu
                 .collect(),
         );
     }
+    for (field, min) in [
+        ("sharpness", query.min_sharpness),
+        ("exposure", query.min_exposure),
+        ("noise", query.min_noise),
+    ] {
+        if let Some(min) = min {
+            add(
+                &format!("{} >= ?", score_sql(field)),
+                vec![Value::Real(f64::from(min))],
+            );
+        }
+    }
+    if query.best_only == Some(true) {
+        add(
+            "NOT EXISTS (SELECT 1 FROM series_member bo WHERE bo.photo_id = p.id AND bo.best IS NULL)",
+            Vec::new(),
+        );
+    }
     if let Some(ids) = &query.photo_ids {
         let marks = vec!["?"; ids.len()].join(", ");
         add(
@@ -116,12 +135,34 @@ fn photo_filters(query: &PhotoQuery, p: &str, d: &str) -> (Vec<String>, Vec<Valu
     (clauses, values)
 }
 
+/// SQL for a technical score of photo `p`; NULL until analyzed (or when
+/// analysis failed).
+fn score_sql(field: &str) -> String {
+    format!(
+        "(SELECT json_extract(an.result, '$.{field}') FROM analysis an
+          WHERE an.photo_id = p.id AND an.analyzer = '{}')",
+        TechnicalAnalyzer::ID.name
+    )
+}
+
 /// A position in a result list: the last row of the previous page.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq)]
 enum Cursor {
-    Dated { local: String, id: i64 },
-    Undated { id: i64 },
-    Imported { id: i64 },
+    Dated {
+        local: String,
+        id: i64,
+    },
+    Undated {
+        id: i64,
+    },
+    Imported {
+        id: i64,
+    },
+    /// `score` is `None` for photos not analyzed.
+    Scored {
+        score: Option<f64>,
+        id: i64,
+    },
 }
 
 impl Cursor {
@@ -130,6 +171,10 @@ impl Cursor {
             Self::Dated { local, id } => format!("d|{local}|{id}"),
             Self::Undated { id } => format!("u|{id}"),
             Self::Imported { id } => format!("i|{id}"),
+            Self::Scored { score, id } => match score {
+                Some(score) => format!("s|{score}|{id}"),
+                None => format!("s||{id}"),
+            },
         }
     }
 
@@ -146,6 +191,14 @@ impl Cursor {
             ("i", id, None) => Some(Self::Imported {
                 id: id.parse().ok()?,
             }),
+            ("s", score, Some(id)) => Some(Self::Scored {
+                score: if score.is_empty() {
+                    None
+                } else {
+                    Some(score.parse().ok().filter(|s: &f64| s.is_finite())?)
+                },
+                id: id.parse().ok()?,
+            }),
             _ => None,
         }
     }
@@ -155,12 +208,33 @@ impl Cursor {
         let (cmp, id_cmp) = match sort {
             PhotoSort::CapturedDesc => ("<", "<"),
             PhotoSort::CapturedAsc => (">", ">"),
-            PhotoSort::ImportedDesc => ("<", "<"),
+            PhotoSort::ImportedDesc | PhotoSort::QualityDesc => ("<", "<"),
         };
         Ok(match (self, sort) {
             (Self::Imported { id }, PhotoSort::ImportedDesc) => {
                 ("p.id < ?".into(), vec![Value::Integer(*id)])
             }
+            (
+                Self::Scored {
+                    score: Some(score),
+                    id,
+                },
+                PhotoSort::QualityDesc,
+            ) => {
+                let s = score_sql("overall");
+                (
+                    format!("({s} IS NULL OR {s} < ? OR ({s} = ? AND p.id < ?))"),
+                    vec![
+                        Value::Real(*score),
+                        Value::Real(*score),
+                        Value::Integer(*id),
+                    ],
+                )
+            }
+            (Self::Scored { score: None, id }, PhotoSort::QualityDesc) => (
+                format!("({} IS NULL AND p.id < ?)", score_sql("overall")),
+                vec![Value::Integer(*id)],
+            ),
             (Self::Dated { local, id }, PhotoSort::CapturedDesc | PhotoSort::CapturedAsc) => (
                 format!(
                     "(p.captured_local IS NULL OR p.captured_local {cmp} ? OR (p.captured_local = ? AND p.id {id_cmp} ?))"
@@ -184,11 +258,14 @@ impl Cursor {
     }
 }
 
-fn order_by(sort: PhotoSort) -> &'static str {
+fn order_by(sort: PhotoSort) -> String {
     match sort {
-        PhotoSort::CapturedDesc => "p.captured_local IS NULL, p.captured_local DESC, p.id DESC",
-        PhotoSort::CapturedAsc => "p.captured_local IS NULL, p.captured_local ASC, p.id ASC",
-        PhotoSort::ImportedDesc => "p.id DESC",
+        PhotoSort::CapturedDesc => {
+            "p.captured_local IS NULL, p.captured_local DESC, p.id DESC".into()
+        }
+        PhotoSort::CapturedAsc => "p.captured_local IS NULL, p.captured_local ASC, p.id ASC".into(),
+        PhotoSort::ImportedDesc => "p.id DESC".into(),
+        PhotoSort::QualityDesc => "quality IS NULL, quality DESC, p.id DESC".into(),
     }
 }
 
@@ -231,8 +308,10 @@ fn query_page(conn: &Connection, query: &PhotoQuery) -> Result<PhotoPage, Catalo
                 (SELECT a.path FROM asset a WHERE a.photo_id = p.id AND a.role <> 'sidecar'
                  ORDER BY a.role = 'raw' LIMIT 1),
                 sm.series_id, sm.best IS NOT NULL,
-                (SELECT count(*) FROM series_member x WHERE x.series_id = sm.series_id)
+                (SELECT count(*) FROM series_member x WHERE x.series_id = sm.series_id),
+                {} AS quality
          {FROM} LEFT JOIN series_member sm ON sm.photo_id = p.id {} ORDER BY {} LIMIT ?",
+        score_sql("overall"),
         where_sql(&clauses),
         order_by(sort)
     );
@@ -251,7 +330,8 @@ fn query_page(conn: &Connection, query: &PhotoQuery) -> Result<PhotoPage, Catalo
                 (w, h)
             };
             let path: String = row.get::<_, Option<String>>(13)?.unwrap_or_default();
-            Ok(PhotoSummary {
+            let quality: Option<f64> = row.get(17)?;
+            let summary = PhotoSummary {
                 id: row.get(0)?,
                 day: local.as_ref().map(|l| l[..10.min(l.len())].to_owned()),
                 captured_at: local,
@@ -270,7 +350,10 @@ fn query_page(conn: &Connection, query: &PhotoQuery) -> Result<PhotoPage, Catalo
                 series_id: row.get(14)?,
                 best_in_series: row.get::<_, Option<bool>>(15)?.unwrap_or(false),
                 series_size: row.get::<_, u32>(16)?,
-            })
+                quality: quality.map(|q| q as f32),
+            };
+            // The exact stored score, for the cursor.
+            Ok((summary, quality))
         })
         .map_err(storage)?
         .collect::<Result<Vec<_>, _>>()
@@ -278,10 +361,14 @@ fn query_page(conn: &Connection, query: &PhotoQuery) -> Result<PhotoPage, Catalo
 
     let next_cursor = if photos.len() > limit as usize {
         photos.truncate(limit as usize);
-        let last = photos.last().expect("non-empty page");
+        let (last, last_quality) = photos.last().cloned().expect("non-empty page");
         Some(
             match (sort, &last.captured_at) {
                 (PhotoSort::ImportedDesc, _) => Cursor::Imported { id: last.id },
+                (PhotoSort::QualityDesc, _) => Cursor::Scored {
+                    score: last_quality,
+                    id: last.id,
+                },
                 (_, Some(local)) => Cursor::Dated {
                     local: local.clone(),
                     id: last.id,
@@ -294,7 +381,7 @@ fn query_page(conn: &Connection, query: &PhotoQuery) -> Result<PhotoPage, Catalo
         None
     };
     Ok(PhotoPage {
-        photos,
+        photos: photos.into_iter().map(|(p, _)| p).collect(),
         next_cursor,
         total: total as usize,
     })
@@ -524,10 +611,16 @@ mod tests {
             },
             Cursor::Undated { id: 3 },
             Cursor::Imported { id: 9 },
+            Cursor::Scored {
+                score: Some(0.123_456_789_012_345_67),
+                id: 4,
+            },
+            Cursor::Scored { score: None, id: 5 },
         ] {
             assert_eq!(Cursor::decode(&c.encode()), Some(c));
         }
         assert_eq!(Cursor::decode("x|1"), None);
         assert_eq!(Cursor::decode("d|2026|nope"), None);
+        assert_eq!(Cursor::decode("s|NaN|1"), None);
     }
 }

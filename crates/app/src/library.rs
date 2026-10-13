@@ -22,6 +22,9 @@ pub enum PhotoSort {
     CapturedAsc,
     /// Most recently imported first.
     ImportedDesc,
+    /// Highest technical quality (`overall` score) first; photos not
+    /// analyzed yet last.
+    QualityDesc,
 }
 
 /// Which photos to list. Every filter is optional; filters combine with AND.
@@ -63,6 +66,17 @@ pub struct PhotoQuery {
     /// Series (by id) shown whole although `collapse_series` is set.
     #[ts(optional, type = "number[]")]
     pub expanded_series: Option<Vec<i64>>,
+    /// Minimum technical scores, 0–1 (`docs/reference/quality-scores.rst`).
+    /// Photos not analyzed yet never match a threshold.
+    #[ts(optional)]
+    pub min_sharpness: Option<f32>,
+    #[ts(optional)]
+    pub min_exposure: Option<f32>,
+    #[ts(optional)]
+    pub min_noise: Option<f32>,
+    /// Hide photos that are in a series but not its best photo.
+    #[ts(optional)]
+    pub best_only: Option<bool>,
     /// Only these photos (at most 1000).
     #[ts(optional, type = "number[]")]
     pub photo_ids: Option<Vec<i64>>,
@@ -88,6 +102,15 @@ impl PhotoQuery {
         }
         if self.limit.is_some_and(|l| l == 0 || l > MAX_PAGE) {
             return Err(format!("`limit` must be 1-{MAX_PAGE}."));
+        }
+        for (name, value) in [
+            ("min_sharpness", self.min_sharpness),
+            ("min_exposure", self.min_exposure),
+            ("min_noise", self.min_noise),
+        ] {
+            if value.is_some_and(|v| !(0.0..=1.0).contains(&v)) {
+                return Err(format!("`{name}` must be between 0 and 1."));
+            }
         }
         if self
             .photo_ids
@@ -134,6 +157,8 @@ pub struct PhotoSummary {
     pub best_in_series: bool,
     /// Photos in the photo's series (0 when in none).
     pub series_size: u32,
+    /// Overall technical quality, 0–1; `null` until analyzed.
+    pub quality: Option<f32>,
 }
 
 /// A page of results.
@@ -412,6 +437,9 @@ mod tests {
         assert!(q(|q| q.limit = Some(1000)).is_ok());
         assert!(q(|q| q.photo_ids = Some(vec![1; 1001])).is_err());
         assert!(q(|q| q.photo_ids = Some(vec![1; 1000])).is_ok());
+        assert!(q(|q| q.min_sharpness = Some(1.5)).is_err());
+        assert!(q(|q| q.min_noise = Some(f32::NAN)).is_err());
+        assert!(q(|q| q.min_exposure = Some(0.0)).is_ok());
     }
 
     #[test]

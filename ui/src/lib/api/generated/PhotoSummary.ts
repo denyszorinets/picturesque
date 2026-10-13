@@ -31,4 +31,8 @@ best_in_series: boolean,
 /**
  * Photos in the photo's series (0 when in none).
  */
-series_size: number, };
+series_size: number, 
+/**
+ * Overall technical quality, 0–1; `null` until analyzed.
+ */
+quality: number | null, };

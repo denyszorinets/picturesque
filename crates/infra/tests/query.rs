@@ -484,8 +484,26 @@ fn queries_over_ten_thousand_photos_are_fast() {
             .unwrap();
         }
     }
+    for n in 0..10_000u64 {
+        let score = ((n * 7919) % 1000) as f64 / 1000.0;
+        c.store_analysis(
+            PhotoId(n as i64 + 1),
+            picturesque_app::analysis::technical::TechnicalAnalyzer::ID,
+            &serde_json::json!({ "sharpness": score, "exposure": 0.8, "noise": 0.7, "overall": score }),
+        )
+        .unwrap();
+    }
     let queries = [
         PhotoQuery::default(),
+        PhotoQuery {
+            sort: Some(PhotoSort::QualityDesc),
+            ..Default::default()
+        },
+        PhotoQuery {
+            min_sharpness: Some(0.5),
+            best_only: Some(true),
+            ..Default::default()
+        },
         PhotoQuery {
             city: Some("Lisbon".into()),
             lens: Some("RF50".into()),
@@ -804,4 +822,88 @@ fn collapsing_series_shows_the_best_matching_photo_of_each() {
         }),
         [2]
     );
+}
+
+#[test]
+fn score_thresholds_best_only_and_quality_sort() {
+    use picturesque_app::analysis::technical::TechnicalAnalyzer;
+    use picturesque_app::library::PhotoSort;
+    use serde_json::json;
+
+    let c = sample();
+    // (photo, sharpness, exposure, noise, overall); 4 and 6 not analyzed,
+    // 5 failed.
+    for (id, s, e, n, o) in [
+        (1, 0.9, 0.8, 0.7, 0.85),
+        (2, 0.4, 0.9, 0.9, 0.55),
+        (3, 0.95, 0.3, 0.5, 0.6),
+    ] {
+        c.store_analysis(
+            PhotoId(id),
+            TechnicalAnalyzer::ID,
+            &json!({ "sharpness": s, "exposure": e, "noise": n, "overall": o }),
+        )
+        .unwrap();
+    }
+    c.store_analysis(PhotoId(5), TechnicalAnalyzer::ID, &json!({ "error": "x" }))
+        .unwrap();
+    let q = |f: &dyn Fn(&mut PhotoQuery)| {
+        let mut q = PhotoQuery::default();
+        f(&mut q);
+        ids(&c, q)
+    };
+
+    assert_eq!(q(&|q| q.min_sharpness = Some(0.5)), [1, 3]);
+    assert_eq!(q(&|q| q.min_exposure = Some(0.85)), [2]);
+    assert_eq!(
+        q(&|q| {
+            q.min_sharpness = Some(0.5);
+            q.min_noise = Some(0.6)
+        }),
+        [1]
+    );
+    assert_eq!(q(&|q| q.min_sharpness = Some(0.0)), [1, 2, 3]);
+    let facets = c
+        .facets(Some(&PhotoQuery {
+            min_sharpness: Some(0.5),
+            ..Default::default()
+        }))
+        .unwrap();
+    assert_eq!(facets.total, 2);
+
+    // Best first, unanalyzed (and failed) last, newest id first among them.
+    let sorted = |limit| {
+        let mut all = Vec::new();
+        let mut cursor = None;
+        loop {
+            let page = c
+                .query(&PhotoQuery {
+                    sort: Some(PhotoSort::QualityDesc),
+                    limit: Some(limit),
+                    cursor,
+                    ..Default::default()
+                })
+                .unwrap();
+            all.extend(page.photos.iter().map(|p| (p.id, p.quality)));
+            match page.next_cursor {
+                Some(next) => cursor = Some(next),
+                None => return all,
+            }
+        }
+    };
+    let all = sorted(100);
+    assert_eq!(
+        all.iter().map(|(id, _)| *id).collect::<Vec<_>>(),
+        [1, 3, 2, 6, 5, 4]
+    );
+    assert_eq!(all[0].1, Some(0.85));
+    assert_eq!(all[3].1, None);
+    for limit in 1..=4 {
+        assert_eq!(sorted(limit), all, "limit {limit}");
+    }
+
+    // Best only hides series members other than the best.
+    c.replace_series(&[stored(&[PhotoId(2), PhotoId(1)])])
+        .unwrap();
+    assert_eq!(q(&|q| q.best_only = Some(true)), [2, 3, 5, 6, 4]);
 }
