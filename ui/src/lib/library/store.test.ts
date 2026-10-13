@@ -154,6 +154,16 @@ describe("LibraryStore", () => {
     expect(store.sections[0]!.day).toBe("2026-10-12");
   });
 
+  it("refreshes only the counts", async () => {
+    const api = backend(1000);
+    const store = new LibraryStore(api);
+    await store.load();
+    vi.mocked(api.photoFacets).mockResolvedValue(facets(999));
+    await store.refreshFacets();
+    expect(store.total).toBe(999);
+    expect(store.photos).toHaveLength(300);
+  });
+
   it("lists the cities of a section's loaded photos", async () => {
     const store = new LibraryStore(
       backend(5, (i) => (i < 3 ? "Lisbon" : "Porto")),

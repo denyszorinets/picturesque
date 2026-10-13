@@ -79,6 +79,8 @@
   let loupe = $state<number | null>(null);
   let layout = $state<Layout>();
   const culling = $derived(new Culling(api, store));
+  // Flag and rating counts follow decisions.
+  $effect(() => culling.subscribe(() => void store.refreshFacets()));
 
   const FLAGS: Record<string, "pick" | "reject" | "unflagged"> = {
     p: "pick",

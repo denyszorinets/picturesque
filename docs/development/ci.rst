@@ -15,6 +15,13 @@ into ``develop`` or ``main``, on pushes to those branches, and on demand.
      - ``make check`` (formatting, clippy, Rust tests, build, UI checks),
        ``make bindings-check``, then ``make e2e`` in headless Chromium.
        The Playwright report is uploaded when the job fails.
+   * - Desktop app smoke test (Linux)
+     - Ubuntu 24.04
+     - ``make smoke``: builds the real desktop app and drives it on Xvfb
+       through ``tauri-driver`` and WebKitWebDriver
+       (:repo:`ui/smoke/app-smoke.mjs`): the window opens, a library folder
+       is set, three fixture photos are imported and one is picked with
+       **P**. Screenshots are uploaded.
    * - macOS / Windows (build, test)
      - macOS 15, Windows Server 2025
      - ``cargo build`` and ``cargo test`` for the whole workspace,
@@ -24,6 +31,16 @@ into ``develop`` or ``main``, on pushes to those branches, and on demand.
      - ``make docs-check``.
 
 Every pull request must be green before it is merged.
+
+Smoke test of the real app
+--------------------------
+
+The end-to-end tests drive the UI in a browser against the development
+server; the smoke test checks the real Tauri window. Run it locally with
+``make smoke`` (the devcontainer has Xvfb, ``tauri-driver`` and
+WebKitWebDriver). It starts its own Xvfb on ``:99`` and clears
+``WAYLAND_DISPLAY``, so no window appears on a real screen, and gives the
+app fresh data folders. Screenshots land in ``target/smoke-results``.
 
 Conventions
 -----------

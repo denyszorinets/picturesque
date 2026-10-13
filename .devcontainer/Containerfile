@@ -49,6 +49,10 @@ RUN dnf install -y \
     dnf install -y libheif-freeworld && \
     dnf clean all
 
+# Smoke tests of the real app (make smoke): a virtual display and WebKit's
+# WebDriver (Fedora ships it with webkitgtk6.0; same WebKit as 4.1).
+RUN dnf install -y xorg-x11-server-Xvfb webkitgtk6.0 && dnf clean all
+
 RUN curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh | bash
 RUN chsh -s $(which zsh)
 
@@ -56,6 +60,7 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y \
         --default-toolchain ${RUST_VERSION} \
         --component clippy,rustfmt,rust-analyzer
 ENV PATH="/root/.cargo/bin:${PATH}"
+RUN cargo install tauri-driver --version 2.1.0 --locked
 
 RUN curl -fsSL https://bun.sh/install | bash
 ENV PATH="/root/.bun/bin:${PATH}"

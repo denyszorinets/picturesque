@@ -129,6 +129,20 @@ export class LibraryStore {
     }
   }
 
+  /** Reloads only the counts (after decisions changed). */
+  async refreshFacets(): Promise<void> {
+    const generation = this.generation;
+    try {
+      const query = this.ranking
+        ? { ...this.filter, photo_ids: this.ranking.ids }
+        : this.filter;
+      const facets = await this.api.photoFacets(query);
+      if (generation === this.generation) this.facets = facets;
+    } catch {
+      // Stale counts are harmless; the next load fixes them.
+    }
+  }
+
   /**
    * Reloads facets and the photos loaded so far, in place, so the view
    * keeps its scroll position (used when series or best photos change).
