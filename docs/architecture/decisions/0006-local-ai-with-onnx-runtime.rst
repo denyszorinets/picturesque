@@ -164,7 +164,16 @@ Validation
 ----------
 
 :issue:`42` measures throughput and stability of WebGPU versus CPU on the
-maintainer's integrated AMD GPU under Linux. Findings will be recorded here.
+maintainer's integrated AMD GPU (Radeon 780M) under Linux
+(:doc:`/development/benchmarks`). First findings, without the GPU passed
+into the devcontainer:
+
+- The CPU runs the CLIP ViT-B/32 image encoder in 18 ms per photo
+  (Ryzen 7 PRO 7840HS, 16 threads): a 10,000-photo library in about three
+  minutes. CPU-only inference is fast enough for this model.
+- WebGPU initializes on Mesa's software Vulkan driver and matches CPU
+  results (largest difference 7 × 10⁻⁷) over repeated runs, at 258 ms per
+  photo. The measurement on the real iGPU is still to be done.
 
 References
 ----------
