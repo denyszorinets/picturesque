@@ -2,7 +2,7 @@ Packaging
 =========
 
 Installers are built with ``npx tauri build`` (:issue:`52`); the release
-workflow builds them for every platform (:issue:`53`).
+workflow builds them for every platform (:doc:`releasing`).
 
 .. list-table::
    :header-rows: 1
@@ -53,6 +53,8 @@ The executable finds ``libwebgpu_dawn.so`` (ONNX Runtime's WebGPU provider)
 through its run path: next to itself in development builds and AppImages,
 in ``../lib/picturesque`` in deb and rpm packages
 (:repo:`src-tauri/build.rs`).
+
+.. _development-packaging-check:
 
 Checking an installer
 ---------------------
