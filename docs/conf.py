@@ -42,6 +42,8 @@ html_theme_options = {
 # link checkers, which would fail the build at random.
 linkcheck_ignore = [
     rf"{REPO_URL}(/.*)?",
+    # The website is deployed from this repository after the docs build.
+    r"https://denyszorinets\.github\.io/picturesque(/.*)?",
     # Local development servers mentioned in the docs.
     r"https?://(127\.0\.0\.1|localhost)(:\d+)?(/.*)?",
 ]
