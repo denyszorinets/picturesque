@@ -14,15 +14,60 @@ use rusqlite::{Connection, OptionalExtension, params, params_from_iter};
 
 use super::{SqliteCatalog, storage};
 
+/// The stored make and model of every camera that displays as `camera`
+/// does (files spell one camera in different ways). Read from the camera
+/// index, so it costs one row per distinct camera.
+fn camera_spellings(
+    conn: &Connection,
+    camera: &CameraKey,
+) -> Result<Vec<(Option<String>, Option<String>)>, CatalogError> {
+    let label = Camera::new(&camera.make, &camera.model).display_name();
+    let mut stmt = conn
+        .prepare_cached(
+            "SELECT camera_make, camera_model FROM photo
+             WHERE camera_make IS NOT NULL OR camera_model IS NOT NULL
+             GROUP BY camera_make, camera_model",
+        )
+        .map_err(storage)?;
+    let rows = stmt
+        .query_map([], |r| {
+            Ok((
+                r.get::<_, Option<String>>(0)?,
+                r.get::<_, Option<String>>(1)?,
+            ))
+        })
+        .map_err(storage)?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(storage)?;
+    Ok(rows
+        .into_iter()
+        .filter(|(make, model)| {
+            Camera::new(
+                make.as_deref().unwrap_or_default(),
+                model.as_deref().unwrap_or_default(),
+            )
+            .display_name()
+                == label
+        })
+        .collect())
+}
+
 /// SQL for the filters of `query`, with their parameters, including
 /// collapsing series.
-fn filters(query: &PhotoQuery) -> (Vec<String>, Vec<Value>) {
-    let (mut clauses, mut values) = photo_filters(query, "p", "d");
+fn filters(
+    conn: &Connection,
+    query: &PhotoQuery,
+) -> Result<(Vec<String>, Vec<Value>), CatalogError> {
+    let spellings = match &query.camera {
+        Some(camera) => camera_spellings(conn, camera)?,
+        None => Vec::new(),
+    };
+    let (mut clauses, mut values) = photo_filters(query, &spellings, "p", "d");
     if query.collapse_series == Some(true) {
         // Hide a series member when a better-placed member of the same
         // series also matches: the best photo (chosen or ranked) first, then
         // by rank. Expanded series stay whole.
-        let (inner, inner_values) = photo_filters(query, "p2", "d2");
+        let (inner, inner_values) = photo_filters(query, &spellings, "p2", "d2");
         let expanded = query.expanded_series.as_deref().unwrap_or_default();
         let mut clause = String::from(
             "NOT EXISTS (SELECT 1 FROM series_member me
@@ -48,12 +93,18 @@ fn filters(query: &PhotoQuery) -> (Vec<String>, Vec<Value>) {
         values.extend(inner_values);
         clauses.push(clause);
     }
-    (clauses, values)
+    Ok((clauses, values))
 }
 
 /// SQL for the photo filters of `query`, for the photo table aliased `p`
-/// and the decision table aliased `d`.
-fn photo_filters(query: &PhotoQuery, p: &str, d: &str) -> (Vec<String>, Vec<Value>) {
+/// and the decision table aliased `d`. `spellings` are the stored makes and
+/// models of the camera filtered by (`camera_spellings`).
+fn photo_filters(
+    query: &PhotoQuery,
+    spellings: &[(Option<String>, Option<String>)],
+    p: &str,
+    d: &str,
+) -> (Vec<String>, Vec<Value>) {
     let mut clauses = Vec::new();
     let mut values = Vec::new();
     let mut add = |clause: &str, vals: Vec<Value>| {
@@ -79,19 +130,24 @@ fn photo_filters(query: &PhotoQuery, p: &str, d: &str) -> (Vec<String>, Vec<Valu
     if let Some(city) = &query.city {
         add("p.place_city = ?", vec![Value::Text(city.clone())]);
     }
-    if let Some(camera) = &query.camera {
-        add(
-            // Every spelling of the camera: the label is computed once per
-            // distinct camera (index `photo_camera`), not per photo.
-            "(p.camera_make, p.camera_model) IN (
-                 SELECT camera_make, camera_model FROM photo
-                 GROUP BY camera_make, camera_model
-                 HAVING camera_label(camera_make, camera_model) = camera_label(?, ?))",
-            vec![
-                Value::Text(camera.make.clone()),
-                Value::Text(camera.model.clone()),
-            ],
-        );
+    if query.camera.is_some() {
+        // Every spelling of the camera (none: no photo matches).
+        let text = |v: &Option<String>| v.clone().map_or(Value::Null, Value::Text);
+        let any: Vec<&str> = spellings
+            .iter()
+            .map(|_| "(p.camera_make IS ? AND p.camera_model IS ?)")
+            .collect();
+        if any.is_empty() {
+            add("0", Vec::new());
+        } else {
+            add(
+                &format!("({})", any.join(" OR ")),
+                spellings
+                    .iter()
+                    .flat_map(|(make, model)| [text(make), text(model)])
+                    .collect(),
+            );
+        }
     }
     if let Some(lens) = &query.lens {
         add("p.lens = ?", vec![Value::Text(lens.clone())]);
@@ -325,7 +381,7 @@ fn where_sql(clauses: &[String]) -> String {
 
 fn query_page(conn: &Connection, query: &PhotoQuery) -> Result<PhotoPage, CatalogError> {
     let sort = query.sort.unwrap_or_default();
-    let (mut clauses, mut values) = filters(query);
+    let (mut clauses, mut values) = filters(conn, query)?;
 
     let total: i64 = conn
         .query_row(
@@ -486,7 +542,10 @@ fn merge_spellings(cameras: Vec<Counted<CameraFacet>>) -> Vec<Counted<CameraFace
 }
 
 fn facets(conn: &Connection, filter: Option<&PhotoQuery>) -> Result<PhotoFacets, CatalogError> {
-    let (clauses, values) = filter.map(filters).unwrap_or_default();
+    let (clauses, values) = match filter {
+        Some(f) => filters(conn, f)?,
+        None => Default::default(),
+    };
     let (total, first, last): (i64, Option<String>, Option<String>) = conn
         .query_row(
             &format!(

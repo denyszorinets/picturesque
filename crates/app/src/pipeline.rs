@@ -324,13 +324,19 @@ fn megabytes(bytes: u64) -> String {
     format!("{} MB", bytes / 1_000_000)
 }
 
-/// RAW if present, else the image, else the first file.
-fn primary(files: &[JobFile]) -> &JobFile {
+/// RAW if present, else the image, else the first file (none for a job
+/// whose files are gone).
+fn primary(files: &[JobFile]) -> Option<&JobFile> {
     files
         .iter()
         .find(|f| f.format == MediaFormat::Raw)
         .or_else(|| files.iter().find(|f| f.format.role() != AssetRole::Sidecar))
-        .unwrap_or(&files[0])
+        .or_else(|| files.first())
+}
+
+/// The path that names a job: its primary file's.
+fn job_path(files: &[JobFile]) -> &Path {
+    primary(files).map_or(Path::new(""), |f| f.path.as_path())
 }
 
 fn stem_key(name: &str) -> String {
@@ -483,7 +489,7 @@ impl ImportPipeline {
         Ok(jobs
             .into_iter()
             .map(|job| {
-                let first = primary(&job.files);
+                let first = job_path(&job.files);
                 let (thumbnail, analysis) = match (job.stage, job.photo_id) {
                     (JobStage::Imported, Some(id)) => {
                         let (t, a) = details(id);
@@ -493,8 +499,8 @@ impl ImportPipeline {
                 };
                 JobView {
                     id: job.id,
-                    file_name: file_name(&first.path),
-                    source_path: first.path.display().to_string(),
+                    file_name: file_name(first),
+                    source_path: first.display().to_string(),
                     files: job.files.iter().map(|f| file_name(&f.path)).collect(),
                     stage: job.stage,
                     error: job.error.clone(),
@@ -869,7 +875,7 @@ impl ImportPipeline {
                     "{} free in {}, {} needs {}",
                     megabytes(free),
                     root.display(),
-                    file_name(&primary(&job.files).path),
+                    file_name(job_path(&job.files)),
                     megabytes(needed)
                 )),
             );
@@ -930,7 +936,7 @@ impl ImportPipeline {
         let mut shared = self.shared.lock().expect("pipeline lock");
         shared.active = (!stage.is_final()).then(|| ActiveJob {
             job_id: job.id,
-            file_name: file_name(&primary(&job.files).path),
+            file_name: file_name(job_path(&job.files)),
             stage,
         });
         drop(shared);
@@ -940,7 +946,7 @@ impl ImportPipeline {
     /// Imports one photo. Returns why importing must pause (a disk is
     /// full) instead of failing the photo.
     fn process(&self, root: &Path, job: &Job) -> Option<&'static str> {
-        let name = file_name(&primary(&job.files).path);
+        let name = file_name(job_path(&job.files));
         let fail = |message: String| {
             self.set_stage(job, JobStage::Failed, None, Some(&message));
             self.log(
@@ -951,6 +957,10 @@ impl ImportPipeline {
             );
             None
         };
+
+        if job.files.is_empty() {
+            return fail("its files were not found; it is imported again if they reappear".into());
+        }
 
         // 1. Read.
         self.set_stage(job, JobStage::Reading, None, None);
