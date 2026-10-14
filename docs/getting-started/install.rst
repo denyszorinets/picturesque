@@ -19,6 +19,8 @@ Installers are attached to each
   (installs for you, no administrator rights needed) or
   ``Picturesque_*_x64_en-US.msi`` (for all users). The installers are not
   signed yet: if SmartScreen warns, choose **More info → Run anyway**.
+  HEIC photos (from iPhones) are imported but cannot be shown or analyzed
+  on Windows yet (:issue:`135`).
 
 You can also build the app from source (:doc:`/development/building`,
 :doc:`/development/packaging`).

@@ -70,7 +70,9 @@ distribution it was built on.
        (:repo:`src-tauri/tauri.windows.conf.json`). The setup ``.exe``
        installs for the current user without administrator rights; the
        ``.msi`` installs for all users. The WebView2 runtime, part of
-       Windows 11 and current Windows 10, is installed if missing.
+       Windows 11 and current Windows 10, is installed if missing. The
+       libvips build has no HEVC decoder, so HEIC photos are not decoded
+       (AVIF is; :issue:`135`).
 
 Each package must be built on the system it targets, because the binary
 links the libvips and LibRaw versions of the build host.
