@@ -113,6 +113,27 @@ Commands
    ``places``, ``flags``, ``ratings`` (counts for 0–5 stars), plus
    ``total``, ``first_day`` and ``last_day``.
 
+``library_stats``
+   No arguments. Keepers per camera and lens and focal lengths per camera
+   (:doc:`/features/statistics`):
+
+   .. code-block:: json
+
+      { "all": { "photos": 812, "picks": 120, "auto_picked": 64, "rejects": 230 },
+        "keeper_rate": 0.23,
+        "cameras": [{ "label": "Canon EOS R6", "camera": { "make": "Canon", "model": "Canon EOS R6" },
+                      "lens": null, "counts": { "photos": 500, "picks": 90, "auto_picked": 40, "rejects": 150 },
+                      "keeper_rate": 0.26, "few_photos": false,
+                      "focal_lengths": [{ "value": 35, "count": 210 }, { "value": 85, "count": 120 }] }],
+        "lenses": [{ "label": "RF35mm F1.8", "camera": null, "lens": "RF35mm F1.8", "...": "..." }],
+        "min_photos": 20 }
+
+   A keeper is a picked or auto-picked photo; ``keeper_rate`` is keepers
+   per photo, 0–1. ``cameras`` and ``lenses`` come most successful first:
+   by keeper rate, then by photos, with gear of fewer than ``min_photos``
+   photos (``few_photos``) last. ``focal_lengths`` (cameras only) counts
+   photos per focal length in whole millimetres, most used first.
+
 ``ai_status``
    No arguments. Where local AI models run (:doc:`/features/ai`):
 

@@ -23,6 +23,7 @@ pub mod search;
 pub mod series;
 pub mod settings;
 pub mod sidecars;
+pub mod stats;
 pub mod templates;
 pub mod thumbnails;
 

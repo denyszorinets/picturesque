@@ -557,6 +557,12 @@ impl PhotoCatalog for MemoryCatalog {
         ))
     }
 
+    fn gear_usage(&self) -> Result<crate::stats::GearUsage, CatalogError> {
+        Err(CatalogError::Storage(
+            "statistics are tested against SQLite".into(),
+        ))
+    }
+
     fn decision(&self, id: PhotoId) -> Result<picturesque_core::decision::Decision, CatalogError> {
         Ok(self
             .decisions

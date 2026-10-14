@@ -199,6 +199,10 @@ impl PhotoCatalog for SqliteCatalog {
         self.photo_facets(filter)
     }
 
+    fn gear_usage(&self) -> Result<picturesque_app::stats::GearUsage, CatalogError> {
+        self.load_gear_usage()
+    }
+
     fn decision(&self, id: PhotoId) -> Result<picturesque_core::decision::Decision, CatalogError> {
         self.load_decision(id)
     }

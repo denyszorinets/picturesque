@@ -106,6 +106,9 @@ pub trait PhotoCatalog: Send + Sync {
     /// layout); the option lists always cover the whole library.
     fn facets(&self, filter: Option<&PhotoQuery>) -> Result<PhotoFacets, CatalogError>;
 
+    /// Photos per camera, lens and camera focal length, by decision.
+    fn gear_usage(&self) -> Result<crate::stats::GearUsage, CatalogError>;
+
     /// A photo's decision; the default when none was made.
     fn decision(&self, id: PhotoId) -> Result<Decision, CatalogError>;
 
