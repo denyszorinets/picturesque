@@ -17,6 +17,7 @@ import type { PipelineStatus } from "./generated/PipelineStatus";
 import type { DecisionChange } from "./generated/DecisionChange";
 import type { DecisionView } from "./generated/DecisionView";
 import type { PhotoDetail } from "./generated/PhotoDetail";
+import type { LibraryStats } from "./generated/LibraryStats";
 import type { PhotoFacets } from "./generated/PhotoFacets";
 import type { PhotoPage } from "./generated/PhotoPage";
 import type { PhotoQuery } from "./generated/PhotoQuery";
@@ -30,6 +31,9 @@ import { selectTransport, type ImageSize } from "./transport";
 
 export { ApiError } from "./error";
 export type { AiStatus } from "./generated/AiStatus";
+export type { GearStats } from "./generated/GearStats";
+export type { KeeperCounts } from "./generated/KeeperCounts";
+export type { LibraryStats } from "./generated/LibraryStats";
 export type { AnalysisStatus } from "./generated/AnalysisStatus";
 export type { ModelView } from "./generated/ModelView";
 export type { ExportArgs } from "./generated/ExportArgs";
@@ -186,6 +190,11 @@ export function photoFacets(filter?: PhotoQuery): Promise<PhotoFacets> {
     "photo_facets",
     filter ? { filter } : undefined,
   );
+}
+
+/** Keepers per camera and lens, and focal lengths per camera. */
+export function libraryStats(): Promise<LibraryStats> {
+  return transport.call<LibraryStats>("library_stats");
 }
 
 /** Changes photos' flags and/or ratings; returns the resulting decisions. */

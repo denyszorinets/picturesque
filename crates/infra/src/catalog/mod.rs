@@ -8,6 +8,7 @@ mod query;
 mod rejects;
 mod series;
 mod settings;
+mod stats;
 
 use std::path::Path;
 use std::sync::{Mutex, MutexGuard};

@@ -177,7 +177,7 @@ fn score_sql(field: &str) -> String {
 
 /// Whether photo `p` is auto-picked: a suggested keeper the user has not
 /// flagged.
-const AUTO_PICKED_SQL: &str = "(coalesce(d.flag, 'unflagged') = 'unflagged'
+pub(super) const AUTO_PICKED_SQL: &str = "(coalesce(d.flag, 'unflagged') = 'unflagged'
      AND EXISTS (SELECT 1 FROM photo_score ap WHERE ap.photo_id = p.id AND ap.keeper = 1))";
 
 /// SQL for a photo's combined quality score (`photo_score`); NULL until
@@ -308,7 +308,7 @@ fn order_by(sort: PhotoSort) -> String {
     }
 }
 
-const FROM: &str = "FROM photo p LEFT JOIN decision d ON d.photo_id = p.id";
+pub(super) const FROM: &str = "FROM photo p LEFT JOIN decision d ON d.photo_id = p.id";
 
 fn where_sql(clauses: &[String]) -> String {
     if clauses.is_empty() {

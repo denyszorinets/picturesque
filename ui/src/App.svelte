@@ -6,11 +6,13 @@
   import { Pipeline } from "./lib/activity/pipeline.svelte";
   import LibraryView from "./lib/library/LibraryView.svelte";
   import SettingsPanel from "./lib/settings/SettingsPanel.svelte";
+  import StatsView from "./lib/stats/StatsView.svelte";
 
-  type Tab = "library" | "activity" | "settings";
+  type Tab = "library" | "activity" | "statistics" | "settings";
   const TABS: { id: Tab; label: string }[] = [
     { id: "library", label: "Library" },
     { id: "activity", label: "Activity" },
+    { id: "statistics", label: "Statistics" },
     { id: "settings", label: "Settings" },
   ];
 
@@ -94,6 +96,9 @@
           hasLibrary={settings === null || !!settings.library_root}
           onsettings={() => (tab = "settings")}
         />
+      </div>
+      <div class="view page" hidden={tab !== "statistics"}>
+        <StatsView load={api.libraryStats} visible={tab === "statistics"} />
       </div>
       <div class="view page settings" hidden={tab !== "settings"}>
         <SettingsPanel onchange={(s) => (settings = s)} />

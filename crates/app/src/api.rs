@@ -557,6 +557,12 @@ impl Api {
                         .map_err(catalog_error)?,
                 )
             }
+            "library_stats" => {
+                no_args(command, &args)?;
+                respond(crate::stats::summarize(
+                    self.catalog.gear_usage().map_err(catalog_error)?,
+                ))
+            }
             "similar_photos" => {
                 let SimilarArgs { photo_id, limit } = parse_args(command, args)?;
                 let limit = limit.unwrap_or(DEFAULT_LIMIT);
