@@ -40,6 +40,10 @@ What the page shows
    (rounded to whole millimetres), with the share of the camera's photos
    taken at each. The longest bar is the most used focal length.
 
+A camera whose files spell it differently (for example make *Canon* with
+model *EOS R5* in RAW files and *Canon EOS R5* in JPEGs) is one row, as
+it is one option in the camera filter.
+
 Photos without camera or lens information count in the highlights only.
 The camera and lens are read from each photo's EXIF data on import
 (:doc:`/features/import`).

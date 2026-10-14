@@ -529,6 +529,14 @@ fn queries_over_ten_thousand_photos_are_fast() {
             lens: Some("RF50".into()),
             ..Default::default()
         },
+        // Matches every spelling of the camera (a function per row).
+        PhotoQuery {
+            camera: Some(CameraKey {
+                make: R5.0.into(),
+                model: R5.1.into(),
+            }),
+            ..Default::default()
+        },
         PhotoQuery {
             flags: Some(vec![Flag::Pick]),
             min_rating: Some(3),
@@ -1042,4 +1050,54 @@ fn auto_picked_photos_are_keepers_without_a_flag() {
     );
     let facets = c.facets(None).unwrap();
     assert_eq!(facets.auto_picked, 1);
+}
+
+#[test]
+fn one_camera_spelled_two_ways_is_one_filter_option() {
+    let c = SqliteCatalog::open_in_memory().unwrap();
+    for (n, model) in [(1, "Canon EOS R5"), (2, "EOS R5"), (3, "EOS R5")] {
+        insert(
+            &c,
+            n,
+            &Spec {
+                when: Some("2026-10-12 10:00:00"),
+                camera: ("Canon", model),
+                lens: None,
+                city: None,
+                files: &["x.JPG"],
+            },
+        );
+    }
+    insert(
+        &c,
+        4,
+        &Spec {
+            when: Some("2026-10-12 11:00:00"),
+            camera: PHONE,
+            lens: None,
+            city: None,
+            files: &["y.JPG"],
+        },
+    );
+
+    let cameras = c.facets(None).unwrap().cameras;
+    let labels: Vec<(&str, usize)> = cameras
+        .iter()
+        .map(|c| (c.value.label.as_str(), c.count))
+        .collect();
+    assert_eq!(labels, [("Canon EOS R5", 3), ("Apple iPhone 15 Pro", 1)]);
+    // The most used spelling stands for the camera.
+    assert_eq!(cameras[0].value.key.model, "EOS R5");
+
+    // Filtering by either spelling finds all three.
+    for model in ["EOS R5", "Canon EOS R5"] {
+        let q = PhotoQuery {
+            camera: Some(CameraKey {
+                make: "Canon".into(),
+                model: model.into(),
+            }),
+            ..Default::default()
+        };
+        assert_eq!(ids(&c, q).len(), 3, "{model}");
+    }
 }

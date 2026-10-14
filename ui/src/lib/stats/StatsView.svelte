@@ -103,129 +103,145 @@
 
 <div class="stats" data-testid="stats">
   <h2>Statistics</h2>
-  {#if error}
-    <p class="error-text" role="alert">{error}</p>
-  {:else if !stats}
-    <p class="muted">Loading…</p>
-  {:else if stats.all.photos === 0}
-    <p class="muted" data-testid="stats-empty">
-      No photos yet. Statistics appear once photos are imported.
-    </p>
-  {:else}
-    <div class="tiles">
-      <div class="tile">
-        <span class="label">Photos</span>
-        <span class="big">{stats.all.photos.toLocaleString()}</span>
-        <span class="muted">{plural(stats.all.rejects, "reject")}</span>
-      </div>
-      <div class="tile">
-        <span class="label">Keepers</span>
-        <span class="big" data-testid="overall-rate"
-          >{percent(
-            stats.all.picks + stats.all.auto_picked,
-            stats.all.photos,
-          )}</span
-        >
-        <span class="muted"
-          >{stats.all.picks.toLocaleString()} picked, {stats.all.auto_picked.toLocaleString()}
-          auto-picked</span
-        >
-      </div>
-      <div class="tile">
-        <span class="label">Most successful camera</span>
-        {#if bestCamera}
-          <span class="big name" data-testid="best-camera"
-            >{bestCamera.label}</span
-          >
-          <span class="muted"
-            >{percent(
-              bestCamera.counts.picks + bestCamera.counts.auto_picked,
-              bestCamera.counts.photos,
-            )} keepers of {plural(bestCamera.counts.photos, "photo")}</span
-          >
-        {:else}
-          <span class="muted">Not enough photos with camera information.</span>
-        {/if}
-      </div>
-      <div class="tile">
-        <span class="label">Most successful lens</span>
-        {#if bestLens}
-          <span class="big name" data-testid="best-lens">{bestLens.label}</span>
-          <span class="muted"
-            >{percent(
-              bestLens.counts.picks + bestLens.counts.auto_picked,
-              bestLens.counts.photos,
-            )} keepers of {plural(bestLens.counts.photos, "photo")}</span
-          >
-        {:else}
-          <span class="muted">Not enough photos with lens information.</span>
-        {/if}
-      </div>
-    </div>
-
-    <p class="muted note">
-      <strong>Keepers</strong> are photos you picked and photos auto-pick
-      suggests keeping (not yet decided). Gear is ranked by the share of its
-      photos that are keepers.
-      <span class="legend">
-        <span class="swatch picked"></span>Picked
-        <span class="swatch auto"></span>Auto-picked
-      </span>
-    </p>
-
-    <section>
-      <h3>Cameras</h3>
-      {#if stats.cameras.length === 0}
-        <p class="muted">No photos record their camera.</p>
-      {:else}
-        {@render table(stats.cameras, "Camera", "camera-stats")}
-      {/if}
-    </section>
-
-    <section>
-      <h3>Lenses</h3>
-      {#if stats.lenses.length === 0}
-        <p class="muted">No photos record their lens.</p>
-      {:else}
-        {@render table(stats.lenses, "Lens", "lens-stats")}
-      {/if}
-    </section>
-
-    {#if withFocal.length > 0}
-      <section>
-        <h3>Most used focal lengths</h3>
-        <div class="focal-grid">
-          {#each withFocal as c (c.label)}
-            {@const recorded = c.focal_lengths.reduce((n, f) => n + f.count, 0)}
-            <div class="focal" data-testid="focal-lengths">
-              <h4>{c.label}</h4>
-              <ol>
-                {#each c.focal_lengths.slice(0, FOCAL_SHOWN) as f (f.value)}
-                  <li
-                    title={`${plural(f.count, "photo")} at ${f.value} mm (${percent(f.count, recorded)})`}
-                  >
-                    <span class="mm">{f.value} mm</span>
-                    <span class="track" aria-hidden="true"
-                      ><span
-                        class="bar focal-bar"
-                        style:width={`${share(f.count, c.focal_lengths[0]!.count)}%`}
-                      ></span></span
-                    >
-                    <span class="value">{percent(f.count, recorded)}</span>
-                  </li>
-                {/each}
-              </ol>
-              {#if c.focal_lengths.length > FOCAL_SHOWN}
-                <p class="muted more">
-                  and {plural(c.focal_lengths.length - FOCAL_SHOWN, "other")}
-                </p>
-              {/if}
-            </div>
-          {/each}
+  <!-- A failure while drawing shows instead of a page stuck loading. -->
+  <svelte:boundary>
+    {#if error}
+      <p class="error-text" role="alert">{error}</p>
+    {:else if !stats}
+      <p class="muted">Loading…</p>
+    {:else if stats.all.photos === 0}
+      <p class="muted" data-testid="stats-empty">
+        No photos yet. Statistics appear once photos are imported.
+      </p>
+    {:else}
+      <div class="tiles">
+        <div class="tile">
+          <span class="label">Photos</span>
+          <span class="big">{stats.all.photos.toLocaleString()}</span>
+          <span class="muted">{plural(stats.all.rejects, "reject")}</span>
         </div>
+        <div class="tile">
+          <span class="label">Keepers</span>
+          <span class="big" data-testid="overall-rate"
+            >{percent(
+              stats.all.picks + stats.all.auto_picked,
+              stats.all.photos,
+            )}</span
+          >
+          <span class="muted"
+            >{stats.all.picks.toLocaleString()} picked, {stats.all.auto_picked.toLocaleString()}
+            auto-picked</span
+          >
+        </div>
+        <div class="tile">
+          <span class="label">Most successful camera</span>
+          {#if bestCamera}
+            <span class="big name" data-testid="best-camera"
+              >{bestCamera.label}</span
+            >
+            <span class="muted"
+              >{percent(
+                bestCamera.counts.picks + bestCamera.counts.auto_picked,
+                bestCamera.counts.photos,
+              )} keepers of {plural(bestCamera.counts.photos, "photo")}</span
+            >
+          {:else}
+            <span class="muted">Not enough photos with camera information.</span
+            >
+          {/if}
+        </div>
+        <div class="tile">
+          <span class="label">Most successful lens</span>
+          {#if bestLens}
+            <span class="big name" data-testid="best-lens"
+              >{bestLens.label}</span
+            >
+            <span class="muted"
+              >{percent(
+                bestLens.counts.picks + bestLens.counts.auto_picked,
+                bestLens.counts.photos,
+              )} keepers of {plural(bestLens.counts.photos, "photo")}</span
+            >
+          {:else}
+            <span class="muted">Not enough photos with lens information.</span>
+          {/if}
+        </div>
+      </div>
+
+      <p class="muted note">
+        <strong>Keepers</strong> are photos you picked and photos auto-pick
+        suggests keeping (not yet decided). Gear is ranked by the share of its
+        photos that are keepers.
+        <span class="legend">
+          <span class="swatch picked"></span>Picked
+          <span class="swatch auto"></span>Auto-picked
+        </span>
+      </p>
+
+      <section>
+        <h3>Cameras</h3>
+        {#if stats.cameras.length === 0}
+          <p class="muted">No photos record their camera.</p>
+        {:else}
+          {@render table(stats.cameras, "Camera", "camera-stats")}
+        {/if}
       </section>
+
+      <section>
+        <h3>Lenses</h3>
+        {#if stats.lenses.length === 0}
+          <p class="muted">No photos record their lens.</p>
+        {:else}
+          {@render table(stats.lenses, "Lens", "lens-stats")}
+        {/if}
+      </section>
+
+      {#if withFocal.length > 0}
+        <section>
+          <h3>Most used focal lengths</h3>
+          <div class="focal-grid">
+            {#each withFocal as c (c.label)}
+              {@const recorded = c.focal_lengths.reduce(
+                (n, f) => n + f.count,
+                0,
+              )}
+              <div class="focal" data-testid="focal-lengths">
+                <h4>{c.label}</h4>
+                <ol>
+                  {#each c.focal_lengths.slice(0, FOCAL_SHOWN) as f (f.value)}
+                    <li
+                      title={`${plural(f.count, "photo")} at ${f.value} mm (${percent(f.count, recorded)})`}
+                    >
+                      <span class="mm">{f.value} mm</span>
+                      <span class="track" aria-hidden="true"
+                        ><span
+                          class="bar focal-bar"
+                          style:width={`${share(f.count, c.focal_lengths[0]!.count)}%`}
+                        ></span></span
+                      >
+                      <span class="value">{percent(f.count, recorded)}</span>
+                    </li>
+                  {/each}
+                </ol>
+                {#if c.focal_lengths.length > FOCAL_SHOWN}
+                  <p class="muted more">
+                    and {plural(c.focal_lengths.length - FOCAL_SHOWN, "other")}
+                  </p>
+                {/if}
+              </div>
+            {/each}
+          </div>
+        </section>
+      {/if}
     {/if}
-  {/if}
+    {#snippet failed(e)}
+      <p class="error-text" role="alert" data-testid="stats-failed">
+        Statistics could not be shown: {e instanceof Error
+          ? e.message
+          : String(e)}
+      </p>
+    {/snippet}
+  </svelte:boundary>
 </div>
 
 <style>

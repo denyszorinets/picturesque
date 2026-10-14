@@ -112,30 +112,74 @@ impl GearStats {
     }
 }
 
-/// Labels and ranks what the catalog counted.
+impl std::ops::AddAssign for KeeperCounts {
+    fn add_assign(&mut self, other: Self) {
+        self.photos += other.photos;
+        self.picks += other.picks;
+        self.auto_picked += other.auto_picked;
+        self.rejects += other.rejects;
+    }
+}
+
+/// Adds `more` into `into` (photos per focal length).
+fn merge_focal(into: &mut Vec<Counted<u32>>, more: Vec<Counted<u32>>) {
+    for f in more {
+        match into.iter_mut().find(|c| c.value == f.value) {
+            Some(c) => c.count += f.count,
+            None => into.push(f),
+        }
+    }
+}
+
+/// Labels and ranks what the catalog counted. Gear stored under different
+/// names that display the same (`Canon`/`EOS R5` and `Canon`/`Canon EOS
+/// R5`) is one row; its `camera` is the most used of the spellings.
 pub fn summarize(usage: GearUsage) -> LibraryStats {
-    let mut cameras: Vec<GearStats> = usage
-        .cameras
-        .into_iter()
-        .map(|c| {
-            let label = Camera::new(&c.key.make, &c.key.model).display_name();
-            let mut focal_lengths = c.focal_lengths;
-            focal_lengths.sort_by(|a, b| b.count.cmp(&a.count).then(a.value.cmp(&b.value)));
-            GearStats {
-                camera: Some(c.key),
-                focal_lengths,
-                ..GearStats::new(label, c.counts)
+    let mut cameras: Vec<GearStats> = Vec::new();
+    let mut most_used: Vec<usize> = Vec::new();
+    for c in usage.cameras {
+        let label = Camera::new(&c.key.make, &c.key.model).display_name();
+        match cameras.iter().position(|g| g.label == label) {
+            Some(i) => {
+                let g = &mut cameras[i];
+                if c.counts.photos > most_used[i] {
+                    most_used[i] = c.counts.photos;
+                    g.camera = Some(c.key);
+                }
+                g.counts += c.counts;
+                merge_focal(&mut g.focal_lengths, c.focal_lengths);
             }
-        })
-        .collect();
-    let mut lenses: Vec<GearStats> = usage
-        .lenses
-        .into_iter()
-        .map(|l| GearStats {
-            lens: Some(l.lens.clone()),
-            ..GearStats::new(l.lens, l.counts)
-        })
-        .collect();
+            None => {
+                most_used.push(c.counts.photos);
+                cameras.push(GearStats {
+                    camera: Some(c.key),
+                    focal_lengths: c.focal_lengths,
+                    ..GearStats::new(label, c.counts)
+                });
+            }
+        }
+    }
+    let mut lenses: Vec<GearStats> = Vec::new();
+    for l in usage.lenses {
+        let label = l.lens.trim().to_owned();
+        match lenses.iter_mut().find(|g| g.label == label) {
+            Some(g) => g.counts += l.counts,
+            None => lenses.push(GearStats {
+                lens: Some(l.lens),
+                ..GearStats::new(label, l.counts)
+            }),
+        }
+    }
+    for g in cameras.iter_mut().chain(lenses.iter_mut()) {
+        // Rates and the threshold follow the merged counts.
+        *g = GearStats {
+            keeper_rate: g.counts.keeper_rate(),
+            few_photos: g.counts.photos < MIN_PHOTOS,
+            ..g.clone()
+        };
+        g.focal_lengths
+            .sort_by(|a, b| b.count.cmp(&a.count).then(a.value.cmp(&b.value)));
+    }
     rank(&mut cameras);
     rank(&mut lenses);
     LibraryStats {
@@ -264,5 +308,45 @@ mod tests {
             stats.cameras[0].camera.as_ref().map(|k| k.model.as_str()),
             Some("EOS R5")
         );
+    }
+
+    #[test]
+    fn merges_gear_that_displays_the_same() {
+        let stats = summarize(GearUsage {
+            all: KeeperCounts::default(),
+            cameras: vec![
+                camera("EOS R5", counts(15, 3, 0), &[(35, 10), (50, 5)]),
+                camera("Canon EOS R5", counts(10, 2, 2), &[(35, 4), (85, 6)]),
+            ],
+            lenses: vec![
+                LensUsage {
+                    lens: "RF50".into(),
+                    counts: counts(12, 6, 0),
+                },
+                LensUsage {
+                    lens: "RF50 ".into(),
+                    counts: counts(12, 0, 0),
+                },
+            ],
+        });
+        assert_eq!(stats.cameras.len(), 1);
+        let r5 = &stats.cameras[0];
+        assert_eq!(r5.label, "Canon EOS R5");
+        assert_eq!(r5.counts, counts(25, 5, 2));
+        // Enough photos together, and the rate follows the sum.
+        assert!(!r5.few_photos);
+        assert_eq!(r5.keeper_rate, 7.0 / 25.0);
+        // The more used spelling.
+        assert_eq!(r5.camera.as_ref().map(|k| k.model.as_str()), Some("EOS R5"));
+        let focal: Vec<(u32, usize)> = r5
+            .focal_lengths
+            .iter()
+            .map(|f| (f.value, f.count))
+            .collect();
+        assert_eq!(focal, [(35, 14), (85, 6), (50, 5)]);
+
+        assert_eq!(stats.lenses.len(), 1);
+        assert_eq!(stats.lenses[0].counts.photos, 24);
+        assert!(!stats.lenses[0].few_photos);
     }
 }

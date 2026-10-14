@@ -164,7 +164,8 @@ The **Filters** panel beside the timeline (toggle it with the
      - Photos taken with that camera: one button per camera, with its
        photo count, the most used first (the six most used, then **All N
        cameras**). Click the chosen camera again, or **Any**, to show
-       every camera.
+       every camera. Files that spell one camera differently (*Canon* /
+       *EOS R5* and *Canon* / *Canon EOS R5*) are one camera.
    * - Lens
      - Photos taken with that lens
    * - Date
