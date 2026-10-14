@@ -1,22 +1,50 @@
 <script lang="ts">
-  import { appInfo, type AppInfo, type Settings } from "./lib/api";
-  import ImportView from "./lib/import/ImportView.svelte";
-  import SettingsPanel from "./lib/import/SettingsPanel.svelte";
+  import * as api from "./lib/api";
+  import type { AppInfo, Settings } from "./lib/api";
+  import ActivityView from "./lib/activity/ActivityView.svelte";
+  import PipelineIndicator from "./lib/activity/PipelineIndicator.svelte";
+  import { Pipeline } from "./lib/activity/pipeline.svelte";
   import LibraryView from "./lib/library/LibraryView.svelte";
+  import SettingsPanel from "./lib/settings/SettingsPanel.svelte";
 
-  type Tab = "library" | "import";
+  type Tab = "library" | "activity" | "settings";
+  const TABS: { id: Tab; label: string }[] = [
+    { id: "library", label: "Library" },
+    { id: "activity", label: "Activity" },
+    { id: "settings", label: "Settings" },
+  ];
 
   let info = $state<AppInfo | null>(null);
   let error = $state<string | null>(null);
   let settings = $state<Settings | null>(null);
   let tab = $state<Tab>("library");
+  const pipeline = new Pipeline(api);
 
   const versionLabel = (i: AppInfo) => `v${i.version}`;
 
   $effect(() => {
-    appInfo()
+    api
+      .appInfo()
       .then((result) => (info = result))
       .catch((e: unknown) => (error = String(e)));
+    api
+      .getSettings()
+      .then((s) => (settings = s))
+      .catch(() => {});
+  });
+
+  // The header indicator follows the pipeline everywhere.
+  $effect(() => {
+    void pipeline.loadStatus();
+    const stop = api.onAppEvent((event) => pipeline.handle(event));
+    // Events may be missed (for example while reconnecting).
+    const timer = setInterval(() => {
+      if (pipeline.busy) void pipeline.loadStatus();
+    }, 3000);
+    return () => {
+      stop();
+      clearInterval(timer);
+    };
   });
 </script>
 
@@ -25,28 +53,26 @@
     <h1>Picturesque</h1>
     {#if info}
       <nav aria-label="Main">
-        <button
-          class:active={tab === "library"}
-          aria-current={tab === "library" ? "page" : undefined}
-          onclick={() => (tab = "library")}
-        >
-          Library
-        </button>
-        <button
-          class:active={tab === "import"}
-          aria-current={tab === "import" ? "page" : undefined}
-          onclick={() => (tab = "import")}
-        >
-          Import
-        </button>
+        {#each TABS as t (t.id)}
+          <button
+            class:active={tab === t.id}
+            aria-current={tab === t.id ? "page" : undefined}
+            onclick={() => (tab = t.id)}
+          >
+            {t.label}
+          </button>
+        {/each}
       </nav>
-      <p
-        class="version"
-        data-testid="app-version"
-        title={`${info.name} ${info.version}`}
-      >
-        {versionLabel(info)}
-      </p>
+      <div class="status">
+        <PipelineIndicator {pipeline} onclick={() => (tab = "activity")} />
+        <p
+          class="version"
+          data-testid="app-version"
+          title={`${info.name} ${info.version}`}
+        >
+          {versionLabel(info)}
+        </p>
+      </div>
     {:else if error}
       <p class="error" role="alert">Backend unavailable: {error}</p>
     {/if}
@@ -54,17 +80,23 @@
 
   {#if info}
     <main class:full={tab === "library"}>
-      <!-- Both views stay mounted so an import keeps running while browsing. -->
+      <!-- Views stay mounted so they keep their state while switching. -->
       <div class="view" hidden={tab !== "library"}>
-        <LibraryView onimport={() => (tab = "import")} />
+        <LibraryView
+          onimport={() => (tab = "activity")}
+          importing={pipeline.busy}
+        />
       </div>
-      <div class="view import" hidden={tab !== "import"}>
-        <aside>
-          <SettingsPanel onchange={(s) => (settings = s)} />
-        </aside>
-        <div class="content">
-          <ImportView hasLibrary={!!settings?.library_root} />
-        </div>
+      <div class="view page" hidden={tab !== "activity"}>
+        <ActivityView
+          {pipeline}
+          visible={tab === "activity"}
+          hasLibrary={settings === null || !!settings.library_root}
+          onsettings={() => (tab = "settings")}
+        />
+      </div>
+      <div class="view page settings" hidden={tab !== "settings"}>
+        <SettingsPanel onchange={(s) => (settings = s)} />
       </div>
     </main>
   {/if}
@@ -112,8 +144,15 @@
     color: var(--fg);
   }
 
+  .status {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 0.9rem;
+    min-width: 0;
+  }
+
   .version {
-    margin-left: auto !important;
     color: var(--muted);
     font-size: 0.85rem;
   }
@@ -137,21 +176,15 @@
     height: 100%;
   }
 
-  .view.import {
-    display: grid;
-    grid-template-columns: minmax(18rem, 24rem) minmax(0, 1fr);
-    gap: 1.2rem;
-    align-items: start;
+  .view.page {
     height: auto;
+  }
+
+  .view.settings {
+    max-width: 46rem;
   }
 
   .view[hidden] {
     display: none;
-  }
-
-  @media (max-width: 900px) {
-    .view.import {
-      grid-template-columns: minmax(0, 1fr);
-    }
   }
 </style>

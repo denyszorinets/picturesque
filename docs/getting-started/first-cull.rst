@@ -20,7 +20,7 @@ glance.
 2. Let the AI help (optional)
 -----------------------------
 
-Under **Import → Library → AI models**, download the CLIP image encoder
+Under **Settings → AI models**, download the CLIP image encoder
 and the face models. Picturesque then scores every photo in the
 background: how good it looks, whether eyes are closed, whether faces
 are sharp (:doc:`/features/ai`). Series pick their best photo with these

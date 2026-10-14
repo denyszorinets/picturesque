@@ -37,11 +37,11 @@ try {
   window = await App.launch(app, shots);
 
   step("the window shows the empty library");
-  await window.find("//button[normalize-space()='Import photos']");
+  await window.find("//button[normalize-space()='Add import folder']");
   await window.screenshot("1-empty");
 
   step("set the library folder");
-  await window.click("//nav//button[normalize-space()='Import']");
+  await window.click("//nav//button[normalize-space()='Settings']");
   await window.type("[data-testid=library-root]", library);
   await window.click("[data-testid=save-settings]");
   await until(
@@ -50,20 +50,18 @@ try {
   );
 
   step("import the card");
+  await window.click("//nav//button[normalize-space()='Activity']");
   await window.type("[data-testid=source-path]", card);
   await window.click("[data-testid=add-source]");
-  await window.click("[data-testid=plan-import]");
-  await window.click("[data-testid=start-import]");
-  await until("import finished", async () =>
-    (await window.text("[data-testid=import-outcome]")).includes(
-      "Import finished",
-    ),
+  const jpegs = () =>
+    readdirSync(library, { recursive: true }).filter((f) =>
+      String(f).endsWith(".JPG"),
+    );
+  await until("3 photos imported", async () => jpegs().length === 3);
+  await until(
+    "the activity shows them imported",
+    async () => (await window.count("tr[data-stage=imported]")) === 3,
   );
-  const imported = readdirSync(library, { recursive: true }).filter((f) =>
-    String(f).endsWith(".JPG"),
-  );
-  if (imported.length !== 3)
-    throw new Error(`expected 3 imported files, found ${imported}`);
 
   step("pick a photo");
   await window.click("//nav//button[normalize-space()='Library']");

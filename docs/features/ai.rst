@@ -12,7 +12,7 @@ one is supported.
 Acceleration
 ------------
 
-In **Import → Library → AI acceleration**, choose where models run:
+In **Settings → AI acceleration**, choose where models run:
 
 .. list-table::
    :header-rows: 1
@@ -50,7 +50,7 @@ shown. Changing the choice takes effect for models loaded afterwards.
 Models
 ------
 
-Models are not bundled with the app. **Import → Library → AI models**
+Models are not bundled with the app. **Settings → AI models**
 lists the models Picturesque can use, what each is for, its download size
 and its **license** (with a link to the full text) and source. Every model
 offered has a license that allows its use in a GPL-3.0 application.

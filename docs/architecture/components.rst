@@ -65,8 +65,9 @@ Front end
 ``ui/``
    Svelte 5 and TypeScript, built with Vite. An ``api`` module is the only
    code that knows how commands reach the backend; it selects Tauri IPC
-   inside the desktop app and HTTP otherwise. Views: import, timeline grid
-   with series frames, loupe, compare, filters, settings.
+   inside the desktop app and HTTP otherwise. Views: timeline grid with
+   series frames, loupe, compare, filters; activity (import folders,
+   per-photo progress, log); settings.
 
 .. _architecture-components-command-api:
 
@@ -113,6 +114,11 @@ Long-running work (import, thumbnail generation, analysis) runs as jobs
 owned by the application layer. Jobs report progress through events, can be
 cancelled, and record enough state in the catalog to resume after a restart.
 CPU-heavy steps run on a bounded worker pool so the UI stays responsive.
+
+Importing is a persistent queue of photos found in watched folders,
+processed one at a time; each photo is catalogued as soon as it is
+copied
+(:doc:`ADR-0012 </architecture/decisions/0012-continuous-import-pipeline>`).
 
 Photo analysis (scores, hashes, AI models) is a queue of analyzers run over
 every photo's preview, with results stored per analyzer version; photos on

@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App.svelte";
 
 const appInfo = vi.fn();
+const pipelineStatus = vi.fn();
 vi.mock("./lib/api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./lib/api")>();
   return {
@@ -44,13 +45,29 @@ vi.mock("./lib/api", async (importOriginal) => {
     queryPhotos: () =>
       Promise.resolve({ photos: [], next_cursor: null, total: 0 }),
     canPickFolders: () => false,
+    pipelineStatus: () => pipelineStatus(),
+    listImportSources: () => Promise.resolve([]),
+    pipelineJobs: () => Promise.resolve([]),
+    pipelineLog: () => Promise.resolve([]),
   };
 });
+
+const idle = {
+  queued: 0,
+  imported: 0,
+  duplicates: 0,
+  failed: 0,
+  active: null,
+  scanning: false,
+  paused: null,
+};
 
 describe("App", () => {
   // Hooks use block bodies: a function returned from beforeEach runs as teardown.
   beforeEach(() => {
     appInfo.mockReset();
+    pipelineStatus.mockReset();
+    pipelineStatus.mockResolvedValue(idle);
   });
   afterEach(() => {
     cleanup();
@@ -68,6 +85,34 @@ describe("App", () => {
       await screen.findByRole("button", { name: "Library" }),
     ).toBeInTheDocument();
     expect(await screen.findByText("No photos yet")).toBeInTheDocument();
+  });
+
+  it("shows import progress in the header and opens the activity", async () => {
+    appInfo.mockResolvedValue({ name: "Picturesque", version: "0.1.0" });
+    pipelineStatus.mockResolvedValue({
+      ...idle,
+      queued: 12,
+      failed: 2,
+      active: { job_id: 3, file_name: "IMG_0003.CR3", stage: "copying" },
+    });
+
+    render(App);
+
+    const indicator = await screen.findByTestId("pipeline-indicator");
+    expect(indicator).toHaveTextContent("Importing 12 photos");
+    expect(indicator).toHaveTextContent("2 failed");
+    expect(indicator).toHaveAttribute("title", "Copying IMG_0003.CR3");
+    // The empty library says photos are on their way.
+    expect(await screen.findByText("Importing…")).toBeInTheDocument();
+
+    indicator.click();
+    expect(
+      await screen.findByRole("heading", { name: "Import folders" }),
+    ).toBeVisible();
+    expect(screen.getByRole("button", { name: "Activity" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
   });
 
   it("shows an error when the backend is unavailable", async () => {

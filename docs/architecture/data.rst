@@ -41,9 +41,6 @@ task that introduces them. The rest is in the schema today
      PHOTO ||--o| SERIES_MEMBER : "member of"
      PHOTO ||--o| SERIES_EDIT : "corrected by"
      PHOTO ||--o| DECISION : has
-     IMPORT_RUN ||--|{ IMPORT_PHOTO : contains
-     IMPORT_PHOTO ||--|{ IMPORT_FILE : has
-     IMPORT_PHOTO }o--o| PHOTO : "becomes"
      IMPORT_SOURCE ||--o{ IMPORT_JOB : "photos found"
      IMPORT_JOB }o--o| PHOTO : "becomes"
 
@@ -86,21 +83,14 @@ task that introduces them. The rest is in the schema today
    Pick, reject or unflagged; star rating; timestamp of the
    last change and of the last sidecar write.
 
-``import_run`` / ``import_photo`` / ``import_file``
-   An import run (state, library folder, template, sources, problems),
-   each photo in it (capture metadata as JSON, status: planned, duplicate,
-   imported or failed, and the catalog photo once imported) and each file
-   (source path, size and modification time at planning, hash when known,
-   target path, status: planned, verified or failed). Lets plans be
-   reviewed and interrupted imports resume.
-
 ``import_source`` / ``import_job`` / ``pipeline_log``
    The continuous import pipeline
    (:doc:`ADR-0012 </architecture/decisions/0012-continuous-import-pipeline>`):
    each source folder (watched or not, when last scanned and why the scan
    failed), one job per source photo (its files with size and modification
    time as JSON, stage, error, and the catalog photo once imported or found
-   as a duplicate) and the pipeline log (newest 20,000 entries).
+   as a duplicate, and where a failed photo stopped) and the pipeline log
+   (newest 20,000 entries).
 
 .. _architecture-data-schema:
 
@@ -134,8 +124,8 @@ how many have run. Each migration runs in its own transaction.
        under ``settings`` (:doc:`/reference/settings`)
    * - 3
      - ``0003_imports.sql``
-     - ``import_run``, ``import_photo``, ``import_file``
-       (:doc:`/features/import`)
+     - ``import_run``, ``import_photo``, ``import_file`` (import runs;
+       dropped in 13)
    * - 4
      - ``0004_decisions.sql``
      - ``decision`` (flag, rating, when the sidecar was last written);
@@ -170,6 +160,10 @@ how many have run. Each migration runs in its own transaction.
      - ``0012_import_pipeline.sql``
      - ``import_source``, ``import_job``, ``pipeline_log``
        (:doc:`ADR-0012 </architecture/decisions/0012-continuous-import-pipeline>`)
+   * - 13
+     - ``0013_pipeline_only.sql``
+     - ``import_job.failed_stage``; drops the import run tables, replaced
+       by the pipeline
 
 Conventions:
 

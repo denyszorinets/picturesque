@@ -26,8 +26,7 @@ fn api_with(catalog: Arc<SqliteCatalog>, cache_dir: std::path::PathBuf) -> Arc<A
             pipeline_store: catalog.clone(),
             watcher: Arc::new(picturesque_app::ports::watcher::NoWatcher),
             settings_store: catalog.clone(),
-            catalog: catalog.clone(),
-            imports: catalog,
+            catalog,
             fs: Arc::new(StdFileSystem),
             metadata: Arc::new(ExifMetadataReader),
             geocoder: Arc::new(GeoNamesGeocoder::default()),
@@ -144,8 +143,7 @@ async fn invalid_settings_return_400_with_reason() {
 
 #[tokio::test]
 async fn events_are_streamed_as_server_sent_events() {
-    use picturesque_app::import::ImportStatus;
-    use picturesque_app::import::model::ImportState;
+    use picturesque_app::pipeline::PipelineStatus;
     use picturesque_app::ports::events::{AppEvent, EventSink};
 
     let bus = EventBus::default();
@@ -155,14 +153,14 @@ async fn events_are_streamed_as_server_sent_events() {
         .unwrap();
     assert_eq!(response.headers()["content-type"], "text/event-stream");
 
-    bus.emit(&AppEvent::ImportProgress(ImportStatus {
-        run_id: 7,
-        state: ImportState::Copying,
-        phase: None,
-        done: 1,
-        total: 2,
-        summary: None,
-        error: None,
+    bus.emit(&AppEvent::PipelineProgress(PipelineStatus {
+        queued: 7,
+        imported: 2,
+        duplicates: 0,
+        failed: 0,
+        active: None,
+        scanning: false,
+        paused: None,
     }));
     let mut body = response.into_body();
     let frame = body.frame().await.unwrap().unwrap().into_data().unwrap();
@@ -170,8 +168,8 @@ async fn events_are_streamed_as_server_sent_events() {
 
     assert!(text.starts_with("data: "), "{text}");
     let event: Value = serde_json::from_str(text.trim_start_matches("data: ").trim()).unwrap();
-    assert_eq!(event["type"], "import_progress");
-    assert_eq!(event["run_id"], 7);
+    assert_eq!(event["type"], "pipeline_progress");
+    assert_eq!(event["queued"], 7);
 }
 
 mod images {

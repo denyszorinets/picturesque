@@ -5,18 +5,16 @@ use ts_rs::TS;
 
 use crate::analysis::AnalysisStatus;
 use crate::export::ExportStatus;
-use crate::import::ImportStatus;
 use crate::models::ModelView;
 use crate::pipeline::PipelineStatus;
 use crate::series::SeriesStatus;
 
 /// An event for the UI. Serialized with a `type` field, for example
-/// `{ "type": "import_progress", "run_id": 3, ... }`.
+/// `{ "type": "pipeline_progress", "queued": 3, ... }`.
 #[derive(Debug, Clone, PartialEq, Serialize, TS)]
 #[serde(tag = "type", rename_all = "snake_case")]
 #[ts(export)]
 pub enum AppEvent {
-    ImportProgress(ImportStatus),
     AnalysisProgress(AnalysisStatus),
     SeriesChanged(SeriesStatus),
     ModelProgress(ModelView),

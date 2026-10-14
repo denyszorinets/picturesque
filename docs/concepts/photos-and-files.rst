@@ -48,7 +48,7 @@ recognized:
   ``IMG_0042``.
 - ``IMG_0042.CR3.xmp`` (darktable style) belongs to that exact file.
 
-A sidecar that matches no photo is reported during import and not copied.
+A sidecar that matches no photo is not copied.
 
 Identity
 --------

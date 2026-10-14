@@ -228,7 +228,7 @@ fn prefill_generates_only_missing_grid_images() {
 }
 
 #[test]
-fn a_completed_import_starts_a_prefill() {
+fn an_imported_photo_starts_a_prefill() {
     let fs = MemFs::new().file("/src/a.jpg", b"a").dir("/lib");
     let world = TestWorld::new(fs, FakeMetadata::default());
     world
@@ -239,14 +239,9 @@ fn a_completed_import_starts_a_prefill() {
         })
         .unwrap();
     let api = Api::new(world.context()).unwrap();
-    let run = api
-        .call("plan_import", json!({ "sources": ["/src"] }))
-        .unwrap()["run_id"]
-        .clone();
-    api.wait_for_imports();
-
-    api.call("start_import", json!({ "run_id": run })).unwrap();
-    api.wait_for_imports();
+    api.call("add_import_source", json!({ "path": "/src" }))
+        .unwrap();
+    assert_eq!(api.run_imports(), 1);
 
     let deadline = Instant::now() + Duration::from_secs(5);
     while world.fs.files_under(Path::new("/cache/v1/grid")).is_empty() {

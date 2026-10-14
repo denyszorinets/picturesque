@@ -6,7 +6,6 @@ pub mod events;
 pub mod fs;
 pub mod geocoder;
 pub mod images;
-pub mod imports;
 pub mod inference;
 pub mod metadata;
 pub mod models;

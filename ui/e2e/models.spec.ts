@@ -16,7 +16,7 @@ test("downloads, verifies and removes models", async ({ page, request }) => {
   await page.goto("/");
   await page
     .getByRole("navigation")
-    .getByRole("button", { name: "Import" })
+    .getByRole("button", { name: "Settings" })
     .click();
   const list = page.getByTestId("model-list");
   const good = list.locator('[data-model-id="e2e-affine"]');
@@ -44,7 +44,7 @@ test("downloads, verifies and removes models", async ({ page, request }) => {
   await page.reload();
   await page
     .getByRole("navigation")
-    .getByRole("button", { name: "Import" })
+    .getByRole("button", { name: "Settings" })
     .click();
   await expect(good.getByTestId("model-state")).toHaveAttribute(
     "data-state",

@@ -60,9 +60,15 @@
   );
   const running = $derived(status?.state === "running");
 
+  /** Progress events seen; a command's reply must not undo a newer one. */
+  let events = 0;
+
   $effect(() => {
     return api.onAppEvent((event) => {
-      if (event.type === "export_progress") status = event;
+      if (event.type === "export_progress") {
+        events += 1;
+        status = event;
+      }
     });
   });
 
@@ -92,7 +98,8 @@
       // Remembering the options is a convenience only.
     }
     try {
-      status = await api.startExport({
+      const seen = events;
+      const started = await api.startExport({
         destination: destination.trim(),
         query: query(),
         format,
@@ -102,6 +109,8 @@
         max_edge: format === "jpeg" && maxEdge > 0 ? maxEdge : undefined,
         quality: format === "jpeg" ? quality : undefined,
       });
+      // Progress may already have arrived (even the end of a small export).
+      if (events === seen) status = started;
     } catch (e) {
       error = api.ApiError.from(e).message;
     }

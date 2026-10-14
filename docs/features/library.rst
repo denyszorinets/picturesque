@@ -9,7 +9,8 @@ photos it has. Photos without a capture date come last, under *No date*.
 The timeline stays fast with tens of thousands of photos: its full height
 is known from the number of photos per day, only the rows on screen (and
 a margin around them) are drawn, and photo details are loaded page by
-page as you scroll. New photos appear as soon as an import completes.
+page as you scroll. While importing, new photos appear as each one is
+copied.
 
 Tiles
 -----

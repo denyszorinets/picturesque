@@ -30,9 +30,6 @@ use picturesque_core::template::{PathTemplate, TemplateValues, unique_stem};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use crate::import::copy::copy_file;
-use crate::import::model::{FileStatus, PlannedFile};
-use crate::import::plan::{Readers, read_one};
 use crate::ports::catalog::{CatalogError, PhotoCatalog};
 use crate::ports::events::{AppEvent, EventSink};
 use crate::ports::fs::FileSystem;
@@ -46,7 +43,12 @@ use crate::ports::sidecars::SidecarStore;
 use crate::ports::watcher::FolderWatcher;
 use crate::scan::{SourcePhoto, scan_sources};
 
+mod copy;
+mod read;
 mod schedule;
+
+use copy::{PlannedFile, copy_file};
+use read::{Readers, read_one};
 use schedule::Schedule;
 
 /// Log entries kept.
@@ -144,6 +146,8 @@ pub struct JobView {
     pub photo_id: Option<i64>,
     /// UTC, ISO 8601.
     pub updated_at: String,
+    /// For a failed photo, the stage it failed in (`reading` or `copying`).
+    pub failed_stage: Option<JobStage>,
     /// For imported photos: whether the grid thumbnail exists.
     pub thumbnail: Option<bool>,
     /// For imported photos: analyses done and to do.
@@ -480,6 +484,7 @@ impl ImportPipeline {
                     error: job.error.clone(),
                     photo_id: job.photo_id.map(|p| p.0),
                     updated_at: job.updated_at.clone(),
+                    failed_stage: job.failed_stage,
                     thumbnail,
                     analysis,
                 }
@@ -805,6 +810,32 @@ impl ImportPipeline {
     /// Processes the next queued job; `false` when there is nothing to do
     /// (or importing is paused).
     fn run_next(&self) -> bool {
+        let job = match self.deps.store.next_job() {
+            Ok(Some(job)) => job,
+            Ok(None) => {
+                // Nothing waits, so nothing is paused.
+                if self
+                    .shared
+                    .lock()
+                    .expect("pipeline lock")
+                    .paused
+                    .take()
+                    .is_some()
+                {
+                    self.emit_progress(true);
+                }
+                return false;
+            }
+            Err(e) => {
+                self.log(
+                    LogLevel::Error,
+                    None,
+                    None,
+                    &format!("Cannot read the import queue: {e}"),
+                );
+                return false;
+            }
+        };
         let root = match self.usable_library() {
             Ok(root) => {
                 let was_paused = self.shared.lock().expect("pipeline lock").paused.take();
@@ -827,19 +858,6 @@ impl ImportPipeline {
                     );
                     self.emit_progress(true);
                 }
-                return false;
-            }
-        };
-        let job = match self.deps.store.next_job() {
-            Ok(Some(job)) => job,
-            Ok(None) => return false,
-            Err(e) => {
-                self.log(
-                    LogLevel::Error,
-                    None,
-                    None,
-                    &format!("Cannot read the import queue: {e}"),
-                );
                 return false;
             }
         };
@@ -891,6 +909,17 @@ impl ImportPipeline {
 
         // 1. Read.
         self.set_stage(job, JobStage::Reading, None, None);
+        let fs = self.deps.fs.as_ref();
+        if let Some(changed) = job.files.iter().find(|f| {
+            fs.stamp(&f.path).map(|s| s.size).ok() != Some(f.size)
+                || modified_ns(fs, &f.path) != f.modified_ns
+        }) {
+            // The next scan queues it again with its files as they are then.
+            return fail(format!(
+                "{} changed since it was found; it will be imported again",
+                file_name(&changed.path)
+            ));
+        }
         let source = SourcePhoto {
             raw: job
                 .files
@@ -1085,22 +1114,48 @@ fn assign_target(
         original_name: &original_stem,
         seq: u32::try_from(seq).ok(),
     });
-    let on_disk: HashSet<String> = fs
-        .list_dir(&root.join(&rendered.dir))
-        .map(|entries| entries.iter().map(|e| stem_key(&e.name)).collect())
-        .unwrap_or_default();
+    let suffixes: Vec<String> = files
+        .iter()
+        .map(|file| {
+            let name = file_name(&file.source);
+            match file.format.role() {
+                // `IMG_1.CR3.xmp` keeps `.CR3.xmp`; `IMG_1.xmp` keeps `.xmp`.
+                AssetRole::Sidecar => name.get(original_stem.len()..).unwrap_or(".xmp").to_owned(),
+                _ => format!(".{}", name.rsplit_once('.').map_or("", |(_, e)| e)),
+            }
+        })
+        .collect();
+    let dir = root.join(&rendered.dir);
+    let mut on_disk: HashMap<String, Vec<String>> = HashMap::new();
+    for entry in fs.list_dir(&dir).unwrap_or_default() {
+        on_disk
+            .entry(stem_key(&entry.name))
+            .or_default()
+            .push(entry.name);
+    }
+    // A name is free if nothing uses it, or if what uses it is this
+    // photo's own copy left by an interrupted attempt (same content).
+    let leftover = |candidate: &str, existing: &[String]| {
+        existing.iter().all(|name| {
+            files.iter().zip(&suffixes).any(|(file, suffix)| {
+                if *name != format!("{candidate}{suffix}") {
+                    return false;
+                }
+                let theirs = fs.hash_file(&dir.join(name)).ok().map(|(h, _)| h);
+                let ours = file
+                    .hash
+                    .or_else(|| fs.hash_file(&file.source).ok().map(|(h, _)| h));
+                theirs.is_some() && theirs == ours
+            })
+        })
+    };
     let stem = unique_stem(&rendered.stem, |candidate| {
-        on_disk.contains(&candidate.to_lowercase())
+        on_disk
+            .get(&candidate.to_lowercase())
+            .is_some_and(|existing| !leftover(candidate, existing))
     });
-    for file in files.iter_mut() {
-        let name = file_name(&file.source);
-        let suffix = match file.format.role() {
-            // `IMG_1.CR3.xmp` keeps `.CR3.xmp`; `IMG_1.xmp` keeps `.xmp`.
-            AssetRole::Sidecar => name.get(original_stem.len()..).unwrap_or(".xmp").to_owned(),
-            _ => format!(".{}", name.rsplit_once('.').map_or("", |(_, e)| e)),
-        };
+    for (file, suffix) in files.iter_mut().zip(&suffixes) {
         file.target = rendered.dir.join(format!("{stem}{suffix}"));
-        file.status = FileStatus::Planned;
     }
 }
 

@@ -46,9 +46,10 @@ Main workflows
 --------------
 
 Import
-   Scan source folders, read metadata, resolve GPS to place names offline,
-   render the target path from the template, copy and verify each file,
-   record it in the catalog.
+   Watch import folders; for each photo found, read metadata, resolve GPS
+   to place names offline, render the target path from the template, copy
+   and verify each file, and record it in the catalog, one photo at a time
+   (:doc:`ADR-0012 </architecture/decisions/0012-continuous-import-pipeline>`).
 
 Analyze
    In the background: generate thumbnails and previews, compute technical

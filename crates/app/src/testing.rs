@@ -328,7 +328,7 @@ impl ReverseGeocoder for FakeGeocoder {
     }
 }
 
-// --- Catalog, import store, events -------------------------------------
+// --- Catalog, events -------------------------------------------------
 
 use std::collections::HashSet as StdHashSet;
 use std::sync::Arc;
@@ -336,12 +336,8 @@ use std::sync::Arc;
 use picturesque_core::photo::{NewPhoto, Photo, PhotoId};
 
 use crate::api::AppContext;
-use crate::import::model::{
-    FileStatus, ImportProblem, ImportRun, ImportState, PhotoStatus, PlannedPhoto,
-};
 use crate::ports::catalog::{AnalyzerId, CatalogError, PhotoCatalog};
 use crate::ports::events::{AppEvent, EventSink};
-use crate::ports::imports::ImportStore;
 use crate::settings::tests::MemorySettings;
 
 /// Photos kept in memory, with the catalog's one-copy rule for media.
@@ -853,137 +849,6 @@ impl PhotoCatalog for MemoryCatalog {
     }
 }
 
-/// Import runs kept in memory.
-#[derive(Default)]
-pub struct MemoryImports {
-    runs: Mutex<BTreeMap<i64, ImportRun>>,
-    next_id: Mutex<i64>,
-}
-
-impl MemoryImports {
-    fn id(&self) -> i64 {
-        let mut n = self.next_id.lock().unwrap();
-        *n += 1;
-        *n
-    }
-}
-
-impl ImportStore for MemoryImports {
-    fn create_run(
-        &self,
-        library_root: &Path,
-        template: &str,
-        sources: &[PathBuf],
-    ) -> Result<i64, CatalogError> {
-        let id = self.id();
-        self.runs.lock().unwrap().insert(
-            id,
-            ImportRun {
-                id,
-                state: ImportState::Planning,
-                library_root: library_root.to_path_buf(),
-                template: template.to_owned(),
-                sources: sources.to_vec(),
-                photos: Vec::new(),
-                problems: Vec::new(),
-                error: None,
-            },
-        );
-        Ok(id)
-    }
-
-    fn save_plan(
-        &self,
-        run_id: i64,
-        photos: &mut [PlannedPhoto],
-        problems: &[ImportProblem],
-    ) -> Result<(), CatalogError> {
-        for photo in photos.iter_mut() {
-            photo.id = Some(self.id());
-            for file in &mut photo.files {
-                file.id = Some(self.id());
-            }
-        }
-        let mut runs = self.runs.lock().unwrap();
-        let run = runs
-            .get_mut(&run_id)
-            .ok_or_else(|| CatalogError::Storage("no run".into()))?;
-        run.photos = photos.to_vec();
-        run.problems = problems.to_vec();
-        run.state = ImportState::Planned;
-        Ok(())
-    }
-
-    fn load_run(&self, run_id: i64) -> Result<Option<ImportRun>, CatalogError> {
-        Ok(self.runs.lock().unwrap().get(&run_id).cloned())
-    }
-
-    fn set_state(
-        &self,
-        run_id: i64,
-        state: ImportState,
-        error: Option<&str>,
-    ) -> Result<(), CatalogError> {
-        let mut runs = self.runs.lock().unwrap();
-        let run = runs
-            .get_mut(&run_id)
-            .ok_or_else(|| CatalogError::Storage("no run".into()))?;
-        run.state = state;
-        run.error = error.map(str::to_owned);
-        Ok(())
-    }
-
-    fn update_file(
-        &self,
-        file_id: i64,
-        status: FileStatus,
-        hash: Option<&ContentHash>,
-        error: Option<&str>,
-    ) -> Result<(), CatalogError> {
-        let mut runs = self.runs.lock().unwrap();
-        let file = runs
-            .values_mut()
-            .flat_map(|r| r.photos.iter_mut())
-            .flat_map(|p| p.files.iter_mut())
-            .find(|f| f.id == Some(file_id))
-            .ok_or_else(|| CatalogError::Storage("no file".into()))?;
-        file.status = status;
-        if let Some(h) = hash {
-            file.hash = Some(*h);
-        }
-        file.error = error.map(str::to_owned);
-        Ok(())
-    }
-
-    fn update_photo(
-        &self,
-        import_photo_id: i64,
-        status: PhotoStatus,
-        photo_id: Option<PhotoId>,
-        reason: Option<&str>,
-    ) -> Result<(), CatalogError> {
-        let mut runs = self.runs.lock().unwrap();
-        let photo = runs
-            .values_mut()
-            .flat_map(|r| r.photos.iter_mut())
-            .find(|p| p.id == Some(import_photo_id))
-            .ok_or_else(|| CatalogError::Storage("no photo".into()))?;
-        photo.status = status;
-        photo.photo_id = photo_id;
-        photo.reason = reason.map(str::to_owned);
-        Ok(())
-    }
-
-    fn mark_unfinished_interrupted(&self) -> Result<(), CatalogError> {
-        for run in self.runs.lock().unwrap().values_mut() {
-            if matches!(run.state, ImportState::Planning | ImportState::Copying) {
-                run.state = ImportState::Interrupted;
-            }
-        }
-        Ok(())
-    }
-}
-
 /// Records emitted events.
 #[derive(Default)]
 pub struct RecordedEvents(pub Mutex<Vec<AppEvent>>);
@@ -1333,7 +1198,6 @@ pub struct TestWorld {
     pub fs: Arc<MemFs>,
     pub settings: Arc<MemorySettings>,
     pub catalog: Arc<MemoryCatalog>,
-    pub imports: Arc<MemoryImports>,
     pub metadata: Arc<FakeMetadata>,
     pub events: Arc<RecordedEvents>,
     pub decoder: Arc<FakeDecoder>,
@@ -1402,7 +1266,6 @@ impl TestWorld {
             fs,
             settings: Arc::default(),
             catalog: Arc::default(),
-            imports: Arc::default(),
             metadata: Arc::new(metadata),
             events: Arc::default(),
             pipeline: Arc::default(),
@@ -1431,7 +1294,6 @@ impl TestWorld {
         AppContext {
             settings_store: self.settings.clone(),
             catalog: self.catalog.clone(),
-            imports: self.imports.clone(),
             fs: self.fs.clone(),
             metadata: self.metadata.clone(),
             geocoder: Arc::new(FakeGeocoder),
@@ -1573,6 +1435,7 @@ impl crate::ports::pipeline::PipelineStore for MemoryPipelineStore {
                 photo_id: None,
                 error: None,
                 updated_at: "2026-10-14T10:00:00Z".into(),
+                failed_stage: None,
             },
         ));
         Ok(Some(id))
@@ -1595,8 +1458,10 @@ impl crate::ports::pipeline::PipelineStore for MemoryPipelineStore {
         photo_id: Option<PhotoId>,
         error: Option<&str>,
     ) -> Result<(), CatalogError> {
+        use crate::ports::pipeline::JobStage;
         let mut s = self.state.lock().unwrap();
         if let Some((_, job)) = s.jobs.iter_mut().find(|(_, j)| j.id == id) {
+            job.failed_stage = (stage == JobStage::Failed).then_some(job.stage);
             job.stage = stage;
             job.photo_id = photo_id.or(job.photo_id);
             job.error = error.map(str::to_owned);

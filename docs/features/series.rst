@@ -34,7 +34,7 @@ updated in the background as analysis progresses and after each import
 Adjusting the thresholds
 ------------------------
 
-In **Import → Library → Series**, set the longest pause between shots and
+In **Settings → Series**, set the longest pause between shots and
 the similarity limit (:ref:`reference-settings-series`). Series are
 regrouped as soon as you save.
 
@@ -62,7 +62,7 @@ aesthetic score and faces (:doc:`/features/ai`):
   size, halve the score: a sharp blink loses to a slightly softer frame
   with open eyes (:ref:`features-ai-faces`).
 - The weights default to 0.6 (sharpness), 0.3 (exposure), 0.1 (noise) and
-  0.4 (aesthetic) and can be changed in **Import → Library → Series**
+  0.4 (aesthetic) and can be changed in **Settings → Series**
   (:ref:`reference-settings-ranking`). Only their ratios matter; an
   aesthetic weight of 0 ranks by technical scores alone.
 - **Rejected** photos rank last, and photos not analyzed yet just before

@@ -7,10 +7,10 @@ organized library. Your original folders are only read, never changed.
 1. Choose the library folder
 ----------------------------
 
-In the **Library** panel, set **Library folder** to an empty folder (or
-an existing Picturesque library) on a disk with enough free space. In
-the desktop app, **Browse…** opens a folder picker; you can also type or
-paste a path.
+Open **Settings** and set **Library folder** to an empty folder (or an
+existing Picturesque library) on a disk with enough free space. In the
+desktop app, **Browse…** opens a folder picker; you can also type or paste
+a path.
 
 2. Choose how folders are named
 -------------------------------
@@ -23,39 +23,44 @@ photos would go. A template with a mistake is explained in red. See
 
 Click **Save**.
 
-3. Add the folders to import
-----------------------------
+3. Add a folder to import from
+------------------------------
 
-In the **Import** panel, add one or more folders: a memory card, an old
-photo dump, a backup drive. Subfolders are included. If the same photo
-is in several folders, the copy from the folder added first is imported.
+Open **Activity** and add a folder under **Import folders**: a memory
+card, an old photo dump, a backup drive. Subfolders are included.
+Importing starts right away, in the background.
 
-4. Plan and review
-------------------
+Photos appear in the **Library** one by one as soon as each is copied,
+so you can start culling while the rest is still importing. The header
+shows how many photos are left; click it to come back to **Activity**.
 
-Click **Plan import**. Picturesque scans the folders and reads each
-photo's date, camera and location; a progress bar shows how far it is.
-Nothing is copied yet.
+4. Follow each photo
+--------------------
 
-The review shows how many photos will be imported, how many are already
-in the library (duplicates) and anything that could not be read. The
-table lists every photo with where it will go; filter it by status with
-the buttons above it.
+**Photos** in **Activity** lists every photo found, newest first, with a
+row of steps: *Found*, *Read*, *Copied*, *Verified*, *Catalogued*,
+*Thumbnail* and *Analyzed*. A green dot is done, a pulsing blue one is in
+progress, a red one is where a photo failed. The filters show only the
+photos in progress, imported, skipped as duplicates or failed. A photo
+that failed says why; **Retry failed** tries again once the cause is
+fixed.
 
-5. Import
----------
+The **Log** next to it records what happened and when, with warnings and
+errors highlighted; choose **Errors** to see only problems.
 
-Click **Import N photos**. Each file is copied, checked against the
-original, and only then given its final name. You can **Cancel** at any
-time; photos already copied stay, and **Resume** continues with the rest.
+5. Keep importing
+-----------------
 
-When it finishes, the summary shows what was imported, skipped and
-failed, with a reason for every failure.
+Folders are *watched*: new photos copied into them later are imported
+automatically, and the folder is checked again every few minutes and
+when the app starts. Untick **Watch** to import a folder only when you
+click **Check**. Quitting is safe at any time; importing continues where
+it stopped when the app starts again.
 
 What next
 ---------
 
-- :doc:`/features/import` explains duplicates, safety and resuming in
-  detail.
+- :doc:`/features/import` explains duplicates, safety, watching and
+  resuming in detail.
 - :doc:`/concepts/photos-and-files` explains how RAW+JPEG pairs and
   sidecars are handled.

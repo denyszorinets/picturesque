@@ -18,6 +18,10 @@ files: Array<string>, stage: JobStage, error: string | null, photo_id: number | 
  */
 updated_at: string, 
 /**
+ * For a failed photo, the stage it failed in (`reading` or `copying`).
+ */
+failed_stage: JobStage | null, 
+/**
  * For imported photos: whether the grid thumbnail exists.
  */
 thumbnail: boolean | null, 

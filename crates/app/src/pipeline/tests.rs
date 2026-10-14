@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::Duration;
 
 use chrono::NaiveDateTime;
@@ -321,4 +322,268 @@ fn a_folder_that_cannot_be_watched_is_reported() {
             .iter()
             .any(|m| m.starts_with("Cannot watch /card for new photos (too many watches)"))
     );
+}
+
+#[test]
+fn nothing_is_paused_while_nothing_waits() {
+    let world = world();
+    world.settings.save_settings(&Settings::default()).unwrap();
+    let p = world.pipeline();
+    assert_eq!(p.run_until_idle(), 0);
+    assert!(p.status().paused.is_none());
+    assert!(world.pipeline.messages().is_empty());
+}
+
+// ---- Copy safety (ADR-0008), photo by photo ----
+
+/// A world with `files` in `/src`, the library in `/lib`, and `template`.
+fn source_world(
+    fs: MemFs,
+    metadata: FakeMetadata,
+    template: &str,
+) -> (TestWorld, Arc<ImportPipeline>) {
+    let world = TestWorld::new(fs.dir("/lib"), metadata);
+    world
+        .settings
+        .save_settings(&Settings {
+            library_root: Some("/lib".into()),
+            path_template: template.into(),
+            ..Default::default()
+        })
+        .unwrap();
+    let p = world.pipeline();
+    p.add_source(Path::new("/src"), false).unwrap();
+    scan_all(&p);
+    (world, p)
+}
+
+fn simple(fs: MemFs) -> (TestWorld, Arc<ImportPipeline>) {
+    source_world(
+        fs,
+        FakeMetadata::default(),
+        "{year|Undated}/{date}/{name}.{ext}",
+    )
+}
+
+fn library_files(world: &TestWorld) -> Vec<String> {
+    let mut files: Vec<String> = world
+        .fs
+        .files_under(Path::new("/lib"))
+        .iter()
+        .map(|p| {
+            p.strip_prefix("/lib")
+                .unwrap()
+                .iter()
+                .map(|c| c.to_string_lossy())
+                .collect::<Vec<_>>()
+                .join("/")
+        })
+        .collect();
+    files.sort();
+    files
+}
+
+fn failure(p: &ImportPipeline) -> String {
+    let failed = p
+        .jobs(JobFilter::Failed, 10, None, &|_| (false, [0, 0]))
+        .unwrap();
+    assert_eq!(failed.len(), 1, "{:?}", stages(p));
+    failed[0].error.clone().unwrap()
+}
+
+#[test]
+fn names_never_collide_with_files_in_the_library() {
+    let t = taken("2026-10-12 10:00:00");
+    let metadata = FakeMetadata {
+        by_path: [
+            (PathBuf::from("/src/a/IMG_1.CR3"), t.clone()),
+            (PathBuf::from("/src/b/IMG_1.JPG"), t),
+        ]
+        .into_iter()
+        .collect(),
+        failing: Vec::new(),
+    };
+    let fs = MemFs::new()
+        .file("/lib/2026/2026-10-12/IMG_1.NEF", b"already-here")
+        .file("/src/a/IMG_1.CR3", b"raw-a")
+        .file("/src/a/IMG_1.JPG", b"jpg-a")
+        .file("/src/b/IMG_1.JPG", b"jpg-b");
+    let (world, p) = source_world(fs, metadata, "{year}/{date}/{name}.{ext}");
+    assert_eq!(p.run_until_idle(), 2);
+    // The pair keeps one name; nothing reuses a base name already on disk,
+    // so the lone JPEG cannot later look like part of the pair.
+    assert_eq!(
+        library_files(&world),
+        [
+            "2026/2026-10-12/IMG_1 (2).CR3",
+            "2026/2026-10-12/IMG_1 (2).JPG",
+            "2026/2026-10-12/IMG_1 (3).JPG",
+            "2026/2026-10-12/IMG_1.NEF",
+        ]
+    );
+}
+
+#[test]
+fn a_corrupted_copy_is_retried_once() {
+    let (world, p) = simple(MemFs::new().file("/src/a.jpg", b"a"));
+    world.fs.corrupt_next_copies(1);
+    p.run_until_idle();
+    assert_eq!(
+        world.fs.read(Path::new("/lib/Undated/a.jpg")).unwrap(),
+        b"a"
+    );
+}
+
+#[test]
+fn repeated_corruption_fails_the_photo_and_leaves_nothing() {
+    let (world, p) = simple(MemFs::new().file("/src/a.jpg", b"a"));
+    world.fs.corrupt_next_copies(2);
+    p.run_until_idle();
+    assert!(failure(&p).contains("did not match"));
+    assert!(library_files(&world).is_empty());
+}
+
+#[test]
+fn a_photo_whose_copy_fails_is_rolled_back_and_others_continue() {
+    let fs = MemFs::new()
+        .file("/src/IMG_1.CR3", b"raw")
+        .file("/src/IMG_1.JPG", b"jpg")
+        .file("/src/IMG_2.JPG", b"two");
+    let (world, p) = simple(fs);
+    world.fs.fail_copies_of("/src/IMG_1.JPG");
+    assert_eq!(p.run_until_idle(), 2);
+    assert!(failure(&p).contains("input/output error"));
+    // The RAW was copied before the JPEG failed; it is removed again.
+    assert_eq!(library_files(&world), ["Undated/IMG_2.JPG"]);
+}
+
+#[test]
+fn a_photo_changed_after_it_was_found_is_imported_as_it_is_now() {
+    let (world, p) = simple(MemFs::new().file("/src/a.jpg", b"a"));
+    world.fs.write(Path::new("/src/a.jpg"), b"edited later");
+    p.run_until_idle();
+    assert!(failure(&p).contains("imported again"));
+    assert!(library_files(&world).is_empty());
+    // The next scan sees the change and imports the new content.
+    scan_all(&p);
+    assert_eq!(p.run_until_idle(), 1);
+    assert_eq!(
+        world.fs.read(Path::new("/lib/Undated/a.jpg")).unwrap(),
+        b"edited later"
+    );
+}
+
+#[test]
+fn a_photo_changed_during_its_copy_is_not_kept() {
+    let (world, p) = simple(MemFs::new().file("/src/a.jpg", b"a"));
+    world.fs.change_after_copy("/src/a.jpg");
+    p.run_until_idle();
+    failure(&p);
+    assert!(library_files(&world).is_empty());
+}
+
+#[test]
+fn a_copy_left_by_an_interrupted_attempt_is_reused() {
+    let (world, p) = simple(MemFs::new().file("/src/a.jpg", b"aaa"));
+    // The app stopped after renaming the copy, before cataloguing it.
+    world.fs.write(Path::new("/lib/Undated/a.jpg"), b"aaa");
+    assert_eq!(p.run_until_idle(), 1);
+    assert_eq!(library_files(&world), ["Undated/a.jpg"]);
+    assert_eq!(world.catalog.photo_count().unwrap(), 1);
+}
+
+#[test]
+fn a_different_file_at_the_target_is_never_overwritten() {
+    let (world, p) = simple(MemFs::new().file("/src/a.jpg", b"aaa"));
+    world
+        .fs
+        .write(Path::new("/lib/Undated/a.jpg"), b"someone else's file");
+    p.run_until_idle();
+    assert_eq!(
+        world.fs.read(Path::new("/lib/Undated/a.jpg")).unwrap(),
+        b"someone else's file"
+    );
+    // The photo gets another name instead.
+    assert_eq!(
+        library_files(&world),
+        ["Undated/a (2).jpg", "Undated/a.jpg"]
+    );
+}
+
+#[test]
+fn an_unreadable_photo_fails_and_a_readable_jpeg_rescues_its_raw() {
+    let mut metadata = FakeMetadata {
+        failing: vec!["/src/bad.jpg".into(), "/src/IMG_1.CR3".into()],
+        ..Default::default()
+    };
+    metadata
+        .by_path
+        .insert("/src/IMG_1.JPG".into(), taken("2026-02-02 08:00:00"));
+    let fs = MemFs::new()
+        .file("/src/bad.jpg", b"x")
+        .file("/src/IMG_1.CR3", b"raw")
+        .file("/src/IMG_1.JPG", b"jpg");
+    let (world, p) = source_world(fs, metadata, "{year|Undated}/{date}/{name}.{ext}");
+    assert_eq!(p.run_until_idle(), 2);
+    assert!(failure(&p).contains("corrupt"));
+    let failed = p
+        .jobs(JobFilter::Failed, 10, None, &|_| (false, [0, 0]))
+        .unwrap();
+    assert_eq!(failed[0].failed_stage, Some(JobStage::Reading));
+    assert_eq!(
+        library_files(&world),
+        ["2026/2026-02-02/IMG_1.CR3", "2026/2026-02-02/IMG_1.JPG"]
+    );
+}
+
+#[test]
+fn decisions_in_existing_sidecars_are_imported() {
+    use picturesque_core::decision::{Decision, Flag, Rating};
+    let fs = MemFs::new()
+        .file("/src/IMG_1.CR3", b"raw")
+        .file("/src/IMG_1.CR3.xmp", b"<x/>")
+        .file("/src/IMG_2.JPG", b"jpg");
+    let world = TestWorld::new(fs.dir("/lib"), FakeMetadata::default());
+    world
+        .settings
+        .save_settings(&Settings {
+            library_root: Some("/lib".into()),
+            ..Default::default()
+        })
+        .unwrap();
+    let rejected = Decision {
+        flag: Flag::Reject,
+        rating: Rating::new(2).unwrap(),
+    };
+    world
+        .sidecars
+        .0
+        .lock()
+        .unwrap()
+        .insert(PathBuf::from("/src/IMG_1.CR3.xmp"), rejected);
+    let p = world.pipeline();
+    p.add_source(Path::new("/src"), false).unwrap();
+    scan_all(&p);
+    assert_eq!(p.run_until_idle(), 2);
+    let decisions: Vec<_> = world
+        .catalog
+        .all_photos()
+        .unwrap()
+        .iter()
+        .map(|photo| {
+            (
+                file_name(&photo.assets.primary().path),
+                world.catalog.decision(photo.id).unwrap(),
+            )
+        })
+        .collect();
+    assert!(
+        decisions.contains(&("IMG_1.CR3".to_owned(), rejected)),
+        "{decisions:?}"
+    );
+    assert!(
+        decisions.contains(&("IMG_2.JPG".to_owned(), Decision::default())),
+        "{decisions:?}"
+    );
+    assert!(world.fs.exists(Path::new("/lib/Undated/IMG_1.CR3.xmp")));
 }

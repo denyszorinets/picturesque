@@ -24,24 +24,43 @@ export async function call<T>(
   return (await response.json()) as T;
 }
 
-async function waitFor(
+interface Job {
+  source_path: string;
+  stage: string;
+}
+
+/**
+ * Waits until the pipeline has scanned `folder` and finished every photo
+ * found in it.
+ */
+export async function waitForFolder(
   request: APIRequestContext,
-  runId: number,
-  state: string,
-) {
+  folder: string,
+): Promise<Job[]> {
+  let jobs: Job[] = [];
   await expect
     .poll(
-      async () =>
-        (
-          await call<{ state: string }>(request, "import_status", {
-            run_id: runId,
-          })
-        ).state,
-      {
-        timeout: 60_000,
+      async () => {
+        const status = await call<{ scanning: boolean }>(
+          request,
+          "pipeline_status",
+          null,
+        );
+        jobs = (
+          await call<Job[]>(request, "pipeline_jobs", { limit: 500 })
+        ).filter((j) => j.source_path.startsWith(folder + "/"));
+        return (
+          !status.scanning &&
+          jobs.length > 0 &&
+          jobs.every((j) =>
+            ["imported", "duplicate", "failed"].includes(j.stage),
+          )
+        );
       },
+      { timeout: 60_000 },
     )
-    .toBe(state);
+    .toBe(true);
+  return jobs;
 }
 
 /**
@@ -61,12 +80,8 @@ export async function importFiles(
     if (f.time) utimesSync(join(src, name), f.time, f.time);
   }
   await call(request, "update_settings", { library_root: LIBRARY });
-  const plan = await call<{ run_id: number }>(request, "plan_import", {
-    sources: [src],
-  });
-  await waitFor(request, plan.run_id, "planned");
-  await call(request, "start_import", { run_id: plan.run_id });
-  await waitFor(request, plan.run_id, "completed");
+  await call(request, "add_import_source", { path: src, watch: false });
+  await waitForFolder(request, src);
 }
 
 /**

@@ -14,13 +14,17 @@
   import Timeline from "./Timeline.svelte";
 
   interface Props {
+    /** Opens the import activity. */
     onimport?: () => void;
+    /** Whether photos are being imported. */
+    importing?: boolean;
     store?: LibraryStore;
     selection?: Selection;
   }
 
   let {
     onimport,
+    importing = false,
     store = new LibraryStore(api),
     selection = new Selection(),
   }: Props = $props();
@@ -287,17 +291,31 @@
 
   let section: HTMLElement | undefined = $state();
 
+  /** While importing, new photos show up at most this often. */
+  const LIVE_REFRESH_MS = 1500;
+  let lastImported: number | null = null;
+  let liveTimer: ReturnType<typeof setTimeout> | undefined;
+
+  function photosImported() {
+    if (liveTimer) return;
+    liveTimer = setTimeout(() => {
+      liveTimer = undefined;
+      void (store.total === 0 ? store.load() : store.refresh());
+    }, LIVE_REFRESH_MS);
+  }
+
   $effect(() => {
     void analysis.load();
-    // New photos appear when an import completes.
     const unsubscribe = api.onAppEvent((event) => {
-      if (event.type === "import_progress" && event.state === "completed")
-        void store.load();
-      else if (event.type === "series_changed") void store.refresh();
+      if (event.type === "pipeline_progress") {
+        if (event.imported !== lastImported) photosImported();
+        lastImported = event.imported;
+      } else if (event.type === "series_changed") void store.refresh();
       analysis.handle(event);
     });
     return () => {
       unsubscribe();
+      clearTimeout(liveTimer);
       analysis.dispose();
     };
   });
@@ -309,11 +327,21 @@
   {#if store.error}
     <p class="error-text" role="alert">{store.error}</p>
   {:else if store.facets && store.total === 0 && !filters.active}
-    <div class="empty card">
-      <h2>No photos yet</h2>
-      <p class="muted">Import a folder to start building your library.</p>
-      <button class="primary" onclick={() => onimport?.()}>Import photos</button
-      >
+    <div class="empty card" data-testid="library-empty">
+      {#if importing}
+        <h2>Importing…</h2>
+        <p class="muted">Photos appear here as soon as they are imported.</p>
+        <button onclick={() => onimport?.()}>Show activity</button>
+      {:else}
+        <h2>No photos yet</h2>
+        <p class="muted">
+          Add a folder to import from. New photos in it are imported
+          automatically.
+        </p>
+        <button class="primary" onclick={() => onimport?.()}
+          >Add import folder</button
+        >
+      {/if}
     </div>
   {:else if store.facets}
     <div class="bar">
