@@ -15,10 +15,15 @@ Installers are attached to each
   run it. For HEIC photos, prefer the rpm or deb.
 - **macOS** (Apple Silicon): ``Picturesque_*.dmg``. The app is not signed
   yet: the first time, right-click it and choose **Open**.
-- **Windows**: not available yet.
+- **Windows** 10 or later, 64-bit: ``Picturesque_*_x64-setup.exe``
+  (installs for you, no administrator rights needed) or
+  ``Picturesque_*_x64_en-US.msi`` (for all users). The installers are not
+  signed yet: if SmartScreen warns, choose **More info → Run anyway**.
+  HEIC photos (from iPhones) are imported but cannot be shown or analyzed
+  on Windows yet (:issue:`135`).
 
-Until the first release is published, build the app from source
-(:doc:`/development/building`, :doc:`/development/packaging`).
+You can also build the app from source (:doc:`/development/building`,
+:doc:`/development/packaging`).
 
 What you need
 -------------

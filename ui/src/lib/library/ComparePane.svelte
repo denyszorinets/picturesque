@@ -1,6 +1,6 @@
 <script lang="ts">
   import { imageUrl, type PhotoSummary } from "../api";
-  import type { CompareState } from "./compare.svelte";
+  import type { CompareState } from "./compare-state.svelte";
 
   interface Props {
     photo: PhotoSummary | undefined;

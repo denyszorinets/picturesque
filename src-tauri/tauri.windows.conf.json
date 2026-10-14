@@ -1,0 +1,9 @@
+{
+  "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
+  "bundle": {
+    "resources": {
+      "../target/windows-runtime/*.dll": "./",
+      "../target/windows-runtime/vips-modules-8.18/*.dll": "vips-modules-8.18/"
+    }
+  }
+}

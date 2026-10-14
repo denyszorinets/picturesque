@@ -22,7 +22,11 @@ const LIBRAW_IMAGE_BITMAP: c_int = 2;
 #[link(name = "raw_r")]
 unsafe extern "C" {
     fn libraw_init(flags: c_uint) -> *mut c_void;
+    #[cfg(not(windows))]
     fn libraw_open_file(lr: *mut c_void, file: *const c_char) -> c_int;
+    /// Windows: a UTF-16 path (the narrow variant takes the ANSI code page).
+    #[cfg(windows)]
+    fn libraw_open_wfile(lr: *mut c_void, file: *const u16) -> c_int;
     fn libraw_unpack_thumb(lr: *mut c_void) -> c_int;
     fn libraw_dcraw_make_mem_thumb(lr: *mut c_void, errc: *mut c_int) -> *mut ProcessedImage;
     fn libraw_dcraw_clear_mem(img: *mut ProcessedImage);
@@ -62,6 +66,22 @@ fn check(code: c_int, what: &str) -> Result<(), String> {
 }
 
 /// Extracts the largest embedded preview. `Ok(None)` when the file has none.
+#[cfg(not(windows))]
+fn open(handle: &Handle, path: &Path) -> Result<c_int, String> {
+    let c_path = CString::new(path.to_string_lossy().as_bytes()).map_err(|e| e.to_string())?;
+    // SAFETY: handle.0 is a live LibRaw handle; c_path outlives the call.
+    Ok(unsafe { libraw_open_file(handle.0, c_path.as_ptr()) })
+}
+
+#[cfg(windows)]
+fn open(handle: &Handle, path: &Path) -> Result<c_int, String> {
+    use std::os::windows::ffi::OsStrExt;
+    let wide: Vec<u16> = path.as_os_str().encode_wide().chain([0]).collect();
+    // SAFETY: handle.0 is a live LibRaw handle; `wide` is NUL-terminated
+    // and outlives the call.
+    Ok(unsafe { libraw_open_wfile(handle.0, wide.as_ptr()) })
+}
+
 pub fn preview(path: &Path) -> Result<Option<Preview>, String> {
     // SAFETY: libraw_init has no preconditions; a null result is handled.
     let lr = unsafe { libraw_init(0) };
@@ -69,12 +89,7 @@ pub fn preview(path: &Path) -> Result<Option<Preview>, String> {
         return Err("LibRaw failed to initialize".into());
     }
     let handle = Handle(lr);
-    let c_path = CString::new(path.to_string_lossy().as_bytes()).map_err(|e| e.to_string())?;
-    // SAFETY: handle.0 is a live LibRaw handle; c_path outlives the call.
-    check(
-        unsafe { libraw_open_file(handle.0, c_path.as_ptr()) },
-        "open",
-    )?;
+    check(open(&handle, path)?, "open")?;
     // SAFETY: handle.0 is a live, opened LibRaw handle.
     let unpacked = unsafe { libraw_unpack_thumb(handle.0) };
     if unpacked != 0 {

@@ -276,7 +276,7 @@ impl SettingsService {
                     )));
                 }
             }
-            if !root.is_absolute() {
+            if !crate::ports::fs::is_absolute(&root) {
                 return Err(SettingsError::Invalid(format!(
                     "The library folder must be an absolute path, got `{}`.",
                     root.display()

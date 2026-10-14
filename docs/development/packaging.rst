@@ -31,8 +31,8 @@ They land in ``target/release/bundle/<format>/``.
      - macOS, with ``brew install vips libraw libheif dylibbundler``
    * - ``make dist-windows``
      - ``.msi`` and the NSIS setup ``.exe``
-     - Windows (``make`` from Git Bash or MSYS2); does not work yet, see
-       below
+     - Windows (``make`` from Git Bash), after
+       ``scripts/setup-windows-libvips.sh`` (:doc:`building`)
 
 A target run on the wrong OS stops with a message. Any Linux can produce
 every Linux format, but a package's declared dependencies only match the
@@ -64,11 +64,15 @@ distribution it was built on.
      - Homebrew's libvips and LibRaw are copied into the app bundle with
        ``dylibbundler``. Not verified yet.
    * - ``.msi``, setup ``.exe``
-     - Windows
-     - Not available yet: the workspace does not build on Windows until
-       libvips and LibRaw import libraries are set up
-       (:doc:`building`). ``make dist-windows`` runs the Tauri build that
-       will produce them once it does.
+     - Windows 10 or later, 64-bit
+     - Self-contained: the libvips, LibRaw and libheif DLLs from
+       ``target/windows-runtime`` are installed next to the executable
+       (:repo:`src-tauri/tauri.windows.conf.json`). The setup ``.exe``
+       installs for the current user without administrator rights; the
+       ``.msi`` installs for all users. The WebView2 runtime, part of
+       Windows 11 and current Windows 10, is installed if missing. The
+       libvips build has no HEVC decoder, so HEIC photos are not decoded
+       (AVIF is; :issue:`135`).
 
 Each package must be built on the system it targets, because the binary
 links the libvips and LibRaw versions of the build host.

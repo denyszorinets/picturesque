@@ -18,14 +18,13 @@ picturesque-infra = { path = "crates/infra" }
 picturesque-devserver = { path = "crates/devserver" }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.151"
-rusqlite = { version = "0.40.2", features = ["bundled", "functions"] }
+rusqlite = { version = "0.40.2", features = ["bundled"] }
 tempfile = "3.27.0"
 kamadak-exif = "0.6.1"
 rawler = "0.8.0"
 imagesize = "0.15.0"
 flate2 = "1"
 blake3 = "1.8.7"
-libvips = "2.3.0"
 quick-xml = "0.42.0"
 image = { version = "0.25.10", default-features = false, features = ["jpeg", "png"] }
 chrono = { version = "0.4.45", default-features = false, features = ["std", "clock", "serde"] }

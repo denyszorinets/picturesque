@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CompareState } from "./compare.svelte";
+import { CompareState } from "./compare-state.svelte";
 
 describe("CompareState", () => {
   it("starts on the given photo with 4 panes for more than two photos", () => {
