@@ -104,7 +104,9 @@
         first; photos wait until then.
       </p>
     {:else if status?.paused}
-      <p class="notice" data-testid="paused">{status.paused}</p>
+      <p class="notice" data-testid="paused">
+        Importing paused: {status.paused}
+      </p>
     {/if}
 
     {#if pipeline.sources.length > 0}

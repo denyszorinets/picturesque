@@ -56,6 +56,25 @@ problems, newest first; the newest 20,000 entries are kept.
 Importing waits while no library folder is set, and continues once one is
 chosen.
 
+.. _features-import-disk-full:
+
+When a disk is full
+~~~~~~~~~~~~~~~~~~~
+
+Before copying a photo, Picturesque checks that the library disk has room
+for it plus 256 MB to spare, so the system, the catalog and thumbnails keep
+working. If not, importing **pauses**: the photo and the rest wait in the
+queue (nothing is marked failed), **Activity** and the header say why, and
+the log records how much space is free and needed. The same happens if the
+disk fills up during a copy (the partial copy is removed) or if the disk
+holding the catalog is full (the copies are kept and reused). Every 10
+seconds Picturesque looks again, and importing continues on its own once
+space is freed.
+
+Background analysis pauses the same way when the thumbnail cache or the
+catalog cannot be written, and tries again every 30 seconds; the library
+shows *Analysis paused* meanwhile (:ref:`features-library-analysis`).
+
 Duplicates
 ~~~~~~~~~~
 

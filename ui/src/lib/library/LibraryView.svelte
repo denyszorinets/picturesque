@@ -450,7 +450,14 @@
         onmoved={() => void store.refresh()}
       />
       <span class="spacer"></span>
-      {#if analysis.status && analysis.remaining > 0}
+      {#if analysis.status?.paused && analysis.remaining > 0}
+        <span
+          class="paused"
+          data-testid="analysis-paused"
+          title={`Analysis paused: ${analysis.status.paused}`}
+          >Analysis paused: {analysis.status.paused.split(";")[0]}</span
+        >
+      {:else if analysis.status && analysis.remaining > 0}
         <span
           class="muted"
           data-testid="analysis-progress"
@@ -619,6 +626,11 @@
   .no-match {
     margin-top: 3rem;
     text-align: center;
+  }
+
+  .paused {
+    color: var(--warn);
+    font-size: 0.9rem;
   }
 
   .empty {

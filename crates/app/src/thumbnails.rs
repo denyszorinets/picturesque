@@ -241,6 +241,15 @@ impl ThumbnailService {
         }
     }
 
+    /// Whether the disk holding the cache is (nearly) full, so images
+    /// cannot be written.
+    pub fn cache_full(&self) -> bool {
+        const RESERVE: u64 = 64 * 1024 * 1024;
+        self.fs
+            .available_space(&self.cache_dir)
+            .is_ok_and(|free| free < RESERVE)
+    }
+
     /// Whether the photo's grid thumbnail exists.
     pub fn has_grid(&self, photo: &Photo) -> bool {
         self.fs

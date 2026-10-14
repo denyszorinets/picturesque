@@ -67,5 +67,11 @@ impl SqliteCatalog {
 }
 
 fn storage(e: impl std::fmt::Display) -> CatalogError {
-    CatalogError::Storage(e.to_string())
+    let message = e.to_string();
+    // SQLITE_FULL's message; also what rusqlite shows for it.
+    if message.contains("database or disk is full") {
+        CatalogError::Full
+    } else {
+        CatalogError::Storage(message)
+    }
 }

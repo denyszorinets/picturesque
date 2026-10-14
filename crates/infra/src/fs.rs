@@ -133,6 +133,10 @@ impl FileSystem for StdFileSystem {
             _ => Ok(()),
         }
     }
+
+    fn available_space(&self, path: &Path) -> Result<u64, String> {
+        fs4::available_space(path).map_err(|e| io_reason(&e))
+    }
 }
 
 fn io_reason(e: &std::io::Error) -> String {
@@ -231,6 +235,17 @@ mod tests {
         assert_eq!(StdFileSystem.rename_no_replace(&a, &c), Ok(()));
         assert!(!a.exists());
         assert_eq!(std::fs::read(&c).unwrap(), b"a");
+    }
+
+    #[test]
+    fn reports_free_space() {
+        let dir = tempfile::tempdir().unwrap();
+        assert!(StdFileSystem.available_space(dir.path()).unwrap() > 0);
+        assert!(
+            StdFileSystem
+                .available_space(&dir.path().join("nope"))
+                .is_err()
+        );
     }
 
     #[test]

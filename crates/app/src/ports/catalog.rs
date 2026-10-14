@@ -17,6 +17,8 @@ use crate::library::{PhotoFacets, PhotoPage, PhotoQuery};
 pub enum CatalogError {
     /// A file with the same content (or library path) is already catalogued.
     Duplicate(String),
+    /// The disk holding the catalog is full; retry once space is freed.
+    Full,
     /// The underlying store failed.
     Storage(String),
 }
@@ -25,6 +27,7 @@ impl fmt::Display for CatalogError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Duplicate(what) => write!(f, "already in the catalog: {what}"),
+            Self::Full => f.write_str("the disk holding the catalog is full"),
             Self::Storage(msg) => write!(f, "catalog storage error: {msg}"),
         }
     }

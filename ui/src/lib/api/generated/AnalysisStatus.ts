@@ -11,4 +11,8 @@ analyzed: number, total: number,
 /**
  * Whether workers are busy.
  */
-running: boolean, };
+running: boolean, 
+/**
+ * Why analysis waits (a disk is full), or `null`.
+ */
+paused: string | null, };
