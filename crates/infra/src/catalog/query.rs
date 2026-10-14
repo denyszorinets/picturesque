@@ -345,6 +345,13 @@ fn query_page(conn: &Connection, query: &PhotoQuery) -> Result<PhotoPage, Catalo
     let limit = query.page_size();
     values.push(Value::Integer(i64::from(limit) + 1));
 
+    // The page's photos are chosen first from the sort keys alone; the
+    // details (several lookups per photo) are read for those rows only.
+    let page = format!(
+        "SELECT p.id, {QUALITY_SQL} AS quality {FROM} {} ORDER BY {} LIMIT ?",
+        where_sql(&clauses),
+        order_by(sort)
+    );
     let sql = format!(
         "SELECT p.id, p.captured_local, p.camera_make, p.camera_model, p.lens, p.place_city, p.place_country,
                 coalesce(d.flag, 'unflagged'), coalesce(d.rating, 0), p.width, p.height, p.orientation,
@@ -356,10 +363,11 @@ fn query_page(conn: &Connection, query: &PhotoQuery) -> Result<PhotoPage, Catalo
                 {QUALITY_SQL} AS quality,
                 pss.aesthetic, pss.eyes_closed, coalesce(pss.faces, 0),
                 coalesce(pss.keeper, 0)
-         {FROM} LEFT JOIN series_member sm ON sm.photo_id = p.id
+         FROM ({page}) pg JOIN photo p ON p.id = pg.id
+                LEFT JOIN decision d ON d.photo_id = p.id
+                LEFT JOIN series_member sm ON sm.photo_id = p.id
                 LEFT JOIN photo_score pss ON pss.photo_id = p.id
-         {} ORDER BY {} LIMIT ?",
-        where_sql(&clauses),
+         ORDER BY {}",
         order_by(sort)
     );
     let mut stmt = conn.prepare_cached(&sql).map_err(storage)?;

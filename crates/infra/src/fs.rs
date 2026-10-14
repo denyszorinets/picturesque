@@ -241,6 +241,8 @@ mod tests {
     fn reports_free_space() {
         let dir = tempfile::tempdir().unwrap();
         assert!(StdFileSystem.available_space(dir.path()).unwrap() > 0);
+        // Windows answers for the drive even when the folder is missing.
+        #[cfg(unix)]
         assert!(
             StdFileSystem
                 .available_space(&dir.path().join("nope"))
