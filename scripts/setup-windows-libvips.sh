@@ -3,8 +3,8 @@
 # downloads the official 64-bit "all" build (libvips with LibRaw, libheif
 # and their dependencies), checks its checksum and
 #
-# - makes MSVC import libraries available under the names the `libvips`
-#   crate links (vips, glib-2.0, gobject-2.0),
+# - makes MSVC import libraries available under the names our FFI
+#   bindings link (vips, glib-2.0, gobject-2.0, raw_r),
 # - copies the DLLs to target/windows-runtime, which the Windows installers
 #   bundle next to the executable (src-tauri/tauri.windows.conf.json).
 #
@@ -33,6 +33,7 @@ mkdir -p "$link"
 cp "$root/lib/libvips.lib" "$link/vips.lib"
 cp "$root/lib/libglib-2.0.lib" "$link/glib-2.0.lib"
 cp "$root/lib/libgobject-2.0.lib" "$link/gobject-2.0.lib"
+cp "$root/lib/libraw_r.lib" "$link/raw_r.lib"
 
 runtime="$repo/target/windows-runtime"
 rm -rf "$runtime"

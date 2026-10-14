@@ -27,7 +27,7 @@ help:
 	@echo "  dist-appimage Build the .AppImage (on Linux)"
 	@echo "  dist-linux    Build the .deb, .rpm and .AppImage"
 	@echo "  dist-macos    Build the .dmg (on macOS, needs Homebrew libraries)"
-	@echo "  dist-windows  Build the .msi and setup .exe (on Windows; not supported yet)"
+	@echo "  dist-windows  Build the .msi and setup .exe (on Windows, after scripts/setup-windows-libvips.sh)"
 	@echo "  clean         Remove build artifacts"
 	@echo "  docs          Build documentation into docs/_build/html"
 	@echo "  docs-serve    Live-reloading documentation preview on http://127.0.0.1:8000"

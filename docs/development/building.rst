@@ -31,11 +31,13 @@ needed. Outside it you need:
   Cargo copies next to the binaries; they find it there (``$ORIGIN``
   run path). There are no prebuilt binaries for Intel macOS.
 
-.. warning::
-
-   Building the full workspace on Windows is not set up yet: it needs
-   libvips and LibRaw import libraries. ``picturesque-core`` and
-   ``picturesque-app`` build and test on Windows.
+- On Windows (Git Bash, with the Visual Studio C++ build tools): run
+  ``scripts/setup-windows-libvips.sh`` once. It downloads the official
+  libvips build for Windows (with LibRaw and libheif, checksum checked)
+  into ``target/libvips-windows``, prepares the import libraries the
+  build links and copies the DLLs to ``target/windows-runtime``. It prints
+  two ``export`` lines (the linker path and ``PATH``, so tests find the
+  DLLs); run them in the shell you build from.
 
 After cloning, install the front-end dependencies once:
 

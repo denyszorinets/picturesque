@@ -23,10 +23,10 @@ Steps
    Commit, push, and open a pull request into ``main``. Only fixes go on
    the release branch from now on.
 
-3. **Dry run**: start the *Release* workflow by hand on the release branch
-   (Actions → Release → Run workflow). It builds every installer and keeps
-   them as workflow artifacts, without creating a release. Install and
-   start them (:ref:`checking an installer <development-packaging-check>`).
+3. **Dry run**: pushing the release branch runs the *Release* workflow,
+   which builds every installer and keeps them as workflow artifacts,
+   without creating a release. Install and start them
+   (:ref:`checking an installer <development-packaging-check>`).
 
 4. **Merge** the pull request into ``main`` (a maintainer), then tag the
    merge commit and push the tag::
@@ -63,6 +63,13 @@ What the workflow builds
      - ``.dmg`` with Homebrew's libraries bundled (``dylibbundler``),
        ad-hoc signed
      - no (experimental until verified, :issue:`52`)
+   * - Windows Server 2025
+     - ``.msi`` and the NSIS setup ``.exe``; the job installs the setup
+       silently and checks that the app starts and opens its catalog
+     - yes
 
-Windows installers are not built yet (:doc:`packaging`). Installers are
-not signed; see :doc:`packaging` for what signing needs.
+Installers are not signed; see :doc:`packaging` for what signing needs.
+
+The workflow also runs, without creating a release, on every push to a
+``release/*`` branch and on pull requests that change packaging (the
+workflow, the Tauri configuration or the packaging scripts).

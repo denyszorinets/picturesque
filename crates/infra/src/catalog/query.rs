@@ -81,8 +81,12 @@ fn photo_filters(query: &PhotoQuery, p: &str, d: &str) -> (Vec<String>, Vec<Valu
     }
     if let Some(camera) = &query.camera {
         add(
-            // Every spelling of the camera.
-            "camera_label(p.camera_make, p.camera_model) = camera_label(?, ?)",
+            // Every spelling of the camera: the label is computed once per
+            // distinct camera (index `photo_camera`), not per photo.
+            "(p.camera_make, p.camera_model) IN (
+                 SELECT camera_make, camera_model FROM photo
+                 GROUP BY camera_make, camera_model
+                 HAVING camera_label(camera_make, camera_model) = camera_label(?, ?))",
             vec![
                 Value::Text(camera.make.clone()),
                 Value::Text(camera.model.clone()),

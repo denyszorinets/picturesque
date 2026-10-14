@@ -25,7 +25,6 @@ rawler = "0.8.0"
 imagesize = "0.15.0"
 flate2 = "1"
 blake3 = "1.8.7"
-libvips = "2.3.0"
 quick-xml = "0.42.0"
 image = { version = "0.25.10", default-features = false, features = ["jpeg", "png"] }
 chrono = { version = "0.4.45", default-features = false, features = ["std", "clock", "serde"] }
