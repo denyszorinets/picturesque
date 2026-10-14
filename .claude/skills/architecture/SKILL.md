@@ -35,7 +35,7 @@ All persistent architecture documentation belongs under:
     /docs/architecture/
 
 Architecture documentation is written in reStructuredText (`.rst`) and is part
-of the Sphinx documentation site (see the documentation skill and ADR-0022).
+of the Sphinx documentation site (see the documentation skill and ADR-0001).
 Add every new page to the `toctree` in `docs/architecture/index.rst`.
 
 Use architecture documents to describe the current or intended structure of

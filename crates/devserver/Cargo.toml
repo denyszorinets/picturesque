@@ -1,0 +1,27 @@
+[package]
+name = "picturesque-devserver"
+description = "Development-only HTTP transport for the Picturesque UI (not shipped)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+axum.workspace = true
+picturesque-app.workspace = true
+picturesque-infra.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+futures-util.workspace = true
+
+[dev-dependencies]
+image.workspace = true
+picturesque-core.workspace = true
+tempfile.workspace = true
+http-body-util.workspace = true
+tower.workspace = true
+
+[lints]
+workspace = true

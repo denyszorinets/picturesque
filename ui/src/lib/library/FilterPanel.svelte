@@ -1,0 +1,374 @@
+<script lang="ts">
+  import type { PhotoFacets } from "../api";
+  import { SCORE_LABELS, type Filters, type Score } from "./filters.svelte";
+
+  interface Props {
+    filters: Filters;
+    facets: PhotoFacets;
+    /** Turns every auto-picked photo into a pick. */
+    onacceptauto?: () => void;
+  }
+
+  let { filters, facets, onacceptauto }: Props = $props();
+
+  const FLAGS = [
+    { flag: "pick", label: "Picks" },
+    { flag: "unflagged", label: "Unflagged" },
+    { flag: "reject", label: "Rejects" },
+  ] as const;
+
+  const SCORES = Object.entries(SCORE_LABELS) as [Score, string][];
+  const STEPS = [0, 0.25, 0.5, 0.75];
+
+  const flagCount = (flag: string) =>
+    facets.flags.find((f) => f.flag === flag)?.count ?? 0;
+  /** Photos with at least `stars` stars. */
+  const atLeast = (stars: number) =>
+    facets.ratings.slice(stars).reduce((a, b) => a + b, 0);
+
+  /** Countries with their total photo counts, most photos first. */
+  const countries = $derived.by(() => {
+    const byCode: Record<string, { country: string; count: number }> = {};
+    for (const p of facets.places) {
+      const entry = (byCode[p.value.country_code] ??= {
+        country: p.value.country,
+        count: 0,
+      });
+      entry.count += p.count;
+    }
+    return Object.entries(byCode).sort((a, b) => b[1].count - a[1].count);
+  });
+
+  /** Cameras shown before "All N cameras" (the most used first). */
+  const CAMERAS_SHOWN = 6;
+  let allCameras = $state(false);
+  const keyOf = (k: { make: string; model: string }) =>
+    `${k.make}\u0000${k.model}`;
+  const cameraValue = $derived(filters.camera ? keyOf(filters.camera) : "");
+  // The chosen camera stays visible when the list is short.
+  const shownCameras = $derived(
+    allCameras
+      ? facets.cameras
+      : facets.cameras.filter(
+          (c, i) => i < CAMERAS_SHOWN || keyOf(c.value.key) === cameraValue,
+        ),
+  );
+  const placeValue = $derived(
+    filters.place
+      ? `${filters.place.country_code}\u0000${filters.place.city ?? ""}`
+      : "",
+  );
+
+  function setCamera(value: string) {
+    const facet = facets.cameras.find((c) => keyOf(c.value.key) === value);
+    filters.camera = facet ? { ...facet.value.key } : null;
+    filters.cameraLabel = facet?.value.label ?? "";
+  }
+
+  function setPlace(value: string) {
+    if (!value) {
+      filters.place = null;
+      return;
+    }
+    const [code, city] = value.split("\u0000");
+    const country = countries.find(([c]) => c === code)?.[1].country ?? code!;
+    filters.place = city
+      ? { country_code: code!, city, label: `${city}, ${country}` }
+      : { country_code: code!, label: country };
+  }
+</script>
+
+<div class="panel" data-testid="filter-panel">
+  <section>
+    <h3>Flag</h3>
+    <div class="toggles">
+      {#each FLAGS as { flag, label } (flag)}
+        <button
+          class:on={filters.flags.includes(flag)}
+          aria-pressed={filters.flags.includes(flag)}
+          onclick={() => filters.toggleFlag(flag)}
+        >
+          {label} <span class="count">{flagCount(flag)}</span>
+        </button>
+        {#if flag === "pick"}
+          <button
+            class:on={filters.autoPicked}
+            aria-pressed={filters.autoPicked}
+            onclick={() => (filters.autoPicked = !filters.autoPicked)}
+            title="Photos the app suggests keeping: the best of each series, or a photo in none, good enough and with nobody's eyes closed. Your own pick or reject replaces the suggestion."
+            data-testid="filter-auto-picked"
+          >
+            Auto-picked <span class="count">{facets.auto_picked}</span>
+          </button>
+        {/if}
+      {/each}
+    </div>
+    {#if facets.auto_picked > 0 && onacceptauto}
+      <button
+        class="accept"
+        onclick={onacceptauto}
+        title="Make every auto-picked photo a pick (Undo reverses it)"
+        data-testid="accept-auto-picks"
+        >Pick all {facets.auto_picked} auto-picked</button
+      >
+    {/if}
+  </section>
+
+  <section>
+    <h3>Rating</h3>
+    <div class="toggles" role="radiogroup" aria-label="Minimum rating">
+      {#each [0, 1, 2, 3, 4, 5] as stars (stars)}
+        <button
+          role="radio"
+          aria-checked={filters.minRating === stars}
+          class:on={filters.minRating === stars}
+          onclick={() => (filters.minRating = stars)}
+          title={stars === 0
+            ? "Any rating"
+            : `${stars} stars or more (${atLeast(stars)})`}
+        >
+          {stars === 0 ? "Any" : `${stars}★+`}
+        </button>
+      {/each}
+    </div>
+  </section>
+
+  {#if facets.cameras.length > 0}
+    <section data-testid="filter-cameras">
+      <h3>Camera</h3>
+      <div class="toggles" role="radiogroup" aria-label="Camera">
+        <button
+          role="radio"
+          aria-checked={filters.camera === null}
+          class:on={filters.camera === null}
+          onclick={() => setCamera("")}>Any</button
+        >
+        {#each shownCameras as c (keyOf(c.value.key))}
+          {@const on = cameraValue === keyOf(c.value.key)}
+          <button
+            role="radio"
+            aria-checked={on}
+            class:on
+            onclick={() => setCamera(on ? "" : keyOf(c.value.key))}
+            data-testid="filter-camera"
+          >
+            {c.value.label} <span class="count">{c.count}</span>
+          </button>
+        {/each}
+      </div>
+      {#if facets.cameras.length > CAMERAS_SHOWN}
+        <button
+          class="more"
+          onclick={() => (allCameras = !allCameras)}
+          aria-expanded={allCameras}
+          >{allCameras
+            ? "Fewer cameras"
+            : `All ${facets.cameras.length} cameras`}</button
+        >
+      {/if}
+    </section>
+  {/if}
+
+  {#if facets.lenses.length > 0}
+    <section>
+      <h3>Lens</h3>
+      <select
+        value={filters.lens ?? ""}
+        onchange={(e) => (filters.lens = e.currentTarget.value || null)}
+        aria-label="Lens"
+        data-testid="filter-lens"
+      >
+        <option value="">Any lens</option>
+        {#each facets.lenses as l (l.value)}
+          <option value={l.value}>{l.value} ({l.count})</option>
+        {/each}
+      </select>
+    </section>
+  {/if}
+
+  <section data-testid="filter-quality">
+    <h3>Quality</h3>
+    {#each SCORES as [score, label] (score)}
+      <div class="score">
+        <span>{label}</span>
+        <div class="toggles" role="radiogroup" aria-label={`Minimum ${label}`}>
+          {#each STEPS as min (min)}
+            <button
+              role="radio"
+              aria-checked={filters.minScores[score] === min}
+              class:on={filters.minScores[score] === min}
+              onclick={() =>
+                (filters.minScores = { ...filters.minScores, [score]: min })}
+              data-testid={`min-${score}-${min * 100}`}
+              >{min === 0 ? "Any" : `${min * 100}%`}</button
+            >
+          {/each}
+        </div>
+      </div>
+    {/each}
+    <label class="check"
+      ><input
+        type="checkbox"
+        bind:checked={filters.bestOnly}
+        data-testid="filter-best-only"
+      /> Best of each series only</label
+    >
+    <label class="check"
+      ><input
+        type="checkbox"
+        bind:checked={filters.hideClosedEyes}
+        data-testid="filter-hide-closed-eyes"
+      /> Hide closed eyes</label
+    >
+    <div class="score">
+      <span>People</span>
+      <div class="toggles" role="radiogroup" aria-label="People">
+        {#each [null, true, false] as people (String(people))}
+          <button
+            role="radio"
+            aria-checked={filters.people === people}
+            class:on={filters.people === people}
+            onclick={() => (filters.people = people)}
+            data-testid={`filter-people-${people}`}
+            >{people === null ? "Any" : people ? "With" : "Without"}</button
+          >
+        {/each}
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h3>Date</h3>
+    <label
+      >From <input
+        type="date"
+        bind:value={filters.from}
+        min={facets.first_day}
+        max={facets.last_day}
+        data-testid="filter-from"
+      /></label
+    >
+    <label
+      >To <input
+        type="date"
+        bind:value={filters.to}
+        min={facets.first_day}
+        max={facets.last_day}
+        data-testid="filter-to"
+      /></label
+    >
+  </section>
+
+  {#if facets.places.length > 0}
+    <section>
+      <h3>Place</h3>
+      <select
+        value={placeValue}
+        onchange={(e) => setPlace(e.currentTarget.value)}
+        aria-label="Place"
+        data-testid="filter-place"
+      >
+        <option value="">Anywhere</option>
+        {#each countries as [code, { country, count }] (code)}
+          <optgroup label={country}>
+            <option value={`${code}\u0000`}>All of {country} ({count})</option>
+            {#each facets.places.filter((p) => p.value.country_code === code) as p (p.value.city)}
+              <option value={`${code}\u0000${p.value.city}`}
+                >{p.value.city} ({p.count})</option
+              >
+            {/each}
+          </optgroup>
+        {/each}
+      </select>
+    </section>
+  {/if}
+</div>
+
+<style>
+  .panel {
+    display: flex;
+    flex-direction: column;
+    gap: 1.1rem;
+    font-size: 0.88rem;
+  }
+
+  section {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+
+  h3 {
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+  }
+
+  .score {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    margin-bottom: 0.4rem;
+    font-size: 0.85rem;
+  }
+
+  .check {
+    display: flex;
+    justify-content: flex-start;
+    gap: 0.4rem;
+    align-items: center;
+    font-size: 0.85rem;
+  }
+
+  .toggles {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+  }
+
+  .toggles button {
+    padding: 0.2rem 0.55rem;
+    font-size: 0.82rem;
+    border-radius: 999px;
+  }
+
+  .toggles button.on {
+    background: var(--fg);
+    color: var(--bg);
+    border-color: var(--fg);
+  }
+
+  .count {
+    opacity: 0.6;
+  }
+
+  .more {
+    align-self: flex-start;
+    padding: 0;
+    border: none;
+    background: none;
+    font-size: 0.8rem;
+    color: var(--muted);
+    text-decoration: underline;
+  }
+
+  .accept {
+    margin-top: 0.4rem;
+    padding: 0.2rem 0.55rem;
+    font-size: 0.82rem;
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  label {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+
+  select {
+    width: 100%;
+  }
+</style>

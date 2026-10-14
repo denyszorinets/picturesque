@@ -1,7 +1,7 @@
-FROM fedora:latest
+FROM fedora:44
 
 ARG TARGETARCH
-ENV GO_VERSION 1.27.1
+ENV RUST_VERSION=1.99.0
 
 RUN dnf update -y && \
     dnf install -y \
@@ -9,13 +9,58 @@ RUN dnf update -y && \
         git \
         curl \
         wget \
+        file \
         neovim \
-        gh
+        gh \
+        nodejs22 \
+        nodejs22-bin \
+        nodejs22-npm \
+        nodejs22-npm-bin
+
+# C toolchain, pkg-config and libclang (used by bindgen in *-sys crates)
+RUN dnf install -y \
+        @c-development \
+        pkgconf-pkg-config \
+        clang \
+        clang-devel
+
+# Tauri 2 system dependencies (https://v2.tauri.app/start/prerequisites/#linux)
+RUN dnf install -y \
+        webkit2gtk4.1-devel \
+        openssl-devel \
+        libappindicator-gtk3-devel \
+        librsvg2-devel \
+        libxdo-devel
+
+# Image decoding: libvips (+ HEIF module), libheif and LibRaw
+RUN dnf install -y \
+        vips-devel \
+        vips-heif \
+        vips-tools \
+        libheif-devel \
+        libheif-ffmpeg \
+        libheif-tools \
+        LibRaw-devel
+
+# HEVC decoder for HEIC (iPhone) photos. Fedora ships none for patent
+# reasons; RPM Fusion's libheif-freeworld adds the libde265 plugin (ADR-0005).
+RUN dnf install -y \
+        https://mirrors.rpmfusion.org/free/fedora/rpmfusion-free-release-44.noarch.rpm && \
+    dnf install -y libheif-freeworld && \
+    dnf clean all
+
+# Smoke tests of the real app (make smoke): a virtual display and WebKit's
+# WebDriver (Fedora ships it with webkitgtk6.0; same WebKit as 4.1).
+RUN dnf install -y xorg-x11-server-Xvfb webkitgtk6.0 && dnf clean all
 
 RUN curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh | bash
 RUN chsh -s $(which zsh)
 
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y \
+        --default-toolchain ${RUST_VERSION} \
+        --component clippy,rustfmt,rust-analyzer
+ENV PATH="/root/.cargo/bin:${PATH}"
+RUN cargo install tauri-driver --version 2.1.0 --locked
 
 RUN curl -fsSL https://bun.sh/install | bash
 ENV PATH="/root/.bun/bin:${PATH}"

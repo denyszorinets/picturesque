@@ -1,0 +1,48 @@
+[package]
+name = "picturesque-infra"
+description = "Picturesque infrastructure adapters"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+picturesque-app.workspace = true
+picturesque-core.workspace = true
+rusqlite.workspace = true
+chrono.workspace = true
+serde_json.workspace = true
+tempfile.workspace = true
+kamadak-exif.workspace = true
+rawler.workspace = true
+imagesize.workspace = true
+flate2.workspace = true
+blake3.workspace = true
+quick-xml.workspace = true
+ts-rs.workspace = true
+ort.workspace = true
+ureq.workspace = true
+sha2.workspace = true
+fs4.workspace = true
+notify.workspace = true
+
+# Execution providers available as prebuilt ONNX Runtime binaries per target
+# (ADR-0006). Intel macOS has no prebuilt binaries.
+[target.'cfg(all(target_os = "linux", target_arch = "x86_64"))'.dependencies]
+ort = { workspace = true, features = ["webgpu"] }
+
+[target.'cfg(windows)'.dependencies]
+ort = { workspace = true, features = ["directml"] }
+
+[target.'cfg(all(target_os = "macos", target_arch = "aarch64"))'.dependencies]
+ort = { workspace = true, features = ["coreml", "webgpu"] }
+
+[dev-dependencies]
+image.workspace = true
+rusqlite.workspace = true
+tempfile.workspace = true
+
+[lints]
+workspace = true

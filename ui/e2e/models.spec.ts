@@ -1,0 +1,67 @@
+import type { Server } from "node:http";
+import { expect, test } from "@playwright/test";
+import { call, serveModels } from "./helpers";
+
+let server: Server;
+
+test.beforeAll(async () => {
+  server = await serveModels();
+});
+
+test.afterAll(() => {
+  server.close();
+});
+
+test("downloads, verifies and removes models", async ({ page, request }) => {
+  await page.goto("/");
+  await page
+    .getByRole("navigation")
+    .getByRole("button", { name: "Settings" })
+    .click();
+  const list = page.getByTestId("model-list");
+  const good = list.locator('[data-model-id="e2e-affine"]');
+  const corrupt = list.locator('[data-model-id="e2e-corrupt"]');
+  await expect(good).toContainText("Test model");
+  await expect(good.getByRole("link", { name: "MIT" })).toHaveAttribute(
+    "href",
+    "https://opensource.org/license/mit",
+  );
+
+  await good.getByRole("button", { name: "Download" }).click();
+  await expect(good.getByTestId("model-state")).toHaveAttribute(
+    "data-state",
+    "installed",
+  );
+  await expect(good).toContainText("Downloaded");
+
+  // A download that does not match its checksum is rejected.
+  await corrupt.getByRole("button", { name: "Download" }).click();
+  await expect(corrupt.getByTestId("model-error")).toContainText("corrupt");
+  await expect(corrupt.getByRole("button", { name: "Retry" })).toBeVisible();
+
+  // Installed models stay installed without the server (offline).
+  server.close();
+  await page.reload();
+  await page
+    .getByRole("navigation")
+    .getByRole("button", { name: "Settings" })
+    .click();
+  await expect(good.getByTestId("model-state")).toHaveAttribute(
+    "data-state",
+    "installed",
+  );
+
+  await good.getByRole("button", { name: "Remove" }).click();
+  await expect(good.getByTestId("model-state")).toHaveAttribute(
+    "data-state",
+    "not_installed",
+  );
+  const models = await call<{ id: string; state: string }[]>(
+    request,
+    "list_models",
+    null,
+  );
+  const state = (id: string) => models.find((m) => m.id === id)?.state;
+  expect(state("e2e-affine")).toBe("not_installed");
+  expect(state("e2e-corrupt")).toBe("failed");
+});

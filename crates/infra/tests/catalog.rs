@@ -1,0 +1,444 @@
+use std::path::PathBuf;
+
+use chrono::{FixedOffset, NaiveDate};
+use picturesque_app::ports::catalog::{AnalyzerId, CatalogError, PhotoCatalog};
+use picturesque_core::hash::ContentHash;
+use picturesque_core::media::MediaFormat;
+use picturesque_core::metadata::{
+    Camera, CaptureMetadata, CaptureTime, Exposure, ExposureTime, GeoPoint, Orientation, Place,
+};
+use picturesque_core::photo::{Asset, NewPhoto, PhotoAssets, PhotoId};
+use picturesque_infra::catalog::{SCHEMA_VERSION, SqliteCatalog};
+use serde_json::json;
+
+fn hash(n: u8) -> ContentHash {
+    ContentHash::from_bytes([n; 32])
+}
+
+fn asset(path: &str, n: u8) -> Asset {
+    Asset {
+        format: MediaFormat::from_file_name(path).unwrap(),
+        path: path.split('/').collect(),
+        size: 1000 + u64::from(n),
+        hash: hash(n),
+    }
+}
+
+fn full_metadata() -> CaptureMetadata {
+    CaptureMetadata {
+        captured_at: Some(CaptureTime::new(
+            NaiveDate::from_ymd_opt(2026, 10, 12)
+                .unwrap()
+                .and_hms_milli_opt(14, 30, 5, 250)
+                .unwrap(),
+            FixedOffset::east_opt(3600),
+        )),
+        camera: Some(Camera::new("Canon", "Canon EOS R5")),
+        lens: Some("RF24-70mm F2.8 L IS USM".into()),
+        exposure: Exposure {
+            iso: Some(400),
+            f_number: Some(2.8),
+            exposure_time: Some(ExposureTime {
+                numerator: 1,
+                denominator: 250,
+            }),
+            focal_length_mm: Some(35.0),
+        },
+        gps: GeoPoint::new(38.7223, -9.1393),
+        place: Some(Place {
+            city: "Lisbon".into(),
+            region: Some("Lisbon".into()),
+            country: "Portugal".into(),
+            country_code: "PT".into(),
+        }),
+        orientation: Orientation::Rotate90,
+        dimensions: Some((8192, 5464)),
+    }
+}
+
+fn photo(metadata: CaptureMetadata, assets: Vec<Asset>) -> NewPhoto {
+    NewPhoto {
+        metadata,
+        assets: PhotoAssets::new(assets).unwrap(),
+    }
+}
+
+#[test]
+fn new_catalog_is_migrated_to_the_latest_schema() {
+    let catalog = SqliteCatalog::open_in_memory().unwrap();
+
+    assert_eq!(catalog.schema_version().unwrap(), SCHEMA_VERSION);
+    assert_eq!(catalog.photo_count().unwrap(), 0);
+}
+
+#[test]
+fn photo_round_trips_with_full_metadata_and_assets() {
+    let catalog = SqliteCatalog::open_in_memory().unwrap();
+    let new = photo(
+        full_metadata(),
+        vec![
+            asset("2026/2026-10-12 Lisbon/IMG_1.CR3", 1),
+            asset("2026/2026-10-12 Lisbon/IMG_1.JPG", 2),
+            asset("2026/2026-10-12 Lisbon/IMG_1.CR3.xmp", 3),
+        ],
+    );
+
+    let id = catalog.insert_photo(&new).unwrap();
+    let stored = catalog.photo(id).unwrap().expect("photo exists");
+
+    assert_eq!(stored.id, id);
+    assert_eq!(stored.metadata, new.metadata);
+    assert_eq!(stored.assets, new.assets);
+    assert_eq!(
+        stored.assets.raw().unwrap().path,
+        PathBuf::from_iter(["2026", "2026-10-12 Lisbon", "IMG_1.CR3"])
+    );
+}
+
+#[test]
+fn photo_with_empty_metadata_round_trips() {
+    let catalog = SqliteCatalog::open_in_memory().unwrap();
+    let new = photo(CaptureMetadata::default(), vec![asset("unsorted/a.png", 9)]);
+
+    let id = catalog.insert_photo(&new).unwrap();
+
+    assert_eq!(
+        catalog.photo(id).unwrap().unwrap().metadata,
+        CaptureMetadata::default()
+    );
+}
+
+#[test]
+fn missing_photo_is_none() {
+    let catalog = SqliteCatalog::open_in_memory().unwrap();
+
+    assert_eq!(catalog.photo(PhotoId(42)).unwrap(), None);
+}
+
+#[test]
+fn finds_photos_by_media_hash_but_not_by_sidecar_hash() {
+    let catalog = SqliteCatalog::open_in_memory().unwrap();
+    let id = catalog
+        .insert_photo(&photo(
+            CaptureMetadata::default(),
+            vec![asset("a.NEF", 1), asset("a.JPG", 2), asset("a.xmp", 3)],
+        ))
+        .unwrap();
+
+    assert_eq!(catalog.photo_with_media_hash(&hash(1)).unwrap(), Some(id));
+    assert_eq!(catalog.photo_with_media_hash(&hash(2)).unwrap(), Some(id));
+    assert_eq!(catalog.photo_with_media_hash(&hash(3)).unwrap(), None);
+    assert_eq!(catalog.photo_with_media_hash(&hash(4)).unwrap(), None);
+}
+
+#[test]
+fn duplicate_media_content_is_rejected_and_nothing_is_stored() {
+    let catalog = SqliteCatalog::open_in_memory().unwrap();
+    catalog
+        .insert_photo(&photo(CaptureMetadata::default(), vec![asset("a.JPG", 1)]))
+        .unwrap();
+
+    let err = catalog
+        .insert_photo(&photo(
+            CaptureMetadata::default(),
+            vec![asset("b.CR3", 2), asset("copy-of-a.JPG", 1)],
+        ))
+        .unwrap_err();
+
+    assert!(matches!(err, CatalogError::Duplicate(_)), "{err:?}");
+    assert_eq!(catalog.photo_count().unwrap(), 1);
+    assert_eq!(catalog.photo_with_media_hash(&hash(2)).unwrap(), None);
+}
+
+#[test]
+fn identical_sidecars_may_belong_to_different_photos() {
+    let catalog = SqliteCatalog::open_in_memory().unwrap();
+    catalog
+        .insert_photo(&photo(
+            CaptureMetadata::default(),
+            vec![asset("a.JPG", 1), asset("a.xmp", 9)],
+        ))
+        .unwrap();
+
+    catalog
+        .insert_photo(&photo(
+            CaptureMetadata::default(),
+            vec![asset("b.JPG", 2), asset("b.xmp", 9)],
+        ))
+        .unwrap();
+
+    assert_eq!(catalog.photo_count().unwrap(), 2);
+}
+
+#[test]
+fn lists_all_photos_oldest_first_with_undated_last() {
+    let catalog = SqliteCatalog::open_in_memory().unwrap();
+    let mut later = full_metadata();
+    later.captured_at = Some(CaptureTime::new(
+        NaiveDate::from_ymd_opt(2027, 1, 1)
+            .unwrap()
+            .and_hms_opt(0, 0, 0)
+            .unwrap(),
+        None,
+    ));
+    let undated = catalog
+        .insert_photo(&photo(CaptureMetadata::default(), vec![asset("u.jpg", 1)]))
+        .unwrap();
+    let late = catalog
+        .insert_photo(&photo(later, vec![asset("l.jpg", 2)]))
+        .unwrap();
+    let early = catalog
+        .insert_photo(&photo(
+            full_metadata(),
+            vec![asset("e.CR3", 3), asset("e.JPG", 4)],
+        ))
+        .unwrap();
+
+    let all = catalog.all_photos().unwrap();
+
+    assert_eq!(
+        all.iter().map(|p| p.id).collect::<Vec<_>>(),
+        [early, late, undated]
+    );
+    assert_eq!(all[0].assets.iter().count(), 2);
+    assert_eq!(all[0], catalog.photo(early).unwrap().unwrap());
+}
+
+#[test]
+fn records_dimensions() {
+    let catalog = SqliteCatalog::open_in_memory().unwrap();
+    let id = catalog
+        .insert_photo(&photo(CaptureMetadata::default(), vec![asset("a.heic", 1)]))
+        .unwrap();
+
+    catalog.set_dimensions(id, 4032, 3024).unwrap();
+
+    assert_eq!(
+        catalog.photo(id).unwrap().unwrap().metadata.dimensions,
+        Some((4032, 3024))
+    );
+}
+
+#[test]
+fn file_catalog_persists_and_reopens_without_remigrating() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("catalog.sqlite");
+    let id = {
+        let catalog = SqliteCatalog::open(&path).unwrap();
+        catalog
+            .insert_photo(&photo(full_metadata(), vec![asset("a.CR3", 1)]))
+            .unwrap()
+    };
+
+    let reopened = SqliteCatalog::open(&path).unwrap();
+
+    assert_eq!(reopened.schema_version().unwrap(), SCHEMA_VERSION);
+    assert_eq!(
+        reopened.photo(id).unwrap().unwrap().metadata,
+        full_metadata()
+    );
+}
+
+#[test]
+fn refuses_a_catalog_from_a_newer_version() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("catalog.sqlite");
+    {
+        let conn = rusqlite::Connection::open(&path).unwrap();
+        conn.pragma_update(None, "user_version", SCHEMA_VERSION + 1)
+            .unwrap();
+    }
+
+    let err = SqliteCatalog::open(&path).unwrap_err();
+
+    assert!(err.to_string().contains("newer"), "{err}");
+}
+
+mod settings {
+    use std::path::PathBuf;
+
+    use picturesque_app::ports::settings::SettingsStore;
+    use picturesque_app::settings::Settings;
+    use picturesque_infra::catalog::SqliteCatalog;
+
+    #[test]
+    fn defaults_before_anything_is_saved() {
+        let catalog = SqliteCatalog::open_in_memory().unwrap();
+
+        assert_eq!(catalog.load_settings().unwrap(), Settings::default());
+    }
+
+    #[test]
+    fn saved_settings_survive_reopening() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("catalog.sqlite");
+        let settings = Settings {
+            library_root: Some(PathBuf::from("/photos/Clean")),
+            path_template: "{year}/{name}.{ext}".into(),
+            ..Settings::default()
+        };
+        SqliteCatalog::open(&path)
+            .unwrap()
+            .save_settings(&settings)
+            .unwrap();
+
+        let reopened = SqliteCatalog::open(&path).unwrap();
+
+        assert_eq!(reopened.load_settings().unwrap(), settings);
+    }
+
+    #[test]
+    fn saving_again_replaces_the_settings() {
+        let catalog = SqliteCatalog::open_in_memory().unwrap();
+        catalog.save_settings(&Settings::default()).unwrap();
+        let changed = Settings {
+            path_template: "{name}.{ext}".into(),
+            ..Settings::default()
+        };
+
+        catalog.save_settings(&changed).unwrap();
+
+        assert_eq!(catalog.load_settings().unwrap(), changed);
+    }
+}
+
+const SHARPNESS: AnalyzerId = AnalyzerId {
+    name: "sharpness",
+    version: 1,
+};
+const HASH: AnalyzerId = AnalyzerId {
+    name: "phash",
+    version: 2,
+};
+
+#[test]
+fn tracks_pending_analysis_per_analyzer_and_version() {
+    let catalog = SqliteCatalog::open_in_memory().unwrap();
+    let undated = catalog
+        .insert_photo(&photo(CaptureMetadata::default(), vec![asset("u.jpg", 1)]))
+        .unwrap();
+    let dated = catalog
+        .insert_photo(&photo(full_metadata(), vec![asset("d.jpg", 2)]))
+        .unwrap();
+    let both = [SHARPNESS, HASH];
+
+    assert_eq!(
+        catalog.pending_analysis(&both, 10).unwrap(),
+        [dated, undated]
+    );
+    assert_eq!(catalog.pending_analysis(&both, 1).unwrap(), [dated]);
+    assert_eq!(catalog.analysis_progress(&both).unwrap(), (2, 2));
+
+    catalog
+        .store_analysis(dated, SHARPNESS, &json!({ "score": 0.5 }))
+        .unwrap();
+    assert_eq!(catalog.analyzed(dated, &both).unwrap(), [SHARPNESS]);
+    assert_eq!(
+        catalog.pending_analysis(&both, 10).unwrap(),
+        [dated, undated]
+    );
+    assert_eq!(
+        catalog.pending_analysis(&[SHARPNESS], 10).unwrap(),
+        [undated]
+    );
+
+    catalog
+        .store_analysis(dated, HASH, &json!({ "hash": "ab" }))
+        .unwrap();
+    assert_eq!(catalog.pending_analysis(&both, 10).unwrap(), [undated]);
+    assert_eq!(catalog.analysis_progress(&both).unwrap(), (1, 2));
+
+    // A new analyzer version makes the old result stale.
+    let newer = AnalyzerId {
+        name: "sharpness",
+        version: 2,
+    };
+    assert_eq!(catalog.analyzed(dated, &[newer, HASH]).unwrap(), [HASH]);
+    assert_eq!(
+        catalog.pending_analysis(&[newer, HASH], 10).unwrap(),
+        [dated, undated]
+    );
+    assert!(catalog.pending_analysis(&[], 10).unwrap().is_empty());
+}
+
+#[test]
+fn stale_results_stay_in_use_but_count_as_pending() {
+    let catalog = SqliteCatalog::open_in_memory().unwrap();
+    let a = catalog
+        .insert_photo(&photo(full_metadata(), vec![asset("a.jpg", 1)]))
+        .unwrap();
+    let b = catalog
+        .insert_photo(&photo(CaptureMetadata::default(), vec![asset("b.jpg", 2)]))
+        .unwrap();
+    for id in [a, b] {
+        catalog
+            .store_analysis(id, SHARPNESS, &json!({ "score": 0.5 }))
+            .unwrap();
+    }
+    assert_eq!(catalog.analysis_progress(&[SHARPNESS]).unwrap(), (0, 2));
+
+    // Unknown photos are not counted.
+    assert_eq!(
+        catalog
+            .mark_analysis_stale(Some(&[a, PhotoId(999)]))
+            .unwrap(),
+        1
+    );
+    assert_eq!(catalog.pending_analysis(&[SHARPNESS], 10).unwrap(), [a]);
+    assert!(catalog.analyzed(a, &[SHARPNESS]).unwrap().is_empty());
+    // Scores keep using the earlier result.
+    assert_eq!(catalog.analysis_results(SHARPNESS).unwrap().len(), 2);
+    assert_eq!(catalog.analysis(a).unwrap().len(), 1);
+
+    catalog
+        .store_analysis(a, SHARPNESS, &json!({ "score": 0.7 }))
+        .unwrap();
+    assert!(
+        catalog
+            .pending_analysis(&[SHARPNESS], 10)
+            .unwrap()
+            .is_empty()
+    );
+
+    assert_eq!(catalog.mark_analysis_stale(None).unwrap(), 2);
+    assert_eq!(catalog.analysis_progress(&[SHARPNESS]).unwrap(), (2, 2));
+}
+
+#[test]
+fn stores_and_replaces_analysis_results() {
+    let catalog = SqliteCatalog::open_in_memory().unwrap();
+    let id = catalog
+        .insert_photo(&photo(full_metadata(), vec![asset("d.jpg", 2)]))
+        .unwrap();
+
+    catalog
+        .store_analysis(id, SHARPNESS, &json!({ "score": 0.5 }))
+        .unwrap();
+    catalog
+        .store_analysis(id, HASH, &json!({ "hash": "ab" }))
+        .unwrap();
+    catalog
+        .store_analysis(
+            id,
+            AnalyzerId {
+                name: "sharpness",
+                version: 3,
+            },
+            &json!({ "score": 0.9 }),
+        )
+        .unwrap();
+
+    assert_eq!(
+        catalog.analysis(id).unwrap(),
+        [
+            ("phash".to_owned(), 2, json!({ "hash": "ab" })),
+            ("sharpness".to_owned(), 3, json!({ "score": 0.9 })),
+        ]
+    );
+    assert!(
+        catalog
+            .store_analysis(PhotoId(999), HASH, &json!({}))
+            .is_err(),
+        "results need a photo"
+    );
+}

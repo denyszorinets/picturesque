@@ -1,21 +1,9 @@
-# Binaries for programs and plugins
-*.exe
-*.exe~
-*.dll
-*.so
-*.so.*
-*.dylib
-mcp-gateway
-/cmd/gateway/gateway
-/cmd/webui/webui
-webui-server
+# Rust build output
+/target/
 
-# Build artifacts
+# Node / front end
+node_modules/
 dist/
-build/
-
-# Test binaries
-*.test
 
 # IDE
 .vscode/
@@ -29,7 +17,6 @@ build/
 Thumbs.db
 
 # Local configuration
-config.local.toml
 .env
 .env.local
 
@@ -39,14 +26,26 @@ config.local.toml
 # SQLite databases
 *.db
 *.sqlite
+*.sqlite-wal
+*.sqlite-shm
 
-# Python (deploy/demo/mcp-servers/)
+# Python
 __pycache__/
 *.pyc
 
 # Playwright MCP scratch output (page snapshots, screenshots)
 .playwright-mcp/
 
-# Documentation site (docs/ is a uv project, ADR-0022)
+# Documentation site (docs/ is a uv project, ADR-0001)
 docs/_build/
 docs/.venv/
+
+# Playwright output
+ui/test-results/
+ui/playwright-report/
+
+# Spike corpora and build output
+spikes/*/corpus/
+spikes/*/sample/
+spikes/*/target/
+spikes/*/stderr.log
