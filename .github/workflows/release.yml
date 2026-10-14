@@ -120,6 +120,7 @@ jobs:
     name: dmg (macOS 15, experimental)
     needs: version
     runs-on: macos-15
+    timeout-minutes: 60
     # Not verified yet (#52): does not hold back a release.
     continue-on-error: true
     steps:
