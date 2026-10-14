@@ -72,7 +72,13 @@ fn paths(world: &TestWorld, id: PhotoId) -> Vec<String> {
     let photo = world.catalog.photo(id).unwrap().unwrap();
     let mut paths: Vec<String> = files(&photo)
         .iter()
-        .map(|p| p.display().to_string())
+        // `/`-separated on every platform.
+        .map(|p| {
+            p.iter()
+                .map(|c| c.to_string_lossy())
+                .collect::<Vec<_>>()
+                .join("/")
+        })
         .collect();
     paths.sort();
     paths

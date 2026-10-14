@@ -137,24 +137,17 @@ jobs:
           brew install vips libraw libheif
           echo "LIBRARY_PATH=$(brew --prefix)/lib" >> "$GITHUB_ENV"
 
-      # Windows has no libvips/LibRaw setup yet, so it checks only the
-      # crates without native image libraries.
+      - name: Install image libraries (Windows)
+        if: runner.os == 'Windows'
+        run: scripts/setup-windows-libvips.sh
+
       - name: Build
-        run: |
-          if [ "$RUNNER_OS" = "Windows" ]; then
-            cargo build -p picturesque-core -p picturesque-app --all-targets --locked
-          else
-            cargo build --workspace --all-targets --locked
-          fi
+        run: cargo build --workspace --all-targets --locked
 
       - name: Test
         run: |
-          if [ "$RUNNER_OS" = "Windows" ]; then
-            cargo test -p picturesque-core -p picturesque-app --all-targets --locked
-          else
-            cargo test --workspace --all-targets --locked
-            cargo test --workspace --doc --locked
-          fi
+          cargo test --workspace --all-targets --locked
+          cargo test --workspace --doc --locked
 
   docs:
     name: Documentation

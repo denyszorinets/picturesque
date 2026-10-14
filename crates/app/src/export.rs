@@ -202,7 +202,7 @@ impl ExportService {
     }
 
     fn validate(&self, args: &ExportArgs) -> Result<Job, ExportError> {
-        if !args.destination.is_absolute() {
+        if !crate::ports::fs::is_absolute(&args.destination) {
             return Err(ExportError::Invalid(format!(
                 "The export folder must be an absolute path, got `{}`.",
                 args.destination.display()

@@ -375,7 +375,7 @@ impl ImportPipeline {
 
     /// Adds a folder to import from and scans it.
     pub fn add_source(&self, path: &Path, watch: bool) -> Result<ImportSource, PipelineError> {
-        if !path.is_absolute() {
+        if !crate::ports::fs::is_absolute(path) {
             return Err(PipelineError::Invalid(format!(
                 "The folder must be an absolute path, got `{}`.",
                 path.display()
