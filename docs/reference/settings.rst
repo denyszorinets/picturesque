@@ -94,6 +94,21 @@ Where local AI models run (:doc:`/features/ai`).
 :Values: ``auto``, ``cpu``, ``directml``, ``coreml`` or ``webgpu``. A
    provider the build lacks, or that fails to start, falls back to the CPU.
 
+.. _reference-settings-auto-pick:
+
+``auto_pick``
+-------------
+
+Which photos the app marks as keepers
+(:ref:`features-library-auto-pick`).
+
+:Type: object with ``enabled`` and ``min_quality``
+:Default: ``{ "enabled": true, "min_quality": 0.5 }``
+:Values: ``min_quality``: the combined quality score a photo needs,
+   0–1 (shown as a percentage in Settings).
+
+Changing it updates the suggestions immediately.
+
 .. _reference-settings-import:
 
 ``import``
@@ -126,7 +141,8 @@ API
         "ranking": { "sharpness": 0.6, "exposure": 0.3, "noise": 0.1,
                      "aesthetic": 0.4 },
         "ai": { "provider": "auto" },
-        "import": { "rescan_minutes": 5 } }
+        "import": { "rescan_minutes": 5 },
+        "auto_pick": { "enabled": true, "min_quality": 0.5 } }
 
 ``update_settings``
    Arguments: any subset of the settings. Unknown fields are rejected.

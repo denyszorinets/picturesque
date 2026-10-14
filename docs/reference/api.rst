@@ -54,7 +54,9 @@ Commands
    not analyzed yet never match. ``min_aesthetic`` (0–1) does the same for
    the aesthetic score, ``hide_closed_eyes: true`` hides photos where
    someone important has closed eyes, and ``people`` keeps only photos with
-   (``true``) or without (``false``) faces. ``best_only: true`` hides photos that are
+   (``true``) or without (``false``) faces. ``auto_picked: true`` keeps
+   auto-picked photos (:ref:`features-library-auto-pick`); with ``flags``,
+   photos matching either. ``best_only: true`` hides photos that are
    in a series but not its best photo. ``photo_ids`` (at most 1000) limits
    the result to those photos.
    ``collapse_series: true`` lists one photo per series: the user's chosen
@@ -71,7 +73,9 @@ Commands
    in no series) and ``quality`` (the combined score,
    :ref:`features-series-score`; ``null`` until analyzed), ``aesthetic``
    (0–1 or ``null``), ``eyes_closed`` (``true``/``false``, ``null`` when
-   undecided) and ``faces`` (count).
+   undecided), ``faces`` (count) and ``keeper`` (suggested by auto-pick;
+   the photo shows as auto-picked while its ``flag`` is ``unflagged``).
+   Facets include ``auto_picked``, the number of auto-picked photos.
 
 ``get_photo``
    ``{ "photo_id": 7 }``. A ``PhotoDetail``: capture time and UTC offset,

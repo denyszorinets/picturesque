@@ -64,4 +64,9 @@ people?: boolean,
 /**
  * Only these photos (at most 1000).
  */
-photo_ids?: number[], };
+photo_ids?: number[], 
+/**
+ * `true`: auto-picked photos (suggested keepers without a flag of
+ * their own). Together with `flags`, photos matching either.
+ */
+auto_picked?: boolean, };

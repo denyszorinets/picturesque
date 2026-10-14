@@ -13,6 +13,10 @@ export type PhotoFacets = { total: number, first_day: string | null, last_day: s
  */
 days: Array<Counted<string>>, cameras: Array<Counted<CameraFacet>>, lenses: Array<Counted<string>>, places: Array<Counted<PlaceFacet>>, flags: Array<FlagCount>, 
 /**
+ * Auto-picked photos (all of them also count as unflagged).
+ */
+auto_picked: number, 
+/**
  * Photos per star rating, index 0–5.
  */
 ratings: Array<number>, };

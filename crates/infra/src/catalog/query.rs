@@ -91,15 +91,21 @@ fn photo_filters(query: &PhotoQuery, p: &str, d: &str) -> (Vec<String>, Vec<Valu
     if let Some(lens) = &query.lens {
         add("p.lens = ?", vec![Value::Text(lens.clone())]);
     }
-    if let Some(flags) = query.flags.as_ref().filter(|f| !f.is_empty()) {
-        let marks = vec!["?"; flags.len()].join(", ");
-        add(
-            &format!("coalesce(d.flag, 'unflagged') IN ({marks})"),
-            flags
-                .iter()
-                .map(|f| Value::Text(f.as_str().to_owned()))
-                .collect(),
-        );
+    let flags = query.flags.as_ref().filter(|f| !f.is_empty());
+    let auto_picked = query.auto_picked == Some(true);
+    if flags.is_some() || auto_picked {
+        // Flags and auto-picked: photos matching any of them.
+        let mut any = Vec::new();
+        let mut vals = Vec::new();
+        if let Some(flags) = flags {
+            let marks = vec!["?"; flags.len()].join(", ");
+            any.push(format!("coalesce(d.flag, 'unflagged') IN ({marks})"));
+            vals.extend(flags.iter().map(|f| Value::Text(f.as_str().to_owned())));
+        }
+        if auto_picked {
+            any.push(AUTO_PICKED_SQL.to_owned());
+        }
+        add(&format!("({})", any.join(" OR ")), vals);
     }
     for (field, min) in [
         ("sharpness", query.min_sharpness),
@@ -168,6 +174,11 @@ fn score_sql(field: &str) -> String {
         TechnicalAnalyzer::ID.name
     )
 }
+
+/// Whether photo `p` is auto-picked: a suggested keeper the user has not
+/// flagged.
+const AUTO_PICKED_SQL: &str = "(coalesce(d.flag, 'unflagged') = 'unflagged'
+     AND EXISTS (SELECT 1 FROM photo_score ap WHERE ap.photo_id = p.id AND ap.keeper = 1))";
 
 /// SQL for a photo's combined quality score (`photo_score`); NULL until
 /// computed.
@@ -338,7 +349,8 @@ fn query_page(conn: &Connection, query: &PhotoQuery) -> Result<PhotoPage, Catalo
                 sm.series_id, sm.best IS NOT NULL,
                 (SELECT count(*) FROM series_member x WHERE x.series_id = sm.series_id),
                 {QUALITY_SQL} AS quality,
-                pss.aesthetic, pss.eyes_closed, coalesce(pss.faces, 0)
+                pss.aesthetic, pss.eyes_closed, coalesce(pss.faces, 0),
+                coalesce(pss.keeper, 0)
          {FROM} LEFT JOIN series_member sm ON sm.photo_id = p.id
                 LEFT JOIN photo_score pss ON pss.photo_id = p.id
          {} ORDER BY {} LIMIT ?",
@@ -384,6 +396,7 @@ fn query_page(conn: &Connection, query: &PhotoQuery) -> Result<PhotoPage, Catalo
                 aesthetic: row.get::<_, Option<f64>>(18)?.map(|a| a as f32),
                 eyes_closed: row.get(19)?,
                 faces: row.get(20)?,
+                keeper: row.get(21)?,
             };
             // The exact stored score, for the cursor.
             Ok((summary, quality))
@@ -510,6 +523,13 @@ fn facets(conn: &Connection, filter: Option<&PhotoQuery>) -> Result<PhotoFacets,
             });
         }
     }
+    let auto_picked: i64 = conn
+        .query_row(
+            &format!("SELECT count(*) {FROM} WHERE {AUTO_PICKED_SQL}"),
+            [],
+            |r| r.get(0),
+        )
+        .map_err(storage)?;
     let mut ratings = vec![0usize; 6];
     let mut stmt = conn
         .prepare(&format!(
@@ -534,6 +554,7 @@ fn facets(conn: &Connection, filter: Option<&PhotoQuery>) -> Result<PhotoFacets,
         lenses,
         places,
         flags,
+        auto_picked: auto_picked as usize,
         ratings,
     })
 }

@@ -32,6 +32,7 @@ function photo(
     aesthetic: null,
     eyes_closed: null,
     faces: 0,
+    keeper: false,
   };
 }
 

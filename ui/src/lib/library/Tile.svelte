@@ -81,6 +81,11 @@
     <span class="badges">
       {#if photo.flag === "pick"}<span class="badge pick" title="Pick">✓</span
         >{/if}
+      {#if photo.keeper && photo.flag === "unflagged"}<span
+          class="badge auto"
+          title="Auto-picked: the app suggests keeping this photo. P makes it a pick, X rejects it."
+          data-testid="tile-auto-picked">✓ Auto</span
+        >{/if}
       {#if photo.flag === "reject"}<span class="badge reject" title="Rejected"
           >✕</span
         >{/if}
@@ -216,6 +221,12 @@
 
   .badge.pick {
     background: var(--accent);
+  }
+
+  .badge.auto {
+    background: rgb(0 0 0 / 0.55);
+    color: #8ee3ad;
+    box-shadow: inset 0 0 0 1.5px #8ee3ad;
   }
 
   .badge.reject {

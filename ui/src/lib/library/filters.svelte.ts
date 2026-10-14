@@ -37,6 +37,7 @@ interface Saved {
   from: string;
   to: string;
   flags: Flag[];
+  autoPicked: boolean;
   minRating: number;
   camera: CameraKey | null;
   lens: string | null;
@@ -62,6 +63,8 @@ export class Filters {
   from = $state("");
   to = $state("");
   flags = $state<Flag[]>([]);
+  /** Auto-picked photos; with flags, photos matching either. */
+  autoPicked = $state(false);
   minRating = $state(0);
   camera = $state<CameraKey | null>(null);
   cameraLabel = $state("");
@@ -98,6 +101,7 @@ export class Filters {
         this.from = saved.from ?? "";
         this.to = saved.to ?? "";
         this.flags = saved.flags ?? [];
+        this.autoPicked = saved.autoPicked ?? false;
         this.minRating = saved.minRating ?? 0;
         this.camera = saved.camera ?? null;
         this.lens = saved.lens ?? null;
@@ -121,6 +125,7 @@ export class Filters {
     if (this.from) q.from = this.from;
     if (this.to) q.to = this.to;
     if (this.flags.length > 0) q.flags = [...this.flags];
+    if (this.autoPicked) q.auto_picked = true;
     if (this.minRating > 0) q.min_rating = this.minRating;
     if (this.camera) q.camera = { ...this.camera };
     if (this.lens) q.lens = this.lens;
@@ -167,6 +172,11 @@ export class Filters {
         clear: () => this.toggleFlag(flag),
       });
     }
+    if (this.autoPicked)
+      chips.push({
+        label: "Auto-picked",
+        clear: () => (this.autoPicked = false),
+      });
     if (this.minRating > 0)
       chips.push({
         label: `${"★".repeat(this.minRating)} or more`,
@@ -224,6 +234,7 @@ export class Filters {
     this.from = "";
     this.to = "";
     this.flags = [];
+    this.autoPicked = false;
     this.minRating = 0;
     this.camera = null;
     this.lens = null;
@@ -241,6 +252,7 @@ export class Filters {
       from: this.from,
       to: this.to,
       flags: this.flags,
+      autoPicked: this.autoPicked,
       minRating: this.minRating,
       camera: this.camera,
       lens: this.lens,

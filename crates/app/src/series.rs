@@ -17,7 +17,9 @@ use std::time::{Duration, Instant};
 use picturesque_core::clip::Embedding;
 use picturesque_core::photo::PhotoId;
 use picturesque_core::quality::TechnicalScores;
-use picturesque_core::ranking::{Candidate, FaceSignal, best, photo_quality, rank};
+use picturesque_core::ranking::{
+    Candidate, FaceSignal, Standing, best, is_keeper, photo_quality, rank,
+};
 use picturesque_core::series::{SeriesEdit, SeriesInput, detect_series};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -245,15 +247,37 @@ impl SeriesService {
                 })
             })
             .collect();
+        let mut standing: HashMap<PhotoId, Standing> = HashMap::new();
+        for s in &series {
+            for id in &s.members {
+                standing.insert(*id, Standing::Other);
+            }
+            standing.insert(
+                s.best,
+                Standing::Best {
+                    chosen: s.best_chosen,
+                },
+            );
+        }
+        let auto_pick = settings.auto_pick;
         let mut qualities: Vec<PhotoScore> = scores
             .keys()
             .filter_map(|id| {
+                let score = photo_quality(&candidate(*id))?;
+                let eyes_closed = faces.get(id).and_then(|f| f.eyes_closed);
                 Some(PhotoScore {
                     id: *id,
-                    score: photo_quality(&candidate(*id))?,
+                    score,
                     aesthetic: aesthetic.get(id).copied(),
-                    eyes_closed: faces.get(id).and_then(|f| f.eyes_closed),
+                    eyes_closed,
                     faces: face_counts.get(id).copied().unwrap_or(0),
+                    keeper: auto_pick.enabled
+                        && is_keeper(
+                            Some(score),
+                            eyes_closed,
+                            standing.get(id).copied().unwrap_or(Standing::Alone),
+                            auto_pick.min_quality as f32,
+                        ),
                 })
             })
             .collect();

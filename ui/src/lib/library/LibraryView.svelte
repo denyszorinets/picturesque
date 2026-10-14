@@ -84,7 +84,15 @@
   let layout = $state<Layout>();
   const culling = $derived(new Culling(api, store));
   // Flag and rating counts follow decisions.
-  $effect(() => culling.subscribe(() => void store.refreshFacets()));
+  // A decision changes the counts; under a filter on decisions (flags,
+  // auto-picked, rating) it also changes which photos match.
+  $effect(() =>
+    culling.subscribe(() => {
+      const byDecision =
+        filters.flags.length > 0 || filters.autoPicked || filters.minRating > 0;
+      void (byDecision ? store.refresh() : store.refreshFacets());
+    }),
+  );
 
   const FLAGS: Record<string, "pick" | "reject" | "unflagged"> = {
     p: "pick",
@@ -146,6 +154,27 @@
   function decide(change: () => Promise<unknown>, next: boolean) {
     void change();
     if (next) advance();
+  }
+
+  /** Turns every auto-picked photo into a pick, as one undoable step. */
+  async function acceptAutoPicks() {
+    const photos: api.PhotoSummary[] = [];
+    let cursor: string | null = null;
+    try {
+      do {
+        const page: api.PhotoPage = await api.queryPhotos({
+          auto_picked: true,
+          limit: 1000,
+          cursor: cursor ?? undefined,
+        });
+        photos.push(...page.photos);
+        cursor = page.next_cursor;
+      } while (cursor !== null);
+    } catch (e) {
+      culling.error = api.ApiError.from(e).message;
+      return;
+    }
+    await culling.flagPhotos(photos, "pick");
   }
 
   /** Handles culling keys; returns whether the key was used. */
@@ -535,7 +564,11 @@
     <div class="body">
       {#if showFilters}
         <aside class="filters">
-          <FilterPanel {filters} facets={store.facets} />
+          <FilterPanel
+            {filters}
+            facets={store.facets}
+            onacceptauto={() => void acceptAutoPicks()}
+          />
         </aside>
       {/if}
       <div class="grid">

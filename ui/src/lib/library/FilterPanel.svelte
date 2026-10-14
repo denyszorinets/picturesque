@@ -5,9 +5,11 @@
   interface Props {
     filters: Filters;
     facets: PhotoFacets;
+    /** Turns every auto-picked photo into a pick. */
+    onacceptauto?: () => void;
   }
 
-  let { filters, facets }: Props = $props();
+  let { filters, facets, onacceptauto }: Props = $props();
 
   const FLAGS = [
     { flag: "pick", label: "Picks" },
@@ -79,8 +81,28 @@
         >
           {label} <span class="count">{flagCount(flag)}</span>
         </button>
+        {#if flag === "pick"}
+          <button
+            class:on={filters.autoPicked}
+            aria-pressed={filters.autoPicked}
+            onclick={() => (filters.autoPicked = !filters.autoPicked)}
+            title="Photos the app suggests keeping: the best of each series, or a photo in none, good enough and with nobody's eyes closed. Your own pick or reject replaces the suggestion."
+            data-testid="filter-auto-picked"
+          >
+            Auto-picked <span class="count">{facets.auto_picked}</span>
+          </button>
+        {/if}
       {/each}
     </div>
+    {#if facets.auto_picked > 0 && onacceptauto}
+      <button
+        class="accept"
+        onclick={onacceptauto}
+        title="Make every auto-picked photo a pick (Undo reverses it)"
+        data-testid="accept-auto-picks"
+        >Pick all {facets.auto_picked} auto-picked</button
+      >
+    {/if}
   </section>
 
   <section>
@@ -293,6 +315,14 @@
 
   .count {
     opacity: 0.6;
+  }
+
+  .accept {
+    margin-top: 0.4rem;
+    padding: 0.2rem 0.55rem;
+    font-size: 0.82rem;
+    border-color: var(--accent);
+    color: var(--accent);
   }
 
   label {

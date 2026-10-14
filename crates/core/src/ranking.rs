@@ -180,6 +180,40 @@ pub fn best(ranking: &[Ranked], choices: &[PhotoId]) -> Option<(PhotoId, bool)> 
         .or_else(|| ranking.first().map(|r| (r.id, false)))
 }
 
+/// Where a photo stands in its series, for auto-pick.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Standing {
+    /// Not in any series.
+    Alone,
+    /// The best photo of its series; `chosen` when the user chose it.
+    Best { chosen: bool },
+    /// Another photo of a series.
+    Other,
+}
+
+/// Whether the app suggests keeping a photo (*auto-pick*): the best of its
+/// series, or a photo in none, with a combined quality (see
+/// [`photo_quality`]) of at least `min_quality` and nobody important with
+/// closed eyes. A best photo the user chose is always a keeper. Photos not
+/// analyzed yet (`quality` is `None`) never are.
+pub fn is_keeper(
+    quality: Option<f32>,
+    eyes_closed: Option<bool>,
+    standing: Standing,
+    min_quality: f32,
+) -> bool {
+    let Some(quality) = quality else {
+        return false;
+    };
+    match standing {
+        Standing::Other => false,
+        Standing::Best { chosen: true } => true,
+        Standing::Alone | Standing::Best { chosen: false } => {
+            quality >= min_quality && eyes_closed != Some(true)
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -411,5 +445,25 @@ mod tests {
         assert_eq!(relative_sharpness(0.0, 100.0), 0.0);
         assert_eq!(relative_sharpness(1.0, 1_000_000.0), 0.0);
         assert_eq!(relative_sharpness(50.0, 100.0), 0.75);
+    }
+
+    #[test]
+    fn keepers_are_good_best_or_single_photos() {
+        let best = Standing::Best { chosen: false };
+        assert!(is_keeper(Some(0.6), None, Standing::Alone, 0.5));
+        assert!(is_keeper(Some(0.5), Some(false), best, 0.5));
+        // Not good enough, closed eyes, or not the best of its series.
+        assert!(!is_keeper(Some(0.49), None, Standing::Alone, 0.5));
+        assert!(!is_keeper(Some(0.9), Some(true), best, 0.5));
+        assert!(!is_keeper(Some(0.9), None, Standing::Other, 0.5));
+        // Not analyzed yet.
+        assert!(!is_keeper(None, None, Standing::Alone, 0.0));
+        // The user's choice of best wins over scores.
+        assert!(is_keeper(
+            Some(0.1),
+            Some(true),
+            Standing::Best { chosen: true },
+            0.5
+        ));
     }
 }

@@ -227,6 +227,13 @@
 
     {#if photo}
       <div class="toolbar cull" role="group" aria-label="Decision">
+        {#if photo.keeper && photo.flag === "unflagged"}
+          <span
+            class="auto"
+            title="The app suggests keeping this photo: P makes it a pick, X rejects it"
+            data-testid="loupe-auto-picked">Auto-picked</span
+          >
+        {/if}
         <button
           class="pick"
           aria-pressed={photo.flag === "pick"}
@@ -488,6 +495,15 @@
     background: var(--danger);
     border-color: var(--danger);
     color: #fff;
+  }
+
+  .cull .auto {
+    color: #8ee3ad;
+    border: 1.5px solid #8ee3ad;
+    border-radius: 6px;
+    padding: 0.15rem 0.45rem;
+    font-size: 0.8rem;
+    white-space: nowrap;
   }
 
   .cull .stars {

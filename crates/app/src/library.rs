@@ -91,6 +91,10 @@ pub struct PhotoQuery {
     /// Only these photos (at most 1000).
     #[ts(optional, type = "number[]")]
     pub photo_ids: Option<Vec<i64>>,
+    /// `true`: auto-picked photos (suggested keepers without a flag of
+    /// their own). Together with `flags`, photos matching either.
+    #[ts(optional)]
+    pub auto_picked: Option<bool>,
 }
 
 pub const DEFAULT_PAGE: u32 = 200;
@@ -178,6 +182,9 @@ pub struct PhotoSummary {
     pub eyes_closed: Option<bool>,
     /// Faces found (0 also before the face models ran).
     pub faces: u32,
+    /// Suggested as a keeper by auto-pick. It shows as *auto-picked* while
+    /// the photo is unflagged; the user's pick or reject wins.
+    pub keeper: bool,
 }
 
 /// A page of results.
@@ -238,6 +245,8 @@ pub struct PhotoFacets {
     pub lenses: Vec<Counted<String>>,
     pub places: Vec<Counted<PlaceFacet>>,
     pub flags: Vec<FlagCount>,
+    /// Auto-picked photos (all of them also count as unflagged).
+    pub auto_picked: usize,
     /// Photos per star rating, index 0–5.
     pub ratings: Vec<usize>,
 }

@@ -40,6 +40,29 @@ pub struct Settings {
     pub ai: AiSettings,
     /// Watched import folders.
     pub import: ImportSettings,
+    /// Which photos the app marks as keepers.
+    pub auto_pick: AutoPickSettings,
+}
+
+/// Auto-pick (`docs/features/library.rst`): the best photo of each series,
+/// or a photo in none, is suggested as a keeper when its combined quality
+/// is at least `min_quality` and nobody has closed eyes.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, TS)]
+#[serde(default)]
+#[ts(export)]
+pub struct AutoPickSettings {
+    pub enabled: bool,
+    /// 0–1.
+    pub min_quality: f64,
+}
+
+impl Default for AutoPickSettings {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            min_quality: 0.5,
+        }
+    }
 }
 
 /// Watched import folders (`docs/features/import.rst`).
@@ -156,6 +179,7 @@ impl Default for Settings {
             ranking: RankingSettings::default(),
             ai: AiSettings::default(),
             import: ImportSettings::default(),
+            auto_pick: AutoPickSettings::default(),
         }
     }
 }
@@ -179,6 +203,8 @@ pub struct SettingsUpdate {
     pub ai: Option<AiSettings>,
     #[ts(optional)]
     pub import: Option<ImportSettings>,
+    #[ts(optional)]
+    pub auto_pick: Option<AutoPickSettings>,
 }
 
 /// Why settings could not be read or changed.
@@ -307,6 +333,15 @@ impl SettingsService {
                 )));
             }
             settings.import = import;
+        }
+        if let Some(auto_pick) = update.auto_pick {
+            if !(0.0..=1.0).contains(&auto_pick.min_quality) {
+                return Err(SettingsError::Invalid(format!(
+                    "The auto-pick quality must be 0–100%, got {}%.",
+                    (auto_pick.min_quality * 100.0).round()
+                )));
+            }
+            settings.auto_pick = auto_pick;
         }
         self.store.save_settings(&settings)?;
         Ok(settings)
