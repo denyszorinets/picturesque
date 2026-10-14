@@ -222,6 +222,24 @@ to a day gets its results within seconds. Analysis continues where it left
 off after the app restarts. With the CLIP model downloaded, analysis also
 computes image embeddings (:ref:`features-ai-embeddings`).
 
+.. _features-library-reanalyze:
+
+Analyzing photos again
+~~~~~~~~~~~~~~~~~~~~~~
+
+Each photo is analyzed once. To analyze photos again, for example after
+an analysis failed or after downloading a new model:
+
+- select photos in the timeline and click **Re-analyze** above it, or
+- click **Re-analyze all photos** in **Settings → Analysis** (and confirm).
+
+The photos go back into the queue, the selected ones first, and the
+toolbar shows **Analyzing …** again. Until a photo's new results are
+ready, its earlier ones stay in use, so scores, series, auto-picks and
+quality filters keep working meanwhile; when the new results are stored,
+series and auto-picks are updated. Your decisions (picks, rejects,
+ratings, a best photo you chose) are never changed.
+
 .. _features-library-sidecars:
 
 XMP sidecars

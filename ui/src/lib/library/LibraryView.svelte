@@ -3,6 +3,7 @@
   import { AnalysisProgress } from "./analysis.svelte";
   import Compare from "./Compare.svelte";
   import ExportDialog from "./ExportDialog.svelte";
+  import Reanalyze from "../analysis/Reanalyze.svelte";
   import RejectsMove from "./RejectsMove.svelte";
   import { Culling } from "./culling.svelte";
   import FilterPanel from "./FilterPanel.svelte";
@@ -78,6 +79,13 @@
     if (!first) selection.clear();
     void apply(query, text);
   });
+
+  /** Ids of the selected photos that are loaded. */
+  const selectedIds = $derived(
+    [...selection.selected]
+      .map((i) => store.photos[i]?.id)
+      .filter((id): id is number => id !== undefined),
+  );
 
   /** Index of the photo open in the loupe. */
   let loupe = $state<number | null>(null);
@@ -521,6 +529,14 @@
         title="Copy picks, the photos in view or the selection to a folder"
         data-testid="open-export">Export…</button
       >
+      <Reanalyze
+        reanalyze={api.reanalyzePhotos}
+        photoIds={selectedIds}
+        small
+        label="Re-analyze"
+        disabled={selectedIds.length === 0}
+        title="Analyze the selected photos again (quality, series, faces and AI scores)"
+      />
       <RejectsMove
         rejected={store.facets.flags.find((f) => f.flag === "reject")?.count ??
           0}
@@ -599,9 +615,7 @@
           ? { photo_ids: store.photos.map((p) => p.id) }
           : filters.toQuery()}
         viewCount={store.total}
-        selected={[...selection.selected]
-          .map((i) => store.photos[i]?.id)
-          .filter((id): id is number => id !== undefined)}
+        selected={selectedIds}
         picks={store.facets.flags.find((f) => f.flag === "pick")?.count ?? 0}
         onclose={() => (exporting = false)}
       />

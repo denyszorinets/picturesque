@@ -297,6 +297,10 @@ impl PhotoCatalog for SqliteCatalog {
         self.save_analysis(id, analyzer, result)
     }
 
+    fn mark_analysis_stale(&self, ids: Option<&[PhotoId]>) -> Result<usize, CatalogError> {
+        self.mark_stale(ids)
+    }
+
     fn analysis(&self, id: PhotoId) -> Result<Vec<(String, u32, serde_json::Value)>, CatalogError> {
         self.load_analysis(id)
     }

@@ -362,6 +362,49 @@ fn tracks_pending_analysis_per_analyzer_and_version() {
 }
 
 #[test]
+fn stale_results_stay_in_use_but_count_as_pending() {
+    let catalog = SqliteCatalog::open_in_memory().unwrap();
+    let a = catalog
+        .insert_photo(&photo(full_metadata(), vec![asset("a.jpg", 1)]))
+        .unwrap();
+    let b = catalog
+        .insert_photo(&photo(CaptureMetadata::default(), vec![asset("b.jpg", 2)]))
+        .unwrap();
+    for id in [a, b] {
+        catalog
+            .store_analysis(id, SHARPNESS, &json!({ "score": 0.5 }))
+            .unwrap();
+    }
+    assert_eq!(catalog.analysis_progress(&[SHARPNESS]).unwrap(), (0, 2));
+
+    // Unknown photos are not counted.
+    assert_eq!(
+        catalog
+            .mark_analysis_stale(Some(&[a, PhotoId(999)]))
+            .unwrap(),
+        1
+    );
+    assert_eq!(catalog.pending_analysis(&[SHARPNESS], 10).unwrap(), [a]);
+    assert!(catalog.analyzed(a, &[SHARPNESS]).unwrap().is_empty());
+    // Scores keep using the earlier result.
+    assert_eq!(catalog.analysis_results(SHARPNESS).unwrap().len(), 2);
+    assert_eq!(catalog.analysis(a).unwrap().len(), 1);
+
+    catalog
+        .store_analysis(a, SHARPNESS, &json!({ "score": 0.7 }))
+        .unwrap();
+    assert!(
+        catalog
+            .pending_analysis(&[SHARPNESS], 10)
+            .unwrap()
+            .is_empty()
+    );
+
+    assert_eq!(catalog.mark_analysis_stale(None).unwrap(), 2);
+    assert_eq!(catalog.analysis_progress(&[SHARPNESS]).unwrap(), (2, 2));
+}
+
+#[test]
 fn stores_and_replaces_analysis_results() {
     let catalog = SqliteCatalog::open_in_memory().unwrap();
     let id = catalog

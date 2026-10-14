@@ -157,6 +157,12 @@ pub trait PhotoCatalog: Send + Sync {
         result: &serde_json::Value,
     ) -> Result<(), CatalogError>;
 
+    /// Marks the results of these photos (every photo with `None`) for
+    /// analysis again: they stay in use, but the photos count as pending
+    /// until each analyzer stored a new result. Returns how many of the
+    /// photos exist.
+    fn mark_analysis_stale(&self, ids: Option<&[PhotoId]>) -> Result<usize, CatalogError>;
+
     /// A photo's current results, by analyzer name.
     fn analysis(&self, id: PhotoId) -> Result<Vec<(String, u32, serde_json::Value)>, CatalogError>;
 

@@ -17,7 +17,7 @@ use crate::ai::AiService;
 use crate::analysis::clip::{AestheticView, ClipAnalyzer};
 use crate::analysis::faces::FaceAnalyzer;
 use crate::analysis::technical::{QualityView, TechnicalAnalyzer};
-use crate::analysis::{AnalysisService, Analyzer, PrioritizeArgs};
+use crate::analysis::{AnalysisService, Analyzer, PrioritizeArgs, ReanalyzeArgs, ReanalyzeResult};
 use crate::embeddings::{DEFAULT_LIMIT, EmbeddingIndex, MAX_LIMIT, SimilarArgs};
 use crate::explain::{self, SeriesPlace, Signals};
 use crate::export::{ExportArgs, ExportError, ExportService};
@@ -735,6 +735,20 @@ impl Api {
                 let ids: Vec<PhotoId> = photo_ids.into_iter().map(PhotoId).collect();
                 self.analysis.prioritize(&ids);
                 respond(self.analysis.status())
+            }
+            "reanalyze_photos" => {
+                let ReanalyzeArgs { photo_ids } = if args.is_null() {
+                    ReanalyzeArgs::default()
+                } else {
+                    parse_args(command, args)?
+                };
+                let ids: Option<Vec<PhotoId>> =
+                    photo_ids.map(|ids| ids.into_iter().map(PhotoId).collect());
+                let photos = self
+                    .analysis
+                    .reanalyze(ids.as_deref())
+                    .map_err(catalog_error)?;
+                respond(ReanalyzeResult { photos })
             }
             "photo_series" => {
                 let PhotoArgs { photo_id } = parse_args(command, args)?;

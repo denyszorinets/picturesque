@@ -18,7 +18,7 @@ fn pending_clause(analyzers: &[AnalyzerId]) -> (String, Vec<Value>) {
         .map(|a| {
             values.push(Value::Text(a.name.to_owned()));
             values.push(Value::Integer(a.version.into()));
-            "NOT EXISTS (SELECT 1 FROM analysis a WHERE a.photo_id = p.id AND a.analyzer = ? AND a.version = ?)"
+            "NOT EXISTS (SELECT 1 FROM analysis a WHERE a.photo_id = p.id AND a.analyzer = ? AND a.version = ? AND a.stale = 0)"
         })
         .collect();
     (format!("({})", clauses.join(" OR ")), values)
@@ -70,7 +70,9 @@ impl SqliteCatalog {
     ) -> Result<Vec<AnalyzerId>, CatalogError> {
         let conn = self.conn();
         let mut stmt = conn
-            .prepare_cached("SELECT version FROM analysis WHERE photo_id = ?1 AND analyzer = ?2")
+            .prepare_cached(
+                "SELECT version FROM analysis WHERE photo_id = ?1 AND analyzer = ?2 AND stale = 0",
+            )
             .map_err(storage)?;
         let mut done = Vec::new();
         for analyzer in analyzers {
@@ -100,11 +102,42 @@ impl SqliteCatalog {
                 "INSERT INTO analysis (photo_id, analyzer, version, result) VALUES (?1, ?2, ?3, ?4)
                  ON CONFLICT (photo_id, analyzer) DO UPDATE SET
                      version = excluded.version, result = excluded.result,
-                     analyzed_at = excluded.analyzed_at",
+                     analyzed_at = excluded.analyzed_at, stale = 0",
                 params![id.0, analyzer.name, analyzer.version, result.to_string()],
             )
             .map_err(storage)?;
         Ok(())
+    }
+
+    pub(super) fn mark_stale(&self, ids: Option<&[PhotoId]>) -> Result<usize, CatalogError> {
+        let mut conn = self.conn();
+        let tx = conn.transaction().map_err(storage)?;
+        let photos = match ids {
+            None => {
+                tx.execute("UPDATE analysis SET stale = 1", [])
+                    .map_err(storage)?;
+                tx.query_row("SELECT count(*) FROM photo", [], |r| r.get::<_, i64>(0))
+                    .map_err(storage)?
+            }
+            Some(ids) => {
+                let mut photos = 0;
+                let mut mark = tx
+                    .prepare("UPDATE analysis SET stale = 1 WHERE photo_id = ?1")
+                    .map_err(storage)?;
+                let mut exists = tx
+                    .prepare("SELECT count(*) FROM photo WHERE id = ?1")
+                    .map_err(storage)?;
+                for id in ids {
+                    mark.execute([id.0]).map_err(storage)?;
+                    photos += exists
+                        .query_row([id.0], |r| r.get::<_, i64>(0))
+                        .map_err(storage)?;
+                }
+                photos
+            }
+        };
+        tx.commit().map_err(storage)?;
+        Ok(photos as usize)
     }
 
     pub(super) fn load_analysis(

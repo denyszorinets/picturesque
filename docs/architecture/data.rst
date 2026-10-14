@@ -57,7 +57,9 @@ task that introduces them. The rest is in the schema today
    One analyzer's result for a photo: analyzer name, version and a JSON
    result (or ``{"error": ...}``). A photo is analyzed again when an
    analyzer's version changes
-   (:doc:`ADR-0011 </architecture/decisions/0011-resumable-background-analysis>`).
+   (:doc:`ADR-0011 </architecture/decisions/0011-resumable-background-analysis>`),
+   or when the user asks (``stale``: the result stays in use until the
+   analyzer replaces it).
 
 ``scores`` (planned)
    Technical scores are stored as the ``technical`` analysis result
@@ -168,6 +170,10 @@ how many have run. Each migration runs in its own transaction.
      - ``0014_auto_pick.sql``
      - ``photo_score.keeper`` (suggested keepers, derived with the score;
        :ref:`features-library-auto-pick`)
+   * - 15
+     - ``0015_analysis_stale.sql``
+     - ``analysis.stale`` (results to analyze again;
+       :ref:`features-library-reanalyze`)
 
 Conventions:
 

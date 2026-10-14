@@ -381,6 +381,8 @@ pub struct MemoryCatalog {
     pub revisions: Mutex<HashMap<PhotoId, (u64, Option<u64>)>>,
     /// (photo, analyzer) → (version, result).
     pub analysis: Mutex<HashMap<(PhotoId, String), (u32, serde_json::Value)>>,
+    /// Results marked for analysis again.
+    pub stale: Mutex<StdHashSet<(PhotoId, String)>>,
     pub series_edits: Mutex<HashMap<PhotoId, picturesque_core::series::SeriesEdit>>,
     pub series: Mutex<Vec<crate::ports::catalog::StoredSeries>>,
     pub best_choices: Mutex<Vec<PhotoId>>,
@@ -409,6 +411,11 @@ impl MemoryCatalog {
             .unwrap()
             .get(&(id, analyzer.name.to_owned()))
             .is_some_and(|(v, _)| *v == analyzer.version)
+            && !self
+                .stale
+                .lock()
+                .unwrap()
+                .contains(&(id, analyzer.name.to_owned()))
     }
 }
 
@@ -705,7 +712,31 @@ impl PhotoCatalog for MemoryCatalog {
             (id, analyzer.name.to_owned()),
             (analyzer.version, result.clone()),
         );
+        self.stale
+            .lock()
+            .unwrap()
+            .remove(&(id, analyzer.name.to_owned()));
         Ok(())
+    }
+
+    fn mark_analysis_stale(&self, ids: Option<&[PhotoId]>) -> Result<usize, CatalogError> {
+        let photos: Vec<PhotoId> = self.photos.lock().unwrap().iter().map(|p| p.id).collect();
+        let marked: Vec<PhotoId> = match ids {
+            None => photos,
+            Some(ids) => ids
+                .iter()
+                .copied()
+                .filter(|id| photos.contains(id))
+                .collect(),
+        };
+        let analysis = self.analysis.lock().unwrap();
+        let mut stale = self.stale.lock().unwrap();
+        for (id, name) in analysis.keys() {
+            if marked.contains(id) {
+                stale.insert((*id, name.clone()));
+            }
+        }
+        Ok(marked.len())
     }
 
     fn analysis(&self, id: PhotoId) -> Result<Vec<(String, u32, serde_json::Value)>, CatalogError> {
