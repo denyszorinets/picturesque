@@ -3,10 +3,11 @@ import type { AnalysisStatus } from "./AnalysisStatus";
 import type { ExportStatus } from "./ExportStatus";
 import type { ImportStatus } from "./ImportStatus";
 import type { ModelView } from "./ModelView";
+import type { PipelineStatus } from "./PipelineStatus";
 import type { SeriesStatus } from "./SeriesStatus";
 
 /**
  * An event for the UI. Serialized with a `type` field, for example
  * `{ "type": "import_progress", "run_id": 3, ... }`.
  */
-export type AppEvent = { "type": "import_progress" } & ImportStatus | { "type": "analysis_progress" } & AnalysisStatus | { "type": "series_changed" } & SeriesStatus | { "type": "model_progress" } & ModelView | { "type": "export_progress" } & ExportStatus;
+export type AppEvent = { "type": "import_progress" } & ImportStatus | { "type": "analysis_progress" } & AnalysisStatus | { "type": "series_changed" } & SeriesStatus | { "type": "model_progress" } & ModelView | { "type": "export_progress" } & ExportStatus | { "type": "pipeline_progress" } & PipelineStatus;

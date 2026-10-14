@@ -97,6 +97,7 @@ pub struct ThumbnailService {
     decoder: Arc<dyn ImageDecoder>,
     cache_dir: PathBuf,
     prefilling: AtomicBool,
+    prefill_again: AtomicBool,
 }
 
 impl std::fmt::Debug for ThumbnailService {
@@ -124,6 +125,7 @@ impl ThumbnailService {
             decoder,
             cache_dir,
             prefilling: AtomicBool::new(false),
+            prefill_again: AtomicBool::new(false),
         }
     }
 
@@ -208,14 +210,41 @@ impl ThumbnailService {
     /// Generates grid images for every photo that lacks one, on background
     /// threads. Does nothing if a prefill is already running.
     pub fn prefill_in_background(self: &Arc<Self>) {
+        // A request while a pass runs makes it run once more, so photos
+        // imported meanwhile are not missed.
+        self.prefill_again.store(true, Ordering::Release);
         if self.prefilling.swap(true, Ordering::AcqRel) {
             return;
         }
         let service = Arc::clone(self);
         std::thread::spawn(move || {
-            service.prefill();
-            service.prefilling.store(false, Ordering::Release);
+            loop {
+                while service.prefill_again.swap(false, Ordering::AcqRel) {
+                    service.prefill();
+                }
+                service.prefilling.store(false, Ordering::Release);
+                // A request that came in just now, after the last check.
+                if !service.prefill_again.load(Ordering::Acquire)
+                    || service.prefilling.swap(true, Ordering::AcqRel)
+                {
+                    break;
+                }
+            }
         });
+    }
+
+    /// Waits until a background prefill, if any, has finished (tests and
+    /// tools).
+    pub fn wait_for_prefill(&self) {
+        while self.prefilling.load(Ordering::Acquire) {
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+    }
+
+    /// Whether the photo's grid thumbnail exists.
+    pub fn has_grid(&self, photo: &Photo) -> bool {
+        self.fs
+            .exists(&self.cache_path(&photo.assets.display().hash, ImageSize::Grid))
     }
 
     /// Generates missing grid images now, in parallel; returns how many

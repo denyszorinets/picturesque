@@ -51,6 +51,7 @@ pub fn run() {
             std::fs::create_dir_all(&data_dir)?;
             let catalog = Arc::new(SqliteCatalog::open(&data_dir.join("catalog.sqlite"))?);
             let api = Api::new(AppContext {
+                pipeline_store: catalog.clone(),
                 settings_store: catalog.clone(),
                 catalog: catalog.clone(),
                 imports: catalog,

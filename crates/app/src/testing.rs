@@ -148,6 +148,15 @@ impl MemFs {
             .insert(PathBuf::from(path));
     }
 
+    /// Undoes `fail_copies_of`.
+    pub fn allow_copies_of(&self, path: &str) {
+        self.state
+            .lock()
+            .unwrap()
+            .failing_sources
+            .remove(Path::new(path));
+    }
+
     pub fn change_after_copy(&self, path: &str) {
         self.state
             .lock()
@@ -1330,6 +1339,7 @@ pub struct TestWorld {
     pub decoder: Arc<FakeDecoder>,
     pub sidecars: Arc<MemorySidecars>,
     pub pixels: Arc<FakePixels>,
+    pub pipeline: Arc<MemoryPipelineStore>,
 }
 
 impl TestWorld {
@@ -1350,7 +1360,24 @@ impl TestWorld {
             imports: Arc::default(),
             metadata: Arc::new(metadata),
             events: Arc::default(),
+            pipeline: Arc::default(),
         }
+    }
+
+    /// An import pipeline over this world (not started).
+    pub fn pipeline(&self) -> Arc<crate::pipeline::ImportPipeline> {
+        Arc::new(crate::pipeline::ImportPipeline::new(
+            crate::pipeline::PipelineDeps {
+                store: self.pipeline.clone(),
+                catalog: self.catalog.clone(),
+                settings: self.settings.clone(),
+                fs: self.fs.clone(),
+                metadata: self.metadata.clone(),
+                geocoder: Arc::new(FakeGeocoder),
+                sidecars: self.sidecars.clone(),
+                events: self.events.clone(),
+            },
+        ))
     }
 
     pub fn context(&self) -> AppContext {
@@ -1370,6 +1397,270 @@ impl TestWorld {
             inference: Arc::new(FakeInference::new(&[])),
             models: Vec::new(),
             model_store: Arc::new(MemoryModelStore::default()),
+            pipeline_store: self.pipeline.clone(),
         }
+    }
+}
+
+/// Import sources, jobs and log kept in memory.
+#[derive(Default)]
+pub struct MemoryPipelineStore {
+    state: Mutex<PipelineState>,
+}
+
+#[derive(Default)]
+struct PipelineState {
+    sources: Vec<crate::ports::pipeline::ImportSource>,
+    jobs: Vec<(String, crate::ports::pipeline::Job)>,
+    log: Vec<crate::ports::pipeline::LogEntry>,
+    next_id: i64,
+}
+
+impl PipelineState {
+    fn id(&mut self) -> i64 {
+        self.next_id += 1;
+        self.next_id
+    }
+}
+
+impl MemoryPipelineStore {
+    /// Every log message, oldest first.
+    pub fn messages(&self) -> Vec<String> {
+        self.state
+            .lock()
+            .unwrap()
+            .log
+            .iter()
+            .map(|e| e.message.clone())
+            .collect()
+    }
+}
+
+impl crate::ports::pipeline::PipelineStore for MemoryPipelineStore {
+    fn add_source(
+        &self,
+        path: &Path,
+        watch: bool,
+    ) -> Result<crate::ports::pipeline::ImportSource, CatalogError> {
+        let mut s = self.state.lock().unwrap();
+        if let Some(existing) = s.sources.iter().find(|x| x.path == path) {
+            return Ok(existing.clone());
+        }
+        let id = s.id();
+        let source = crate::ports::pipeline::ImportSource {
+            id,
+            path: path.to_path_buf(),
+            watch,
+            scanned_at: None,
+            scan_error: None,
+        };
+        s.sources.push(source.clone());
+        Ok(source)
+    }
+
+    fn sources(&self) -> Result<Vec<crate::ports::pipeline::ImportSource>, CatalogError> {
+        Ok(self.state.lock().unwrap().sources.clone())
+    }
+
+    fn set_source_watch(&self, id: i64, watch: bool) -> Result<(), CatalogError> {
+        let mut s = self.state.lock().unwrap();
+        if let Some(source) = s.sources.iter_mut().find(|x| x.id == id) {
+            source.watch = watch;
+        }
+        Ok(())
+    }
+
+    fn remove_source(&self, id: i64) -> Result<(), CatalogError> {
+        let mut s = self.state.lock().unwrap();
+        s.sources.retain(|x| x.id != id);
+        s.jobs
+            .retain(|(_, j)| j.source_id != Some(id) || j.stage.is_final());
+        for (_, j) in &mut s.jobs {
+            if j.source_id == Some(id) {
+                j.source_id = None;
+            }
+        }
+        Ok(())
+    }
+
+    fn record_scan(&self, id: i64, error: Option<&str>) -> Result<(), CatalogError> {
+        let mut s = self.state.lock().unwrap();
+        if let Some(source) = s.sources.iter_mut().find(|x| x.id == id) {
+            source.scanned_at = Some("2026-10-14T10:00:00Z".into());
+            source.scan_error = error.map(str::to_owned);
+        }
+        Ok(())
+    }
+
+    fn offer_job(
+        &self,
+        source_id: i64,
+        key: &Path,
+        files: &[crate::ports::pipeline::JobFile],
+    ) -> Result<Option<i64>, CatalogError> {
+        use crate::ports::pipeline::{Job, JobStage};
+        let mut s = self.state.lock().unwrap();
+        let key = key.display().to_string();
+        if let Some((_, job)) = s.jobs.iter_mut().find(|(k, _)| *k == key) {
+            if job.files == files || matches!(job.stage, JobStage::Reading | JobStage::Copying) {
+                return Ok(None);
+            }
+            job.files = files.to_vec();
+            if job.stage == JobStage::Queued {
+                return Ok(None);
+            }
+            job.stage = JobStage::Queued;
+            job.error = None;
+            job.source_id = Some(source_id);
+            return Ok(Some(job.id));
+        }
+        let id = s.id();
+        s.jobs.push((
+            key,
+            Job {
+                id,
+                source_id: Some(source_id),
+                files: files.to_vec(),
+                stage: JobStage::Queued,
+                photo_id: None,
+                error: None,
+                updated_at: "2026-10-14T10:00:00Z".into(),
+            },
+        ));
+        Ok(Some(id))
+    }
+
+    fn next_job(&self) -> Result<Option<crate::ports::pipeline::Job>, CatalogError> {
+        let s = self.state.lock().unwrap();
+        Ok(s.jobs
+            .iter()
+            .map(|(_, j)| j)
+            .filter(|j| j.stage == crate::ports::pipeline::JobStage::Queued)
+            .min_by_key(|j| j.id)
+            .cloned())
+    }
+
+    fn set_job_stage(
+        &self,
+        id: i64,
+        stage: crate::ports::pipeline::JobStage,
+        photo_id: Option<PhotoId>,
+        error: Option<&str>,
+    ) -> Result<(), CatalogError> {
+        let mut s = self.state.lock().unwrap();
+        if let Some((_, job)) = s.jobs.iter_mut().find(|(_, j)| j.id == id) {
+            job.stage = stage;
+            job.photo_id = photo_id.or(job.photo_id);
+            job.error = error.map(str::to_owned);
+        }
+        Ok(())
+    }
+
+    fn requeue_unfinished(&self) -> Result<usize, CatalogError> {
+        use crate::ports::pipeline::JobStage;
+        let mut s = self.state.lock().unwrap();
+        let mut n = 0;
+        for (_, job) in &mut s.jobs {
+            if matches!(job.stage, JobStage::Reading | JobStage::Copying) {
+                job.stage = JobStage::Queued;
+                n += 1;
+            }
+        }
+        Ok(n)
+    }
+
+    fn retry_failed(&self, ids: Option<&[i64]>) -> Result<usize, CatalogError> {
+        use crate::ports::pipeline::JobStage;
+        let mut s = self.state.lock().unwrap();
+        let mut n = 0;
+        for (_, job) in &mut s.jobs {
+            if job.stage == JobStage::Failed && ids.is_none_or(|ids| ids.contains(&job.id)) {
+                job.stage = JobStage::Queued;
+                job.error = None;
+                n += 1;
+            }
+        }
+        Ok(n)
+    }
+
+    fn job(&self, id: i64) -> Result<Option<crate::ports::pipeline::Job>, CatalogError> {
+        let s = self.state.lock().unwrap();
+        Ok(s.jobs.iter().map(|(_, j)| j).find(|j| j.id == id).cloned())
+    }
+
+    fn jobs(
+        &self,
+        stages: Option<&[crate::ports::pipeline::JobStage]>,
+        limit: usize,
+        before_id: Option<i64>,
+    ) -> Result<Vec<crate::ports::pipeline::Job>, CatalogError> {
+        let s = self.state.lock().unwrap();
+        let mut jobs: Vec<_> = s
+            .jobs
+            .iter()
+            .map(|(_, j)| j)
+            .filter(|j| stages.is_none_or(|st| st.contains(&j.stage)))
+            .filter(|j| before_id.is_none_or(|b| j.id < b))
+            .cloned()
+            .collect();
+        jobs.sort_by_key(|j| std::cmp::Reverse(j.id));
+        jobs.truncate(limit);
+        Ok(jobs)
+    }
+
+    fn job_counts(&self) -> Result<Vec<(crate::ports::pipeline::JobStage, usize)>, CatalogError> {
+        let s = self.state.lock().unwrap();
+        let mut counts: HashMap<crate::ports::pipeline::JobStage, usize> = HashMap::new();
+        for (_, job) in &s.jobs {
+            *counts.entry(job.stage).or_default() += 1;
+        }
+        Ok(counts.into_iter().collect())
+    }
+
+    fn append_log(
+        &self,
+        level: crate::ports::pipeline::LogLevel,
+        job_id: Option<i64>,
+        photo_id: Option<PhotoId>,
+        message: &str,
+    ) -> Result<(), CatalogError> {
+        let mut s = self.state.lock().unwrap();
+        let id = s.id();
+        s.log.push(crate::ports::pipeline::LogEntry {
+            id,
+            at: "2026-10-14T10:00:00Z".into(),
+            level,
+            job_id,
+            photo_id: photo_id.map(|p| p.0),
+            message: message.to_owned(),
+        });
+        Ok(())
+    }
+
+    fn log(
+        &self,
+        min_level: crate::ports::pipeline::LogLevel,
+        limit: usize,
+        before_id: Option<i64>,
+    ) -> Result<Vec<crate::ports::pipeline::LogEntry>, CatalogError> {
+        let rank = |l: crate::ports::pipeline::LogLevel| l as u8;
+        let s = self.state.lock().unwrap();
+        Ok(s.log
+            .iter()
+            .rev()
+            .filter(|e| rank(e.level) >= rank(min_level))
+            .filter(|e| before_id.is_none_or(|b| e.id < b))
+            .take(limit)
+            .cloned()
+            .collect())
+    }
+
+    fn prune_log(&self, keep: usize) -> Result<(), CatalogError> {
+        let mut s = self.state.lock().unwrap();
+        let len = s.log.len();
+        if len > keep {
+            s.log.drain(..len - keep);
+        }
+        Ok(())
     }
 }

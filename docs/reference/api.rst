@@ -248,6 +248,55 @@ Commands
    ``{ "run_id": 1 }``. Asks the running planning or copying to stop.
    Copying stops between photos.
 
+``list_import_sources``
+   No arguments. Every ``ImportSource``: ``id``, ``path``, ``watch``,
+   ``scanned_at`` and ``scan_error``.
+
+``add_import_source``
+   ``{ "path": "/absolute/folder", "watch": true }`` (``watch`` defaults
+   to ``true``). Stores the folder and scans it right away; returns the
+   ``ImportSource``. Adding a stored folder again returns it unchanged.
+   Fails if the path is relative, cannot be read, or is inside or contains
+   the library folder.
+
+``remove_import_source``
+   ``{ "id": 1 }``. Forgets the folder and drops its waiting photos;
+   imported photos stay. Returns the remaining sources.
+
+``set_import_source_watch``
+   ``{ "id": 1, "watch": false }``. Returns the ``ImportSource``.
+
+``scan_import_sources``
+   ``{ "id": 1 }`` scans one source; without ``id``, all of them.
+   Returns at once; the scan runs in the background.
+
+``pipeline_status``
+   No arguments. The ``PipelineStatus``: number of photos ``queued``,
+   ``imported``, ``duplicates`` and ``failed``; the ``active`` photo
+   (``job_id``, ``file_name``, ``stage``) or ``null``; whether a scan is
+   running; and ``paused`` (why importing waits, for example no library
+   folder) or ``null``.
+
+``pipeline_jobs``
+   ``{ "filter": "all", "limit": 200, "before": 1234 }`` (all optional).
+   Photos in the pipeline, newest first, as ``JobView``: ``id``,
+   ``file_name``, ``source_path``, ``files``, ``stage`` (``queued``,
+   ``reading``, ``copying``, ``imported``, ``duplicate``, ``failed``),
+   ``error``, ``photo_id``, ``updated_at``, and for imported photos
+   whether the ``thumbnail`` is ready and ``analysis`` progress as
+   ``[done, total]``. ``filter`` is ``all``, ``active``, ``imported``,
+   ``duplicate`` or ``failed``; page with ``before`` (the last ``id``).
+
+``pipeline_log``
+   ``{ "min_level": "info", "limit": 200, "before": 5678 }`` (all
+   optional). Log entries newest first: ``id``, ``at``, ``level``
+   (``info``, ``warn``, ``error``), ``job_id``, ``photo_id`` and
+   ``message``.
+
+``retry_failed_imports``
+   ``{ "ids": [3, 4] }`` queues those failed photos again; without
+   ``ids``, all failed photos. Returns how many were queued.
+
 Import states
 -------------
 
@@ -307,6 +356,11 @@ events from ``GET /api/events``.
 ``import_progress``
    An ``ImportStatus``. Sent when a phase starts, about every percent of
    progress, and when a run ends (with its summary).
+
+``pipeline_progress``
+   A ``PipelineStatus`` (see ``pipeline_status``), sent at most four
+   times a second while the pipeline works, and whenever a photo finishes
+   or a scan starts or ends.
 
 ``analysis_progress``
    The ``analysis_status``, sent after each analyzed photo.

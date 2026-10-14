@@ -158,6 +158,13 @@ impl AnalysisService {
         }
     }
 
+    /// Analyses done and to do for one photo.
+    pub fn progress_of(&self, id: PhotoId) -> [usize; 2] {
+        let ids = self.ids();
+        let done = self.catalog.analyzed(id, &ids).map_or(0, |d| d.len());
+        [done, ids.len()]
+    }
+
     /// Analyzes these photos next (for example the ones on screen).
     pub fn prioritize(&self, ids: &[PhotoId]) {
         let mut q = self.queue.lock().expect("queue lock");

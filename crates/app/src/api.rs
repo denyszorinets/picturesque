@@ -28,6 +28,10 @@ use crate::library::{
     DecisionView, FacetsArgs, PhotoArgs, PhotoDetail, PhotoQuery, SetDecisionsArgs,
 };
 use crate::models::{ModelArgs, ModelError, ModelService};
+use crate::pipeline::{
+    AddSourceArgs, ImportPipeline, JobsArgs, LogArgs, PipelineDeps, PipelineError, RetryArgs,
+    ScanArgs, SourceArgs, SourceWatchArgs,
+};
 use crate::ports::catalog::{AnalyzerId, PhotoCatalog};
 use crate::ports::events::EventSink;
 use crate::ports::fs::FileSystem;
@@ -37,6 +41,8 @@ use crate::ports::imports::ImportStore;
 use crate::ports::inference::InferenceEngine;
 use crate::ports::metadata::MetadataReader;
 use crate::ports::models::{ModelSpec, ModelStore};
+use crate::ports::pipeline::LogLevel;
+use crate::ports::pipeline::PipelineStore;
 use crate::ports::pixels::PixelLoader;
 use crate::ports::settings::SettingsStore;
 use crate::ports::sidecars::SidecarStore;
@@ -116,6 +122,8 @@ pub struct AppContext {
     pub models: Vec<ModelSpec>,
     /// Where downloaded models are kept.
     pub model_store: Arc<dyn ModelStore>,
+    /// Import sources, jobs and the pipeline log (usually the catalog).
+    pub pipeline_store: Arc<dyn PipelineStore>,
 }
 
 impl fmt::Debug for AppContext {
@@ -160,6 +168,7 @@ pub struct Api {
     search: TextSearch,
     rejects: RejectsService,
     export: Arc<ExportService>,
+    pipeline: Arc<ImportPipeline>,
 }
 
 impl fmt::Debug for Api {
@@ -223,6 +232,29 @@ impl Api {
         let _ = events.series.set(Arc::clone(&series));
         let embeddings = Arc::new(EmbeddingIndex::new(Arc::clone(&ctx.catalog)));
         let _ = events.embeddings.set(Arc::clone(&embeddings));
+        let pipeline = Arc::new(ImportPipeline::new(PipelineDeps {
+            store: Arc::clone(&ctx.pipeline_store),
+            catalog: Arc::clone(&ctx.catalog),
+            settings: Arc::clone(&ctx.settings_store),
+            fs: Arc::clone(&ctx.fs),
+            metadata: Arc::clone(&ctx.metadata),
+            geocoder: Arc::clone(&ctx.geocoder),
+            sidecars: Arc::clone(&ctx.sidecars),
+            events: Arc::clone(&events) as Arc<dyn EventSink>,
+        }));
+        {
+            // Each imported photo gets its thumbnail, analysis and series.
+            let (thumbnails, analysis, series) = (
+                Arc::clone(&thumbnails),
+                Arc::clone(&analysis),
+                Arc::clone(&series),
+            );
+            pipeline.on_imported(move || {
+                thumbnails.prefill_in_background();
+                analysis.wake();
+                series.notify();
+            });
+        }
         let catalog = Arc::clone(&ctx.catalog);
         let sidecars = Arc::new(SidecarService::new(
             Arc::clone(&ctx.catalog),
@@ -252,6 +284,7 @@ impl Api {
             Arc::clone(&ctx.settings_store),
         );
         Ok(Self {
+            pipeline,
             export,
             search,
             rejects,
@@ -304,6 +337,18 @@ impl Api {
         self.sidecars.start();
         self.analysis.start(analysis_workers());
         self.series.start();
+        self.pipeline.start();
+    }
+
+    /// Scans every import source and imports what it finds, on the calling
+    /// thread (tests and tools). Returns the number of photos processed.
+    pub fn run_imports(&self) -> usize {
+        self.pipeline.resume();
+        self.pipeline
+            .scan_now(&std::collections::HashSet::from([None]));
+        let imported = self.pipeline.run_until_idle();
+        self.thumbnails.wait_for_prefill();
+        imported
     }
 
     /// Recomputes series now (tests and tools).
@@ -540,6 +585,101 @@ impl Api {
                         .map_err(catalog_error)?,
                 )
             }
+            "list_import_sources" => {
+                no_args(command, &args)?;
+                respond(self.pipeline.sources().map_err(pipeline_error)?)
+            }
+            "add_import_source" => {
+                let AddSourceArgs { path, watch } = parse_args(command, args)?;
+                respond(
+                    self.pipeline
+                        .add_source(&path, watch.unwrap_or(true))
+                        .map_err(pipeline_error)?,
+                )
+            }
+            "remove_import_source" => {
+                let SourceArgs { id } = parse_args(command, args)?;
+                self.pipeline.remove_source(id).map_err(pipeline_error)?;
+                respond(self.pipeline.sources().map_err(pipeline_error)?)
+            }
+            "set_import_source_watch" => {
+                let SourceWatchArgs { id, watch } = parse_args(command, args)?;
+                respond(self.pipeline.set_watch(id, watch).map_err(pipeline_error)?)
+            }
+            "scan_import_sources" => {
+                let ScanArgs { id } = if args.is_null() {
+                    ScanArgs::default()
+                } else {
+                    parse_args(command, args)?
+                };
+                self.pipeline.request_scan(id);
+                respond(self.pipeline.status())
+            }
+            "pipeline_status" => {
+                no_args(command, &args)?;
+                respond(self.pipeline.status())
+            }
+            "pipeline_jobs" => {
+                let JobsArgs {
+                    filter,
+                    limit,
+                    before,
+                } = if args.is_null() {
+                    JobsArgs::default()
+                } else {
+                    parse_args(command, args)?
+                };
+                let details = |id: PhotoId| {
+                    let thumbnail = self
+                        .catalog
+                        .photo(id)
+                        .ok()
+                        .flatten()
+                        .is_some_and(|p| self.thumbnails.has_grid(&p));
+                    (thumbnail, self.analysis.progress_of(id))
+                };
+                respond(
+                    self.pipeline
+                        .jobs(
+                            filter.unwrap_or_default(),
+                            limit.unwrap_or(100),
+                            before,
+                            &details,
+                        )
+                        .map_err(pipeline_error)?,
+                )
+            }
+            "pipeline_log" => {
+                let LogArgs {
+                    min_level,
+                    limit,
+                    before,
+                } = if args.is_null() {
+                    LogArgs::default()
+                } else {
+                    parse_args(command, args)?
+                };
+                respond(
+                    self.pipeline
+                        .log_entries(
+                            min_level.unwrap_or(LogLevel::Info),
+                            limit.unwrap_or(200),
+                            before,
+                        )
+                        .map_err(pipeline_error)?,
+                )
+            }
+            "retry_failed_imports" => {
+                let RetryArgs { ids } = if args.is_null() {
+                    RetryArgs::default()
+                } else {
+                    parse_args(command, args)?
+                };
+                self.pipeline
+                    .retry(ids.as_deref())
+                    .map_err(pipeline_error)?;
+                respond(self.pipeline.status())
+            }
             "start_export" => {
                 let export: ExportArgs = parse_args(command, args)?;
                 respond(self.export.start(export).map_err(export_error)?)
@@ -659,6 +799,13 @@ impl Api {
 /// Half the cores (at least one), leaving the rest for the UI and imports.
 fn analysis_workers() -> usize {
     std::thread::available_parallelism().map_or(1, |n| (n.get() / 2).max(1))
+}
+
+fn pipeline_error(e: PipelineError) -> ApiError {
+    match e {
+        PipelineError::Invalid(_) => ApiError::new(ApiErrorCode::InvalidArguments, e.to_string()),
+        PipelineError::Catalog(e) => catalog_error(e),
+    }
 }
 
 fn export_error(e: ExportError) -> ApiError {

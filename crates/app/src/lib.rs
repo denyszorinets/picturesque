@@ -16,6 +16,7 @@ pub mod import;
 pub mod info;
 pub mod library;
 pub mod models;
+pub mod pipeline;
 pub mod ports;
 pub mod rejects;
 pub mod scan;
