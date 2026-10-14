@@ -21,7 +21,10 @@ work="$repo/target/libvips-windows"
 root="$work/vips-dev-${VERSION%.*}"
 mkdir -p "$work"
 
-if [ ! -d "$root" ]; then
+# Build caches may restore part of target/ (without the .lib files):
+# unpack again unless the libraries are really there.
+if [ ! -f "$root/lib/libvips.lib" ] || [ ! -f "$root/bin/libvips-42.dll" ]; then
+  rm -rf "$root"
   curl -fsSL -o "$work/$ZIP" \
     "https://github.com/libvips/build-win64-mxe/releases/download/v$VERSION/$ZIP"
   echo "$SHA256  $work/$ZIP" | sha256sum -c -
