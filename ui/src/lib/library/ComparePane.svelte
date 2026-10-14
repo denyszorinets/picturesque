@@ -96,39 +96,45 @@
   <div class="view">
     {#if !photo}
       <p class="muted">Loading…</p>
-    {:else if compare.zoomed}
-      <div
-        class="scroller"
-        bind:this={scroller}
-        role="presentation"
-        {onscroll}
-        {onwheel}
-        {onpointerdown}
-        {onpointermove}
-        {onpointerup}
-        data-testid="compare-zoomed"
-      >
-        {#if !loaded}<p class="muted">Loading full size…</p>{/if}
-        <img
-          class="full"
-          class:hidden={!loaded}
-          bind:this={full}
-          src={imageUrl(photo.id, "full")}
-          alt={photo.file_name}
-          draggable="false"
-          onload={() => (loaded = true)}
-        />
-      </div>
     {:else}
-      <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
-      <img
-        class="fitted"
-        src={imageUrl(photo.id, "preview")}
-        alt={photo.file_name}
-        draggable="false"
-        onclick={onactivate}
-        {ondblclick}
-      />
+      <!-- A new element per photo: a reused <img> keeps showing the previous
+           photo until the next one has loaded. -->
+      {#key photo.id}
+        {#if compare.zoomed}
+          <div
+            class="scroller"
+            bind:this={scroller}
+            role="presentation"
+            {onscroll}
+            {onwheel}
+            {onpointerdown}
+            {onpointermove}
+            {onpointerup}
+            data-testid="compare-zoomed"
+          >
+            {#if !loaded}<p class="muted">Loading full size…</p>{/if}
+            <img
+              class="full"
+              class:hidden={!loaded}
+              bind:this={full}
+              src={imageUrl(photo.id, "full")}
+              alt={photo.file_name}
+              draggable="false"
+              onload={() => (loaded = true)}
+            />
+          </div>
+        {:else}
+          <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
+          <img
+            class="fitted"
+            src={imageUrl(photo.id, "preview")}
+            alt={photo.file_name}
+            draggable="false"
+            onclick={onactivate}
+            {ondblclick}
+          />
+        {/if}
+      {/key}
     {/if}
   </div>
   {#if photo}

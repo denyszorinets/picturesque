@@ -74,3 +74,109 @@ test("filters the timeline and keeps filters for the session", async ({
   await expect(page.getByTestId("no-match")).toBeVisible();
   await page.getByTestId("clear-filters").click();
 });
+
+test("shows the filtered photos right away after scrolling down", async ({
+  page,
+  request,
+}) => {
+  // Many days, so the timeline is much taller than the window.
+  const days = Array.from({ length: 40 }, (_, i) => {
+    const d = new Date(Date.UTC(2001, 0, 1 + i));
+    return d.toISOString().slice(0, 10);
+  });
+  await importFiles(
+    request,
+    Object.fromEntries(
+      days.map((day, i) => [
+        `scrolled/IMG_${i}.JPG`,
+        { bytes: jpeg(9000 + i), time: new Date(`${day}T10:00:00`) },
+      ]),
+    ),
+  );
+
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.goto("/");
+  const timeline = page.getByTestId("timeline");
+  await expect(timeline.locator("button.tile").first()).toBeVisible();
+  // Scroll far down, past where the filtered result will end.
+  await timeline.evaluate((el) => (el.scrollTop = el.scrollHeight));
+  await expect(
+    page.locator("[data-testid=day-header][data-day='2001-01-01']"),
+  ).toBeVisible();
+
+  // The newest day only: the timeline gets much shorter.
+  const last = days[days.length - 1]!;
+  await page.getByTestId("filter-from").fill(last);
+  await page.getByTestId("filter-to").fill(last);
+  await expect(page.getByTestId("library-count")).toHaveText("1 photo");
+  // Without scrolling, the photo is shown.
+  await expect(timeline.locator("button.tile")).toHaveCount(1);
+  await expect(timeline.locator("button.tile")).toBeInViewport();
+  await page.getByTestId("clear-filters").click();
+});
+
+test("never shows a previous photo's thumbnail after filtering", async ({
+  page,
+  request,
+}) => {
+  const day = "2002-06-07";
+  await importFiles(
+    request,
+    Object.fromEntries(
+      [0, 1, 2, 3, 4, 5].map((i) => [
+        `stale/IMG_${i}.JPG`,
+        { bytes: jpeg(9500 + i), time: new Date(`${day}T08:00:0${i}`) },
+      ]),
+    ),
+  );
+  const ours = await call<{ photos: { id: number }[] }>(
+    request,
+    "query_photos",
+    { from: day, to: day },
+  );
+  // Picks that are not the first photos of the day: under the Picks
+  // filter they move to other places in the grid.
+  const picked = ours.photos.slice(3).map((p) => p.id);
+  await call(request, "set_decisions", {
+    changes: picked.map((photo_id) => ({ photo_id, flag: "pick" })),
+  });
+
+  await page.goto("/");
+  await page.getByTestId("filter-from").fill(day);
+  await page.getByTestId("filter-to").fill(day);
+  const tiles = page.getByTestId("timeline").locator("button.tile");
+  await expect(tiles).toHaveCount(6);
+  await expect
+    .poll(() =>
+      tiles.evaluateAll((all) =>
+        all.every((t) => t.querySelector("img")?.complete),
+      ),
+    )
+    .toBe(true);
+
+  // Browsers keep showing an <img>'s previous picture until a new src has
+  // loaded (WebKitGTK does, until the thumbnail is created), so a tile must
+  // not reuse the image of a different photo.
+  await tiles.evaluateAll((all) =>
+    all.forEach((t) => {
+      t.querySelector("img")!.dataset.shown = t.getAttribute("data-photo-id")!;
+    }),
+  );
+  await page
+    .getByTestId("filter-panel")
+    .getByRole("button", { name: /^Picks/ })
+    .click();
+  await expect(tiles).toHaveCount(3);
+  const shown = await tiles.evaluateAll((all) =>
+    all.map((t) => [
+      t.getAttribute("data-photo-id"),
+      t.querySelector("img")!.dataset.shown ?? null,
+    ]),
+  );
+  for (const [id, before] of shown)
+    expect(
+      before === null || before === id,
+      `tile ${id} showed ${before}`,
+    ).toBe(true);
+  await page.getByTestId("clear-filters").click();
+});

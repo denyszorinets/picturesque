@@ -169,37 +169,41 @@
 >
   <div class="stage">
     {#if photo}
-      {#if zoomed}
-        <div
-          class="scroller"
-          bind:this={scroller}
-          role="presentation"
-          {onpointerdown}
-          {onpointermove}
-          {onpointerup}
-          data-testid="loupe-zoomed"
-        >
-          {#if !fullLoaded}<p class="loading">Loading full size…</p>{/if}
+      <!-- A new element per photo: a reused <img> keeps showing the previous
+           photo until the next one has loaded. -->
+      {#key photo.id}
+        {#if zoomed}
+          <div
+            class="scroller"
+            bind:this={scroller}
+            role="presentation"
+            {onpointerdown}
+            {onpointermove}
+            {onpointerup}
+            data-testid="loupe-zoomed"
+          >
+            {#if !fullLoaded}<p class="loading">Loading full size…</p>{/if}
+            <img
+              class="full"
+              class:hidden={!fullLoaded}
+              src={imageUrl(photo.id, "full")}
+              alt={photo.file_name}
+              draggable="false"
+              onload={onFullLoad}
+            />
+          </div>
+        {:else}
+          <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
           <img
-            class="full"
-            class:hidden={!fullLoaded}
-            src={imageUrl(photo.id, "full")}
+            class="fitted"
+            src={imageUrl(photo.id, "preview")}
             alt={photo.file_name}
             draggable="false"
-            onload={onFullLoad}
+            onclick={clickFitted}
+            data-testid="loupe-image"
           />
-        </div>
-      {:else}
-        <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
-        <img
-          class="fitted"
-          src={imageUrl(photo.id, "preview")}
-          alt={photo.file_name}
-          draggable="false"
-          onclick={clickFitted}
-          data-testid="loupe-image"
-        />
-      {/if}
+        {/if}
+      {/key}
     {:else}
       <p class="loading">Loading…</p>
     {/if}

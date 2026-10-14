@@ -192,7 +192,9 @@
               data-series-id={segment.seriesId}
             ></div>
           {/each}
-          {#each { length: row.end - row.start } as _, k (row.start + k)}
+          <!-- Keyed by photo too: a reused <img> keeps showing the previous
+               photo until the new thumbnail has loaded. -->
+          {#each { length: row.end - row.start } as _, k (`${row.start + k}:${store.photos[row.start + k]?.id}`)}
             {@const index = row.start + k}
             {@const photo = store.photos[index]}
             {#if photo}
