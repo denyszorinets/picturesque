@@ -105,6 +105,49 @@
     return selection.focus === null ? [] : [selection.focus];
   }
 
+  const AUTO_ADVANCE_KEY = "picturesque.autoAdvance";
+  /** In the loupe, move to the next photo after every decision. */
+  let autoAdvance = $state(
+    (() => {
+      try {
+        return localStorage.getItem(AUTO_ADVANCE_KEY) === "true";
+      } catch {
+        return false;
+      }
+    })(),
+  );
+  $effect(() => {
+    try {
+      localStorage.setItem(AUTO_ADVANCE_KEY, String(autoAdvance));
+    } catch {
+      // A convenience only.
+    }
+  });
+
+  /** After a decision: the next photo in the loupe, or the next tile when
+   * one photo is selected. */
+  function advance() {
+    const total = store.total;
+    if (loupe !== null) {
+      if (loupe + 1 < total) {
+        loupe += 1;
+        selection.click(loupe);
+        void store.ensureLoaded(loupe);
+      }
+      return;
+    }
+    if (selection.size <= 1 && selection.focus !== null) {
+      const to = Math.min(selection.focus + 1, total - 1);
+      void store.ensureLoaded(to);
+      selection.moveTo(to, total);
+    }
+  }
+
+  function decide(change: () => Promise<unknown>, next: boolean) {
+    void change();
+    if (next) advance();
+  }
+
   /** Handles culling keys; returns whether the key was used. */
   function cull(e: KeyboardEvent): boolean {
     const mod = e.ctrlKey || e.metaKey;
@@ -118,13 +161,18 @@
       return true;
     }
     if (mod || e.altKey) return false;
+    // Shift moves on after the decision; in the loupe, so does
+    // Auto-advance.
+    const next = e.shiftKey || (loupe !== null && autoAdvance);
     const flag = FLAGS[key];
     if (flag) {
-      void culling.flag(targets(), flag);
+      const photos = targets();
+      decide(() => culling.flag(photos, flag), next);
       return true;
     }
     if (/^[0-5]$/.test(e.key)) {
-      void culling.rate(targets(), Number(e.key));
+      const photos = targets();
+      decide(() => culling.rate(photos, Number(e.key)), next);
       return true;
     }
     return false;
@@ -543,6 +591,15 @@
           selection.click(i);
         }}
         onclose={() => (loupe = null)}
+        onflag={(flag) => {
+          const photos = targets();
+          decide(() => culling.flag(photos, flag), autoAdvance);
+        }}
+        onrate={(rating) => {
+          const photos = targets();
+          decide(() => culling.rate(photos, rating), autoAdvance);
+        }}
+        bind:autoAdvance
       />
     {/if}
   {/if}

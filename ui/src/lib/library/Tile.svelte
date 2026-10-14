@@ -8,6 +8,10 @@
     focused: boolean;
     onclick: (e: MouseEvent) => void;
     ondblclick: () => void;
+    /** Adds the photo to the selection, or takes it out. */
+    ontoggle?: () => void;
+    /** Whether several photos are being selected (checkboxes stay visible). */
+    selecting?: boolean;
     /** A stacked series' size and whether it is expanded (stacking only). */
     stack?: { count: number; expanded: boolean } | null;
     onstack?: () => void;
@@ -22,6 +26,8 @@
     focused,
     onclick,
     ondblclick,
+    ontoggle,
+    selecting = false,
     stack = null,
     onstack,
     showQuality = false,
@@ -101,6 +107,19 @@
       >
     {/if}
   </button>
+  {#if ontoggle}
+    <button
+      class="check"
+      class:visible={selecting || selected}
+      class:shifted={photo.best_in_series}
+      role="checkbox"
+      aria-checked={selected}
+      aria-label={`Select ${photo.file_name}`}
+      title={selected ? "Remove from the selection" : "Add to the selection"}
+      onclick={() => ontoggle()}
+      data-testid="tile-check">✓</button
+    >
+  {/if}
   {#if stack}
     <button
       class="stack"
@@ -219,6 +238,41 @@
     background: var(--accent);
     color: var(--accent-fg);
     font-size: 0.75rem;
+  }
+
+  .check {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 1.3rem;
+    height: 1.3rem;
+    padding: 0;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    border: 2px solid #fff;
+    background: rgb(0 0 0 / 0.35);
+    color: transparent;
+    font-size: 0.75rem;
+    font-weight: 700;
+    opacity: 0;
+    box-shadow: 0 0 3px rgb(0 0 0 / 0.6);
+  }
+
+  .check.shifted {
+    right: 1.9rem;
+  }
+
+  .cell:hover .check,
+  .check.visible,
+  .check:focus-visible {
+    opacity: 1;
+  }
+
+  .check[aria-checked="true"] {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
   }
 
   .stack {

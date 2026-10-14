@@ -88,6 +88,21 @@ try {
   );
   await window.screenshot("3-picked");
 
+  step("reject in the loupe with its button, then pick it again with P");
+  await window.press("\uE007"); // Enter
+  await window.click("[data-testid=loupe-reject]");
+  await until(
+    "the reject shows",
+    async () =>
+      (await window.run(
+        "return document.querySelector('[data-testid=loupe-reject]').getAttribute('aria-pressed')",
+      )) === "true",
+  );
+  await window.screenshot("3b-loupe");
+  await window.press("p");
+  await window.press("\uE00C"); // Escape
+  await window.find("button.tile .badge.pick", 10_000);
+
   step("restart the app");
   await window.close();
   window = await App.launch(app, shots);

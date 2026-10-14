@@ -2,15 +2,36 @@
   import { ApiError, getPhoto, imageUrl, type PhotoDetail } from "../api";
   import type { LibraryStore } from "./store.svelte";
 
+  type Flag = "pick" | "reject" | "unflagged";
+
   interface Props {
     store: LibraryStore;
     /** Index of the shown photo in the timeline list. */
     index: number;
     onnavigate: (index: number) => void;
     onclose: () => void;
+    /** Flags or rates the shown photo (the same as the P/X/U and 0–5 keys). */
+    onflag?: (flag: Flag) => void;
+    onrate?: (rating: number) => void;
+    /** Move to the next photo after every decision. */
+    autoAdvance?: boolean;
   }
 
-  let { store, index, onnavigate, onclose }: Props = $props();
+  let {
+    store,
+    index,
+    onnavigate,
+    onclose,
+    onflag,
+    onrate,
+    autoAdvance = $bindable(false),
+  }: Props = $props();
+
+  /** Runs a toolbar action and gives the keyboard back to the shortcuts. */
+  function act(e: Event, action: () => void) {
+    (e.currentTarget as HTMLElement).blur();
+    action();
+  }
 
   let zoomed = $state(false);
   let showInfo = $state(true);
@@ -203,6 +224,58 @@
       >
       <button onclick={onclose} aria-label="Close">✕</button>
     </div>
+
+    {#if photo}
+      <div class="toolbar cull" role="group" aria-label="Decision">
+        <button
+          class="pick"
+          aria-pressed={photo.flag === "pick"}
+          title="Pick (P)"
+          onclick={(e) => act(e, () => onflag?.("pick"))}
+          data-testid="loupe-pick">✓ Pick</button
+        >
+        <button
+          class="reject"
+          aria-pressed={photo.flag === "reject"}
+          title="Reject (X)"
+          onclick={(e) => act(e, () => onflag?.("reject"))}
+          data-testid="loupe-reject">✕ Reject</button
+        >
+        <button
+          title="Unflag (U)"
+          disabled={photo.flag === "unflagged"}
+          onclick={(e) => act(e, () => onflag?.("unflagged"))}
+          data-testid="loupe-unflag">Unflag</button
+        >
+        <span class="stars" data-testid="loupe-stars">
+          {#each [1, 2, 3, 4, 5] as n (n)}
+            <button
+              class="star"
+              class:on={photo.rating >= n}
+              aria-label={`${n} star${n === 1 ? "" : "s"}`}
+              aria-pressed={photo.rating === n}
+              title={photo.rating === n
+                ? `Clear rating (0)`
+                : `${n} star${n === 1 ? "" : "s"} (${n})`}
+              onclick={(e) =>
+                act(e, () => onrate?.(photo.rating === n ? 0 : n))}>★</button
+            >
+          {/each}
+        </span>
+        <label
+          class="advance"
+          title="Go to the next photo after every decision (or hold Shift: Shift+P, Shift+X)"
+        >
+          <input
+            type="checkbox"
+            bind:checked={autoAdvance}
+            onchange={(e) => e.currentTarget.blur()}
+            data-testid="loupe-auto-advance"
+          />
+          Auto-advance
+        </label>
+      </div>
+    {/if}
   </div>
 
   {#if showInfo}
@@ -313,7 +386,10 @@
           {/each}
         </ul>
       {/if}
-      <p class="keys muted">← → move · Z zoom · I info · Esc close</p>
+      <p class="keys muted">
+        ← → move · P pick · X reject · U unflag · 0–5 stars · Shift+P/X/U decide
+        and move on · Z zoom · I info · Esc close
+      </p>
     </aside>
   {/if}
 </div>
@@ -395,6 +471,50 @@
 
   .toolbar button[aria-pressed="true"] {
     background: #3a3a36;
+  }
+
+  .toolbar.cull {
+    top: 1rem;
+    bottom: auto;
+  }
+
+  .cull .pick[aria-pressed="true"] {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--accent-fg);
+  }
+
+  .cull .reject[aria-pressed="true"] {
+    background: var(--danger);
+    border-color: var(--danger);
+    color: #fff;
+  }
+
+  .cull .stars {
+    display: flex;
+  }
+
+  .cull .star {
+    border: none;
+    padding: 0.2rem 0.2rem;
+    color: #6b6b66;
+    font-size: 1rem;
+  }
+
+  .cull .star.on {
+    color: #f2c94c;
+  }
+
+  .cull .star[aria-pressed="true"] {
+    background: transparent;
+  }
+
+  .advance {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    margin-left: 0.4rem;
+    white-space: nowrap;
   }
 
   .info {

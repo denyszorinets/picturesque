@@ -203,6 +203,8 @@
                 focused={selection.focus === index}
                 onclick={(e) => select(index, e)}
                 ondblclick={() => onopen?.(index)}
+                ontoggle={() => selection.click(index, { toggle: true })}
+                selecting={selection.size > 1}
                 stack={stackOf(photo)}
                 {showQuality}
                 onstack={() =>

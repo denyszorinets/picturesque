@@ -41,6 +41,12 @@ Selecting photos
      - Every photo from the last clicked one to this one, across days.
    * - Ctrl+click (⌘+click on macOS)
      - Adds or removes that photo; Shift+Ctrl/⌘+click adds a range.
+   * - The round checkbox on a tile (shown on hover, and on every tile
+       while several are selected)
+     - Adds or removes that photo, without a modifier key.
+
+With two or more photos selected, **Compare** (or **C**) shows them side
+by side (:doc:`/features/compare`).
 
 The number of selected photos is shown above the timeline.
 
@@ -65,8 +71,18 @@ focus.
        move around, click again to fit.
    * - I
      - Show or hide the information panel
+   * - P, X, U, 0 – 5
+     - Pick, reject, unflag, rate (:ref:`features-library-culling`)
+   * - Shift+P, Shift+X, Shift+U
+     - Decide, then show the next photo
    * - Esc
      - Leave 100% zoom, then close the loupe
+
+The bar at the top of the loupe shows the photo's decision and does the
+same with the mouse: **Pick**, **Reject**, **Unflag** and the stars
+(click the current rating again to clear it). With **Auto-advance** ticked,
+every decision (button or key) moves on to the next photo, so you can go
+through a shoot with P and X alone; the choice is remembered.
 
 The information panel shows when and where the photo was taken (with the
 UTC offset when known), camera, lens, exposure (aperture, shutter speed,
@@ -78,13 +94,22 @@ The fitted view uses a 2048-pixel preview. 100% zoom uses a full-size
 image, created the first time you zoom into a photo and then cached
 (:doc:`/reference/data-locations`).
 
+.. _features-library-culling:
+
 Culling
 -------
 
 Mark photos as **picks** or **rejects** and give them **star ratings**
 with the keyboard (:doc:`/reference/keyboard-shortcuts`): P, X and U for
 pick, reject and unflag, 1–5 for stars and 0 to clear. In the timeline the
-keys apply to every selected photo; in the loupe, to the photo shown.
+keys apply to every selected photo; in the loupe, to the photo shown. Hold
+**Shift** (Shift+P, Shift+X, Shift+U) to move on to the next photo
+afterwards, in the loupe or with one photo selected in the timeline.
+
+**Picks** counts only photos you marked: nothing is picked automatically.
+The suggested best photo of each series is marked with a green border and
+★ instead (:ref:`features-series`); **Best of each series only** shows just
+those, ready to pick.
 
 Decisions are saved immediately. **Undo** and **Redo** (above the
 timeline, or Ctrl+Z / Ctrl+Shift+Z) step back and forward through the

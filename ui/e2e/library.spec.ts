@@ -79,4 +79,17 @@ test("selects photos with click, shift-click and ctrl-click", async ({
   await tiles.nth(5).click({ modifiers: ["ControlOrMeta"] });
   await expect(page.getByTestId("selection-count")).toHaveText("5 selected");
   await expect(tiles.nth(2)).toHaveAttribute("aria-pressed", "true");
+
+  // Or with the mouse alone: each tile's checkbox adds or removes it.
+  const checks = page.getByTestId("tile-check");
+  await checks.nth(5).click();
+  await expect(page.getByTestId("selection-count")).toHaveText("4 selected");
+  await page.keyboard.press("Escape");
+  await tiles.nth(1).hover();
+  await checks.nth(1).click();
+  await tiles.nth(4).hover();
+  await checks.nth(4).click();
+  await expect(page.getByTestId("selection-count")).toHaveText("2 selected");
+  await page.getByTestId("open-compare").click();
+  await expect(page.getByTestId("compare-pane")).toHaveCount(2);
 });
