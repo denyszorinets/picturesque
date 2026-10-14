@@ -4,6 +4,7 @@
     ApiError,
     getSettings,
     previewTemplate,
+    reanalyzePhotos,
     templatePresets,
     updateSettings,
     type AiStatus,
@@ -15,6 +16,7 @@
     type TemplatePreview,
   } from "../api";
   import ModelList from "../ai/ModelList.svelte";
+  import Reanalyze from "../analysis/Reanalyze.svelte";
   import PathInput from "../components/PathInput.svelte";
 
   interface Props {
@@ -337,6 +339,20 @@
       a suggestion: it is not written to sidecars or exported as a pick.
     </p>
   </fieldset>
+
+  <div class="field">
+    <span class="label">Analysis</span>
+    <p class="hint muted">
+      Photos are analyzed once, after import. Analyze them again after a failed
+      analysis, or to get scores from new models. Earlier results are used until
+      the new ones are ready.
+    </p>
+    <Reanalyze
+      reanalyze={reanalyzePhotos}
+      label="Re-analyze all photos"
+      confirm="Analyze every photo in the library again? This runs in the background and can take a while."
+    />
+  </div>
 
   <div class="field">
     <label class="label" for="ai-provider">AI acceleration</label>

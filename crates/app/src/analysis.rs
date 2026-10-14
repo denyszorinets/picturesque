@@ -81,6 +81,24 @@ pub struct PrioritizeArgs {
     pub photo_ids: Vec<i64>,
 }
 
+/// Arguments of `reanalyze_photos`.
+#[derive(Debug, Clone, Default, Deserialize, TS)]
+#[serde(default, deny_unknown_fields)]
+#[ts(export)]
+pub struct ReanalyzeArgs {
+    /// The photos to analyze again; every photo when absent.
+    #[ts(optional, type = "number[]")]
+    pub photo_ids: Option<Vec<i64>>,
+}
+
+/// Result of `reanalyze_photos`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
+#[ts(export)]
+pub struct ReanalyzeResult {
+    /// Photos that will be analyzed again.
+    pub photos: usize,
+}
+
 struct Queue {
     /// Photos the UI asked for, most recent first.
     priority: VecDeque<PhotoId>,
@@ -189,6 +207,19 @@ impl AnalysisService {
         q.priority.truncate(PRIORITY_LIMIT);
         q.wake = true;
         self.signal.notify_all();
+    }
+
+    /// Analyzes these photos (every photo with `None`) again, the given
+    /// ones first. Their earlier results stay in use until replaced.
+    /// Returns how many photos will be analyzed.
+    pub fn reanalyze(&self, ids: Option<&[PhotoId]>) -> Result<usize, CatalogError> {
+        let photos = self.catalog.mark_analysis_stale(ids)?;
+        match ids {
+            Some(ids) => self.prioritize(ids),
+            None => self.wake(),
+        }
+        self.report();
+        Ok(photos)
     }
 
     /// Tells workers there may be new photos (after an import).

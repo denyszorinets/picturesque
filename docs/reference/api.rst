@@ -134,6 +134,13 @@ Commands
    photos (``few_photos``) last. ``focal_lengths`` (cameras only) counts
    photos per focal length in whole millimetres, most used first.
 
+``reanalyze_photos``
+   Optional ``{ "photo_ids": [7, 8] }``; without it, every photo. Marks
+   the photos' analysis results stale so background analysis runs again
+   (:ref:`features-library-reanalyze`), the given photos first. Stale
+   results stay in use until replaced. Returns ``{ "photos": 2 }``: how
+   many of the photos exist (unknown ids are ignored).
+
 ``ai_status``
    No arguments. Where local AI models run (:doc:`/features/ai`):
 

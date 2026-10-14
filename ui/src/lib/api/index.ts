@@ -19,6 +19,7 @@ import type { DecisionView } from "./generated/DecisionView";
 import type { PhotoDetail } from "./generated/PhotoDetail";
 import type { LibraryStats } from "./generated/LibraryStats";
 import type { PhotoFacets } from "./generated/PhotoFacets";
+import type { ReanalyzeResult } from "./generated/ReanalyzeResult";
 import type { PhotoPage } from "./generated/PhotoPage";
 import type { PhotoQuery } from "./generated/PhotoQuery";
 import type { SeriesEditView } from "./generated/SeriesEditView";
@@ -31,6 +32,7 @@ import { selectTransport, type ImageSize } from "./transport";
 
 export { ApiError } from "./error";
 export type { AiStatus } from "./generated/AiStatus";
+export type { ReanalyzeResult } from "./generated/ReanalyzeResult";
 export type { GearStats } from "./generated/GearStats";
 export type { KeeperCounts } from "./generated/KeeperCounts";
 export type { LibraryStats } from "./generated/LibraryStats";
@@ -202,6 +204,17 @@ export function setDecisions(
   changes: DecisionChange[],
 ): Promise<DecisionView[]> {
   return transport.call<DecisionView[]>("set_decisions", { changes });
+}
+
+/**
+ * Analyzes photos again (every photo without `photoIds`); earlier results
+ * stay in use until replaced.
+ */
+export function reanalyzePhotos(photoIds?: number[]): Promise<ReanalyzeResult> {
+  return transport.call<ReanalyzeResult>(
+    "reanalyze_photos",
+    photoIds ? { photo_ids: photoIds } : undefined,
+  );
 }
 
 /** How many photos background analysis has finished. */

@@ -423,3 +423,48 @@ fn a_full_catalog_disk_pauses_analysis_until_space_is_freed() {
     assert!(analysis.status().paused.is_none());
     assert!(result(&world, ids[1], "sharpness").is_some());
 }
+
+#[test]
+fn reanalyzes_chosen_photos_keeping_earlier_results_meanwhile() {
+    let (world, ids) = world(3);
+    let analyzer = Recorder::new("sharpness", 1);
+    let analysis = service(&world, vec![analyzer.clone()]);
+    assert_eq!(analysis.run_until_idle(), 3);
+
+    // Unknown ids are ignored.
+    assert_eq!(
+        analysis.reanalyze(Some(&[ids[1], PhotoId(999)])).unwrap(),
+        1
+    );
+    let status = analysis.status();
+    assert_eq!((status.analyzed, status.total), (2, 3));
+    // The earlier result is still there until replaced.
+    assert!(result(&world, ids[1], "sharpness").is_some());
+    let id = AnalyzerId {
+        name: "sharpness",
+        version: 1,
+    };
+    assert_eq!(world.catalog.analysis_results(id).unwrap().len(), 3);
+
+    assert_eq!(analysis.run_until_idle(), 1);
+    assert_eq!(analyzer.seen(), [ids[0], ids[1], ids[2], ids[1]]);
+    assert_eq!(analysis.status().analyzed, 3);
+}
+
+#[test]
+fn reanalyzes_every_photo() {
+    let (world, _) = world(2);
+    let analyzer = Recorder::new("sharpness", 1);
+    let analysis = service(&world, vec![analyzer.clone()]);
+    analysis.run_until_idle();
+
+    assert_eq!(analysis.reanalyze(None).unwrap(), 2);
+    assert_eq!(analysis.status().analyzed, 0);
+    // Progress is reported right away.
+    assert!(world.events.0.lock().unwrap().iter().any(|e| matches!(
+        e,
+        AppEvent::AnalysisProgress(s) if s.analyzed == 0 && s.total == 2
+    )));
+    assert_eq!(analysis.run_until_idle(), 2);
+    assert_eq!(analyzer.seen().len(), 4);
+}
