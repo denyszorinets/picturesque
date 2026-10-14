@@ -1124,12 +1124,20 @@ impl ImportPipeline {
             sizes.extend(copied.iter().map(|(f, _)| f.size));
         }
         self.set_stage(job, JobStage::Imported, Some(photo_id), None);
-        let target = &new.assets.primary().path;
+        // Library paths read the same on every platform, as in the UI.
+        let target = new
+            .assets
+            .primary()
+            .path
+            .iter()
+            .map(|c| c.to_string_lossy())
+            .collect::<Vec<_>>()
+            .join("/");
         self.log(
             LogLevel::Info,
             Some(job.id),
             Some(photo_id),
-            &format!("{name}: imported to {}", target.display()),
+            &format!("{name}: imported to {target}"),
         );
         if let Some(hook) = self.on_imported.lock().expect("hook lock").as_ref() {
             hook();
