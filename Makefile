@@ -1,4 +1,4 @@
-.PHONY: smoke help format format-check test lint build doc check clean ui-deps ui-check e2e bindings-check dev-web app-dev docs docs-serve docs-check
+.PHONY: dist dist-deb dist-rpm dist-appimage dist-linux dist-macos dist-windows smoke help format format-check test lint build doc check clean ui-deps ui-check e2e bindings-check dev-web app-dev docs docs-serve docs-check
 
 DOCS_DIR := docs
 SPHINX := uv run --project $(DOCS_DIR) --frozen
@@ -21,6 +21,13 @@ help:
 	@echo "  dev-web       Run the UI in a browser against the dev server (no display needed)"
 	@echo "  app-dev       Run the desktop app with hot reload (needs a display)"
 	@echo "  smoke         Build the desktop app and smoke-test it on Xvfb (tauri-driver)"
+	@echo "  dist          Build the installers for this OS into target/release/bundle"
+	@echo "  dist-deb      Build the .deb (on Debian/Ubuntu)"
+	@echo "  dist-rpm      Build the .rpm (on Fedora)"
+	@echo "  dist-appimage Build the .AppImage (on Linux)"
+	@echo "  dist-linux    Build the .deb, .rpm and .AppImage"
+	@echo "  dist-macos    Build the .dmg (on macOS, needs Homebrew libraries)"
+	@echo "  dist-windows  Build the .msi and setup .exe (on Windows; not supported yet)"
 	@echo "  clean         Remove build artifacts"
 	@echo "  docs          Build documentation into docs/_build/html"
 	@echo "  docs-serve    Live-reloading documentation preview on http://127.0.0.1:8000"
@@ -86,6 +93,56 @@ smoke:
 
 app-dev:
 	npx tauri dev
+
+# Installers (docs/development/packaging.rst). Each must be built on the OS
+# it targets: the binary links the build host's libvips and LibRaw.
+ifeq ($(OS),Windows_NT)
+HOST_OS := Windows
+else
+HOST_OS := $(shell uname -s)
+endif
+require-os = @test "$(HOST_OS)" = "$(1)" || \
+	(echo "$@ must run on $(1) (this is $(HOST_OS))" && exit 1)
+
+dist:
+ifeq ($(HOST_OS),Linux)
+	$(MAKE) dist-linux
+else ifeq ($(HOST_OS),Darwin)
+	$(MAKE) dist-macos
+else ifeq ($(HOST_OS),Windows)
+	$(MAKE) dist-windows
+else
+	@echo "no installers for $(HOST_OS)" && exit 1
+endif
+
+dist-deb:
+	$(call require-os,Linux)
+	npx tauri build --bundles deb
+
+dist-rpm:
+	$(call require-os,Linux)
+	npx tauri build --bundles rpm
+
+# linuxdeploy must find libwebgpu_dawn.so next to the binary; it runs
+# extracted so no FUSE is needed.
+dist-appimage:
+	$(call require-os,Linux)
+	LD_LIBRARY_PATH=$(CURDIR)/target/release APPIMAGE_EXTRACT_AND_RUN=1 \
+		npx tauri build --bundles appimage
+
+dist-linux:
+	$(call require-os,Linux)
+	LD_LIBRARY_PATH=$(CURDIR)/target/release APPIMAGE_EXTRACT_AND_RUN=1 \
+		npx tauri build --bundles deb,rpm,appimage
+
+dist-macos:
+	$(call require-os,Darwin)
+	npx tauri build --bundles app
+	scripts/bundle-macos.sh
+
+dist-windows:
+	$(call require-os,Windows)
+	npx tauri build --bundles msi,nsis
 
 clean:
 	cargo clean

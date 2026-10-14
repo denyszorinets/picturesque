@@ -31,6 +31,8 @@ into ``develop`` or ``main``, on pushes to those branches, and on demand.
 
 Every pull request must be green before it is merged.
 
+.. _development-ci-smoke:
+
 Smoke test of the real app
 --------------------------
 
