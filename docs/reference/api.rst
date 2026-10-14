@@ -49,6 +49,9 @@ Commands
    ``null`` on the last page. Paging is keyset-based, so later pages are as
    fast as the first. ``limit`` is 1–1000.
 
+   ``camera`` matches every spelling of the camera with the same display
+   name (``Canon``/``EOS R5`` and ``Canon``/``Canon EOS R5``).
+
    ``min_sharpness``, ``min_exposure`` and ``min_noise`` (0–1) keep photos
    whose technical score is at least that (:doc:`quality-scores`); photos
    not analyzed yet never match. ``min_aesthetic`` (0–1) does the same for
@@ -109,7 +112,8 @@ Commands
    ``first_day``, ``last_day`` and ``days`` count only matching photos
    (they drive the timeline layout); the option lists below always cover
    the whole library. The values present in the library with photo counts:
-   ``days`` (newest first), ``cameras`` (with display labels), ``lenses``,
+   ``days`` (newest first), ``cameras`` (with display labels; spellings
+   of one camera are one entry, keyed by the most used), ``lenses``,
    ``places``, ``flags``, ``ratings`` (counts for 0–5 stars), plus
    ``total``, ``first_day`` and ``last_day``.
 

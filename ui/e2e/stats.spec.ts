@@ -112,3 +112,44 @@ test("ranks cameras and lenses by keepers and lists focal lengths", async ({
     rows.filter({ hasText: "Statcam Alpha" }).getByTestId("keeper-rate"),
   ).toHaveText("100%");
 });
+
+test("counts one camera once however its files spell it", async ({
+  page,
+  request,
+}) => {
+  const time = new Date("2007-01-01T10:00:00");
+  await importFiles(request, {
+    "spelling/a.JPG": {
+      bytes: jpegWithGear(15001, {
+        make: "Spellcam",
+        model: "Spellcam Delta",
+        focal: 28,
+      }),
+      time,
+    },
+    "spelling/b.JPG": {
+      bytes: jpegWithGear(15002, {
+        make: "Spellcam",
+        model: "Delta",
+        focal: 28,
+      }),
+      time,
+    },
+  });
+  const stats = await call<{ cameras: Row[] }>(request, "library_stats", null);
+  const delta = stats.cameras.filter((c) => c.label === "Spellcam Delta");
+  expect(delta).toHaveLength(1);
+  expect(delta[0]!.counts.photos).toBe(2);
+  expect(delta[0]!.focal_lengths).toEqual([{ value: 28, count: 2 }]);
+
+  await page.goto("/");
+  await page
+    .getByRole("navigation", { name: "Main" })
+    .getByRole("button", { name: "Statistics" })
+    .click();
+  await expect(
+    page
+      .getByTestId("camera-stats")
+      .getByRole("rowheader", { name: "Spellcam Delta" }),
+  ).toHaveCount(1);
+});

@@ -81,7 +81,8 @@ fn photo_filters(query: &PhotoQuery, p: &str, d: &str) -> (Vec<String>, Vec<Valu
     }
     if let Some(camera) = &query.camera {
         add(
-            "p.camera_make = ? AND p.camera_model = ?",
+            // Every spelling of the camera.
+            "camera_label(p.camera_make, p.camera_model) = camera_label(?, ?)",
             vec![
                 Value::Text(camera.make.clone()),
                 Value::Text(camera.model.clone()),
@@ -453,6 +454,25 @@ where
     .map_err(storage)
 }
 
+/// One entry per camera name: spellings that display the same are counted
+/// together under the most used one (the camera filter matches all of
+/// them). `cameras` come most used first.
+fn merge_spellings(cameras: Vec<Counted<CameraFacet>>) -> Vec<Counted<CameraFacet>> {
+    let mut merged: Vec<Counted<CameraFacet>> = Vec::new();
+    for c in cameras {
+        match merged.iter_mut().find(|m| m.value.label == c.value.label) {
+            Some(m) => m.count += c.count,
+            None => merged.push(c),
+        }
+    }
+    merged.sort_by(|a, b| {
+        b.count
+            .cmp(&a.count)
+            .then_with(|| a.value.label.cmp(&b.value.label))
+    });
+    merged
+}
+
 fn facets(conn: &Connection, filter: Option<&PhotoQuery>) -> Result<PhotoFacets, CatalogError> {
     let (clauses, values) = filter.map(filters).unwrap_or_default();
     let (total, first, last): (i64, Option<String>, Option<String>) = conn
@@ -494,6 +514,7 @@ fn facets(conn: &Connection, filter: Option<&PhotoQuery>) -> Result<PhotoFacets,
             Ok(CameraFacet { key, label })
         },
     )?;
+    let cameras = merge_spellings(cameras);
     let lenses = counted(
         conn,
         "SELECT lens, count(*) AS n FROM photo WHERE lens IS NOT NULL GROUP BY lens ORDER BY n DESC, lens",

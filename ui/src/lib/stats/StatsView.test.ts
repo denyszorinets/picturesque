@@ -110,4 +110,18 @@ describe("StatsView", () => {
     expect(await screen.findByTestId("stats-empty")).toBeInTheDocument();
     expect(load).toHaveBeenCalledTimes(1);
   });
+
+  it("shows an error instead of loading forever when drawing fails", async () => {
+    // Two rows with one name cannot be drawn (the backend merges them).
+    const twice = gear("Canon EOS R5", counts(30, 3, 0));
+    render(StatsView, {
+      props: {
+        load: () => Promise.resolve({ ...STATS, cameras: [twice, twice] }),
+        visible: true,
+      },
+    });
+    expect(await screen.findByTestId("stats-failed")).toHaveTextContent(
+      "Statistics could not be shown",
+    );
+  });
 });
