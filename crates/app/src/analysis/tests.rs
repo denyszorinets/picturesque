@@ -253,20 +253,26 @@ fn background_workers_analyze_new_photos_when_woken_and_report_progress() {
     let analyzer = Recorder::new("sharpness", 1);
     let analysis = service(&world, vec![analyzer.clone()]);
 
+    let progress = || -> Vec<AnalysisStatus> {
+        world
+            .events
+            .0
+            .lock()
+            .unwrap()
+            .iter()
+            .filter_map(|e| match e {
+                AppEvent::AnalysisProgress(s) => Some(s.clone()),
+                _ => None,
+            })
+            .collect()
+    };
     analysis.start(3);
-    wait_for("first pass", || analysis.status().analyzed == 4);
+    // The count is updated just before its progress event is sent.
+    wait_for("first pass", || {
+        analysis.status().analyzed == 4 && progress().len() >= 4
+    });
 
-    let progress: Vec<AnalysisStatus> = world
-        .events
-        .0
-        .lock()
-        .unwrap()
-        .iter()
-        .filter_map(|e| match e {
-            AppEvent::AnalysisProgress(s) => Some(s.clone()),
-            _ => None,
-        })
-        .collect();
+    let progress = progress();
     assert_eq!(progress.len(), 4);
     assert!(progress.iter().any(|s| s.analyzed == 4 && s.total == 4));
 
