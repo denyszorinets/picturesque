@@ -52,6 +52,7 @@ pub fn run() {
             let catalog = Arc::new(SqliteCatalog::open(&data_dir.join("catalog.sqlite"))?);
             let api = Api::new(AppContext {
                 pipeline_store: catalog.clone(),
+                watcher: Arc::new(picturesque_infra::watcher::NotifyWatcher::new()),
                 settings_store: catalog.clone(),
                 catalog: catalog.clone(),
                 imports: catalog,

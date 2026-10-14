@@ -94,6 +94,19 @@ Where local AI models run (:doc:`/features/ai`).
 :Values: ``auto``, ``cpu``, ``directml``, ``coreml`` or ``webgpu``. A
    provider the build lacks, or that fails to start, falls back to the CPU.
 
+.. _reference-settings-import:
+
+``import``
+----------
+
+Watched import folders (:ref:`features-import-watching`).
+
+:Type: object with ``rescan_minutes``
+:Default: ``{ "rescan_minutes": 5 }``
+:Values: ``rescan_minutes``: how often watched folders are scanned again,
+   0–1440 minutes. ``0`` scans only when a folder reports a change and when
+   the app starts.
+
 Where settings are stored
 -------------------------
 
@@ -112,7 +125,8 @@ API
         "series": { "max_gap_seconds": 30, "max_distance": 16 },
         "ranking": { "sharpness": 0.6, "exposure": 0.3, "noise": 0.1,
                      "aesthetic": 0.4 },
-        "ai": { "provider": "auto" } }
+        "ai": { "provider": "auto" },
+        "import": { "rescan_minutes": 5 } }
 
 ``update_settings``
    Arguments: any subset of the settings. Unknown fields are rejected.

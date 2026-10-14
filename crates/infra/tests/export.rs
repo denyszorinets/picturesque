@@ -76,6 +76,7 @@ fn exports_verified_originals_and_upright_jpegs_with_metadata() {
         .unwrap();
     let api = Api::new(AppContext {
         pipeline_store: catalog.clone(),
+        watcher: Arc::new(picturesque_app::ports::watcher::NoWatcher),
         settings_store: catalog.clone(),
         catalog: catalog.clone(),
         imports: catalog.clone(),

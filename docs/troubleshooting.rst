@@ -24,6 +24,15 @@ The import stopped
    Photos already copied stay in the library. Open the import again and
    **Resume**; the rest is copied, already-copied photos are skipped.
 
+New photos in a watched folder are imported late
+   The pipeline log says *Cannot watch … for new photos* when the system
+   refuses to watch a folder, usually because a large folder tree exceeds
+   Linux's limit on watches. The folder is still scanned every few minutes
+   (:ref:`reference-settings-import`). To raise the limit:
+   ``sudo sysctl fs.inotify.max_user_watches=524288`` (add it to
+   ``/etc/sysctl.d/`` to keep it). Network shares often report no changes
+   at all and rely on the periodic scan.
+
 "Choosing a different library folder is not supported yet"
    The catalog stores paths relative to the library folder, so it cannot
    point at another folder once it has photos. Keep the library where it

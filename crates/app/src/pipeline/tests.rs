@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use chrono::NaiveDateTime;
 use picturesque_core::metadata::{CaptureMetadata, CaptureTime};
@@ -271,4 +272,53 @@ fn sources_are_validated_and_can_be_removed() {
     assert!(p.sources().unwrap().is_empty());
     // Its waiting photos are dropped.
     assert_eq!(p.status().queued, 0);
+}
+
+fn eventually(what: &str, check: impl Fn() -> bool) {
+    let deadline = std::time::Instant::now() + Duration::from_secs(15);
+    while !check() {
+        assert!(std::time::Instant::now() < deadline, "timed out: {what}");
+        std::thread::sleep(Duration::from_millis(20));
+    }
+}
+
+#[test]
+fn watched_folders_are_imported_when_they_change() {
+    let world = world();
+    let p = world.pipeline();
+    p.add_source(Path::new("/card"), true).unwrap();
+    p.add_source(Path::new("/backup"), false).unwrap();
+    // Nothing is watched until the pipeline starts.
+    assert!(world.watcher.folders().is_empty());
+    p.start();
+    assert_eq!(world.watcher.folders(), [PathBuf::from("/card")]);
+    eventually("the card is imported on start", || {
+        world.catalog.photo_count().unwrap() == 2
+    });
+
+    world
+        .fs
+        .write(Path::new("/card/DCIM/IMG_3.JPG"), b"jpg three");
+    world.watcher.touch("/card");
+    eventually("the new photo is imported", || {
+        world.catalog.photo_count().unwrap() == 3
+    });
+    p.set_watch(1, false).unwrap();
+    assert!(world.watcher.folders().is_empty());
+}
+
+#[test]
+fn a_folder_that_cannot_be_watched_is_reported() {
+    let world = world();
+    world.watcher.failing.lock().unwrap().push("/card".into());
+    let p = world.pipeline();
+    p.start();
+    p.add_source(Path::new("/card"), true).unwrap();
+    assert!(
+        world
+            .pipeline
+            .messages()
+            .iter()
+            .any(|m| m.starts_with("Cannot watch /card for new photos (too many watches)"))
+    );
 }

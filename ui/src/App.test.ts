@@ -16,6 +16,7 @@ vi.mock("./lib/api", async (importOriginal) => {
         series: { max_gap_seconds: 30, max_distance: 16 },
         ranking: { sharpness: 0.6, exposure: 0.3, noise: 0.1, aesthetic: 0.4 },
         ai: { provider: "auto" },
+        import: { rescan_minutes: 5 },
       }),
     listModels: () => Promise.resolve([]),
     aiStatus: () =>

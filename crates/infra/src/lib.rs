@@ -11,4 +11,5 @@ pub mod images;
 pub mod inference;
 pub mod metadata;
 pub mod models;
+pub mod watcher;
 pub mod xmp;

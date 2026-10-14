@@ -60,6 +60,7 @@ async fn serve() -> Result<(), String> {
     let events = EventBus::default();
     let api = Api::new(AppContext {
         pipeline_store: catalog.clone(),
+        watcher: Arc::new(picturesque_infra::watcher::NotifyWatcher::new()),
         settings_store: catalog.clone(),
         catalog: catalog.clone(),
         imports: catalog,

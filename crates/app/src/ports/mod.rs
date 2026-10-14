@@ -14,3 +14,4 @@ pub mod pipeline;
 pub mod pixels;
 pub mod settings;
 pub mod sidecars;
+pub mod watcher;
