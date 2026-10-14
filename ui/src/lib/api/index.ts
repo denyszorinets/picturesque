@@ -8,8 +8,12 @@ import type { RejectMoveResult } from "./generated/RejectMoveResult";
 import type { SimilarPhoto } from "./generated/SimilarPhoto";
 import type { AppEvent } from "./generated/AppEvent";
 import type { AppInfo } from "./generated/AppInfo";
-import type { ImportPlanView } from "./generated/ImportPlanView";
-import type { ImportStatus } from "./generated/ImportStatus";
+import type { ImportSource } from "./generated/ImportSource";
+import type { JobsArgs } from "./generated/JobsArgs";
+import type { JobView } from "./generated/JobView";
+import type { LogArgs } from "./generated/LogArgs";
+import type { LogEntry } from "./generated/LogEntry";
+import type { PipelineStatus } from "./generated/PipelineStatus";
 import type { DecisionChange } from "./generated/DecisionChange";
 import type { DecisionView } from "./generated/DecisionView";
 import type { PhotoDetail } from "./generated/PhotoDetail";
@@ -37,8 +41,14 @@ export type { Provider } from "./generated/Provider";
 export type { ProviderChoice } from "./generated/ProviderChoice";
 export type { AppEvent } from "./generated/AppEvent";
 export type { AppInfo } from "./generated/AppInfo";
-export type { ImportPlanView } from "./generated/ImportPlanView";
-export type { ImportStatus } from "./generated/ImportStatus";
+export type { ImportSource } from "./generated/ImportSource";
+export type { JobFilter } from "./generated/JobFilter";
+export type { JobStage } from "./generated/JobStage";
+export type { JobView } from "./generated/JobView";
+export type { LogEntry } from "./generated/LogEntry";
+export type { LogLevel } from "./generated/LogLevel";
+export type { PipelineStatus } from "./generated/PipelineStatus";
+export type { ImportSettings } from "./generated/ImportSettings";
 export type { DecisionChange } from "./generated/DecisionChange";
 export type { DecisionView } from "./generated/DecisionView";
 export type { PhotoDetail } from "./generated/PhotoDetail";
@@ -54,8 +64,6 @@ export type { Settings } from "./generated/Settings";
 export type { SettingsUpdate } from "./generated/SettingsUpdate";
 export type { TemplatePresetView } from "./generated/TemplatePresetView";
 export type { TemplatePreview } from "./generated/TemplatePreview";
-export type { PlannedPhotoView } from "./generated/PlannedPhotoView";
-export type { PhotoStatus } from "./generated/PhotoStatus";
 export { canPickFolders, pickFolders } from "./dialogs";
 export type { ImageSize } from "./transport";
 
@@ -89,27 +97,64 @@ export function previewTemplate(template: string): Promise<TemplatePreview> {
   return transport.call<TemplatePreview>("preview_template", { template });
 }
 
-/** Starts planning an import of the given absolute folders; progress arrives as events. */
-export function planImport(sources: string[]): Promise<ImportStatus> {
-  return transport.call<ImportStatus>("plan_import", { sources });
+/** The folders photos are imported from. */
+export function listImportSources(): Promise<ImportSource[]> {
+  return transport.call<ImportSource[]>("list_import_sources");
 }
 
-/** The plan (and, after copying, the outcome) of an import run. */
-export function getImport(runId: number): Promise<ImportPlanView> {
-  return transport.call<ImportPlanView>("get_import", { run_id: runId });
+/** Adds a folder to import from and starts importing it. */
+export function addImportSource(
+  path: string,
+  watch = true,
+): Promise<ImportSource> {
+  return transport.call<ImportSource>("add_import_source", { path, watch });
 }
 
-export function importStatus(runId: number): Promise<ImportStatus> {
-  return transport.call<ImportStatus>("import_status", { run_id: runId });
+/** Forgets a folder (imported photos stay); returns the remaining folders. */
+export function removeImportSource(id: number): Promise<ImportSource[]> {
+  return transport.call<ImportSource[]>("remove_import_source", { id });
 }
 
-/** Starts (or resumes) copying a planned import. */
-export function startImport(runId: number): Promise<ImportStatus> {
-  return transport.call<ImportStatus>("start_import", { run_id: runId });
+/** Turns automatic import of new photos in a folder on or off. */
+export function setImportSourceWatch(
+  id: number,
+  watch: boolean,
+): Promise<ImportSource> {
+  return transport.call<ImportSource>("set_import_source_watch", {
+    id,
+    watch,
+  });
 }
 
-export function cancelImport(runId: number): Promise<ImportStatus> {
-  return transport.call<ImportStatus>("cancel_import", { run_id: runId });
+/** Scans one folder (or all) for new photos now. */
+export function scanImportSources(id?: number): Promise<PipelineStatus> {
+  return transport.call<PipelineStatus>(
+    "scan_import_sources",
+    id === undefined ? {} : { id },
+  );
+}
+
+/** Counts and current work of the import pipeline. */
+export function pipelineStatus(): Promise<PipelineStatus> {
+  return transport.call<PipelineStatus>("pipeline_status");
+}
+
+/** Photos in the import pipeline, newest first. */
+export function pipelineJobs(args: JobsArgs = {}): Promise<JobView[]> {
+  return transport.call<JobView[]>("pipeline_jobs", args);
+}
+
+/** The import pipeline log, newest first. */
+export function pipelineLog(args: LogArgs = {}): Promise<LogEntry[]> {
+  return transport.call<LogEntry[]>("pipeline_log", args);
+}
+
+/** Queues failed photos again (all, or those listed). */
+export function retryFailedImports(ids?: number[]): Promise<PipelineStatus> {
+  return transport.call<PipelineStatus>(
+    "retry_failed_imports",
+    ids === undefined ? {} : { ids },
+  );
 }
 
 /** Subscribes to backend events; returns an unsubscribe function. */

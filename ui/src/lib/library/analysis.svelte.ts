@@ -38,8 +38,7 @@ export class AnalysisProgress {
     if (event.type === "analysis_progress") {
       const { type: _, ...status } = event;
       this.status = status;
-    } else if (event.type === "import_progress" && event.state === "completed")
-      void this.load();
+    }
   }
 
   /** Called with the photos on screen; sends them once scrolling settles. */

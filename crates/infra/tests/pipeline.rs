@@ -1,5 +1,5 @@
-//! The continuous import pipeline with every real adapter, across a
-//! restart.
+//! Importing with every real adapter: std file system, SQLite catalog,
+//! EXIF reader, GeoNames geocoder, XMP sidecars and file watching.
 
 mod support;
 
@@ -33,7 +33,6 @@ fn api_with(catalog: &Arc<SqliteCatalog>, cache: &Path, watcher: Arc<dyn FolderW
         watcher,
         settings_store: catalog.clone(),
         catalog: catalog.clone(),
-        imports: catalog.clone(),
         fs: Arc::new(StdFileSystem),
         metadata: Arc::new(ExifMetadataReader),
         geocoder: Arc::new(GeoNamesGeocoder::default()),
@@ -105,6 +104,7 @@ fn imports_photo_by_photo_and_survives_a_restart() {
         assert_eq!(jobs[0]["stage"], "imported");
         assert!(jobs[0]["photo_id"].is_i64());
         assert_eq!(jobs[0]["analysis"], json!([0, 0]));
+        assert_eq!(jobs[0]["failed_stage"], Value::Null);
         let status = call(&api, "pipeline_status", Value::Null);
         assert_eq!(
             (status["imported"].clone(), status["queued"].clone()),
@@ -217,4 +217,186 @@ fn a_photo_dropped_into_a_watched_folder_is_imported() {
         bytes
     );
     api.wait_for_thumbnails();
+}
+
+#[test]
+fn a_failed_job_remembers_where_it_failed() {
+    let catalog = SqliteCatalog::open_in_memory().unwrap();
+    let source = catalog.add_source(Path::new("/card"), true).unwrap();
+    let id = catalog
+        .offer_job(source.id, Path::new("/card/a.jpg"), &[])
+        .unwrap()
+        .unwrap();
+    catalog
+        .set_job_stage(id, JobStage::Copying, None, None)
+        .unwrap();
+    catalog
+        .set_job_stage(id, JobStage::Failed, None, Some("disk full"))
+        .unwrap();
+    let job = catalog.job(id).unwrap().unwrap();
+    assert_eq!(
+        (job.stage, job.failed_stage),
+        (JobStage::Failed, Some(JobStage::Copying))
+    );
+    assert_eq!(job.error.as_deref(), Some("disk full"));
+    // Retrying clears it.
+    catalog.retry_failed(None).unwrap();
+    catalog
+        .set_job_stage(id, JobStage::Reading, None, None)
+        .unwrap();
+    assert_eq!(catalog.job(id).unwrap().unwrap().failed_stage, None);
+}
+
+fn lisbon_photo(path: &Path, time: &'static str) {
+    write_jpeg(
+        path,
+        16,
+        12,
+        &[
+            (Tag::Make, Text("Canon")),
+            (Tag::Model, Text("Canon EOS R5")),
+            (Tag::DateTimeOriginal, Text(time)),
+            (Tag::GPSLatitudeRef, Text("N")),
+            (
+                Tag::GPSLatitude,
+                Rationals(vec![(38, 1), (43, 1), (2028, 100)]),
+            ),
+            (Tag::GPSLongitudeRef, Text("W")),
+            (
+                Tag::GPSLongitude,
+                Rationals(vec![(9, 1), (8, 1), (2148, 100)]),
+            ),
+        ],
+    );
+}
+
+#[test]
+fn imports_real_files_into_a_real_library() {
+    let dir = tempfile::tempdir().unwrap();
+    let (src, lib) = (dir.path().join("card"), dir.path().join("Clean"));
+    std::fs::create_dir_all(&lib).unwrap();
+    std::fs::create_dir_all(&src).unwrap();
+    lisbon_photo(&src.join("IMG_1.JPG"), "2026:10:12 14:30:05");
+    lisbon_photo(&src.join("IMG_2.JPG"), "2026:10:12 14:31:00");
+    std::fs::write(src.join("IMG_2.xmp"), "<x:xmpmeta/>").unwrap();
+    let catalog = Arc::new(SqliteCatalog::open(&dir.path().join("catalog.sqlite")).unwrap());
+    catalog
+        .save_settings(&Settings {
+            library_root: Some(lib.clone()),
+            path_template: "{year}/{date} {city}/{name}.{ext}".into(),
+            ..Default::default()
+        })
+        .unwrap();
+    let api = api(&catalog, &dir.path().join("cache"));
+    call(&api, "add_import_source", json!({ "path": src }));
+    assert_eq!(api.run_imports(), 2);
+
+    // The place comes from GPS through the offline geocoder.
+    let folder = lib.join("2026").join("2026-10-12 Lisbon");
+    assert_eq!(
+        std::fs::read(folder.join("IMG_1.JPG")).unwrap(),
+        std::fs::read(src.join("IMG_1.JPG")).unwrap()
+    );
+    assert!(folder.join("IMG_2.xmp").exists());
+    // No temporary files are left behind.
+    let leftovers: Vec<_> = std::fs::read_dir(&folder)
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .filter(|e| e.file_name().to_string_lossy().starts_with('.'))
+        .collect();
+    assert!(leftovers.is_empty());
+    assert_eq!(catalog.photo_count().unwrap(), 2);
+
+    // Thumbnails are rendered from the library copy and cached.
+    let thumb = api
+        .image_path(1, picturesque_app::thumbnails::ImageSize::Grid)
+        .unwrap();
+    assert_eq!(image::image_dimensions(&thumb).unwrap(), (16, 12));
+    let jobs = call(&api, "pipeline_jobs", Value::Null);
+    assert!(
+        jobs.as_array()
+            .unwrap()
+            .iter()
+            .all(|j| j["thumbnail"] == true),
+        "{jobs}"
+    );
+
+    // The same card in another folder finds only duplicates.
+    let copy = dir.path().join("backup");
+    std::fs::create_dir_all(&copy).unwrap();
+    for name in ["IMG_1.JPG", "IMG_2.JPG"] {
+        std::fs::copy(src.join(name), copy.join(name)).unwrap();
+    }
+    call(&api, "add_import_source", json!({ "path": copy }));
+    assert_eq!(api.run_imports(), 2);
+    let status = call(&api, "pipeline_status", Value::Null);
+    assert_eq!(
+        (status["imported"].clone(), status["duplicates"].clone()),
+        (json!(2), json!(2))
+    );
+}
+
+#[test]
+fn sidecars_are_read_on_import_and_updated_with_decisions() {
+    let dir = tempfile::tempdir().unwrap();
+    let (src, lib) = (dir.path().join("src"), dir.path().join("lib"));
+    std::fs::create_dir_all(&lib).unwrap();
+    std::fs::create_dir_all(&src).unwrap();
+    lisbon_photo(&src.join("IMG_7.JPG"), "2026:05:05 10:00:00");
+    std::fs::write(
+        src.join("IMG_7.JPG.xmp"),
+        r#"<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+<rdf:Description rdf:about="" xmlns:xmp="http://ns.adobe.com/xap/1.0/" xmlns:darktable="http://darktable.sf.net/"
+ xmp:Rating="2" darktable:xmp_version="5"/></rdf:RDF></x:xmpmeta>"#,
+    )
+    .unwrap();
+    lisbon_photo(&src.join("IMG_8.JPG"), "2026:05:05 10:00:01");
+    let catalog = Arc::new(SqliteCatalog::open_in_memory().unwrap());
+    catalog
+        .save_settings(&Settings {
+            library_root: Some(lib.clone()),
+            path_template: "{name}.{ext}".into(),
+            ..Default::default()
+        })
+        .unwrap();
+    let api = api(&catalog, &dir.path().join("cache"));
+    call(&api, "add_import_source", json!({ "path": src }));
+    assert_eq!(api.run_imports(), 2);
+
+    // The darktable rating came in with the photo.
+    let page = call(&api, "query_photos", json!({ "sort": "captured_asc" }));
+    let (first, second) = (&page["photos"][0], &page["photos"][1]);
+    assert_eq!(first["rating"], 2);
+
+    // Picking both photos updates the imported sidecar and creates the other.
+    call(
+        &api,
+        "set_decisions",
+        json!({ "changes": [{ "photo_id": first["id"], "flag": "pick" }, { "photo_id": second["id"], "flag": "pick", "rating": 5 }] }),
+    );
+    let report = api.flush_sidecars();
+    assert_eq!((report.written, report.failed.len()), (2, 0), "{report:?}");
+
+    let updated = std::fs::read_to_string(lib.join("IMG_7.JPG.xmp")).unwrap();
+    assert!(
+        updated.contains(r#"darktable:xmp_version="5""#),
+        "{updated}"
+    );
+    assert!(
+        updated.contains(r#"xmp:Rating="2""#) && updated.contains(r#"digiKam:PickLabel="3""#),
+        "{updated}"
+    );
+    let created = std::fs::read_to_string(lib.join("IMG_8.JPG.xmp")).unwrap();
+    assert!(created.contains(r#"xmp:Rating="5""#), "{created}");
+    // The new sidecar is now one of the photo's files.
+    let detail = call(&api, "get_photo", json!({ "photo_id": second["id"] }));
+    assert!(
+        detail["files"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|f| f["path"] == "IMG_8.JPG.xmp"),
+        "{detail}"
+    );
+    assert_eq!(api.flush_sidecars().written, 0);
 }

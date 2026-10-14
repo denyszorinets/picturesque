@@ -76,7 +76,11 @@ dev-web:
 # window reaches a real screen.
 smoke:
 	npx tauri build --no-bundle
-	@test -e /tmp/.X11-unix/X99 || (Xvfb :99 -screen 0 1280x800x24 >/dev/null 2>&1 &) ; sleep 1
+	@# Start Xvfb unless one is running (a socket alone may be stale).
+	@if ! { [ -e /tmp/.X99-lock ] && kill -0 $$(tr -d ' ' < /tmp/.X99-lock) 2>/dev/null; }; then \
+		rm -f /tmp/.X99-lock /tmp/.X11-unix/X99; \
+		(Xvfb :99 -screen 0 1280x800x24 >/dev/null 2>&1 &); sleep 1; \
+	fi
 	env -u WAYLAND_DISPLAY DISPLAY=:99 GDK_BACKEND=x11 \
 		node ui/smoke/app-smoke.mjs target/release/picturesque-desktop target/smoke-results
 

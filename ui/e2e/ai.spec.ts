@@ -19,7 +19,7 @@ test("chooses the AI provider and shows which one runs", async ({
   await page.goto("/");
   await page
     .getByRole("navigation")
-    .getByRole("button", { name: "Import" })
+    .getByRole("button", { name: "Settings" })
     .click();
   const status = page.getByTestId("ai-status");
   await expect(status).toContainText("Models run on");

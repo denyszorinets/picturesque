@@ -39,10 +39,14 @@ fn job(row: &Row<'_>) -> rusqlite::Result<Job> {
         photo_id: row.get::<_, Option<i64>>(4)?.map(PhotoId),
         error: row.get(5)?,
         updated_at: row.get(6)?,
+        failed_stage: row
+            .get::<_, Option<String>>(7)?
+            .as_deref()
+            .and_then(JobStage::from_name),
     })
 }
 
-const JOB_COLUMNS: &str = "id, source_id, files, stage, photo_id, error, updated_at";
+const JOB_COLUMNS: &str = "id, source_id, files, stage, photo_id, error, updated_at, failed_stage";
 
 fn rank(level: LogLevel) -> i64 {
     match level {
@@ -190,6 +194,7 @@ impl PipelineStore for SqliteCatalog {
             .execute(
                 &format!(
                     "UPDATE import_job SET stage = ?1, photo_id = coalesce(?2, photo_id), error = ?3,
+                     failed_stage = CASE WHEN ?1 = 'failed' THEN stage END,
                      updated_at = {NOW} WHERE id = ?4"
                 ),
                 params![stage.as_str(), photo_id.map(|p| p.0), error, id],

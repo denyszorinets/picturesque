@@ -25,7 +25,6 @@ fn api(catalog: &Arc<SqliteCatalog>, cache_dir: PathBuf) -> Api {
         watcher: Arc::new(picturesque_app::ports::watcher::NoWatcher),
         settings_store: catalog.clone(),
         catalog: catalog.clone(),
-        imports: catalog.clone(),
         fs: Arc::new(StdFileSystem),
         metadata: Arc::new(ExifMetadataReader),
         geocoder: Arc::new(GeoNamesGeocoder::default()),

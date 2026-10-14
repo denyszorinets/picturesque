@@ -40,22 +40,6 @@ describe("AnalysisProgress", () => {
     expect(progress.remaining).toBe(1);
   });
 
-  it("reloads after an import completes", async () => {
-    const backend = api(status(0, 20));
-    const progress = new AnalysisProgress(backend);
-    progress.handle({
-      type: "import_progress",
-      run_id: 1,
-      state: "completed",
-      phase: null,
-      done: 0,
-      total: 0,
-      summary: null,
-      error: null,
-    });
-    await vi.waitFor(() => expect(progress.remaining).toBe(20));
-  });
-
   it("sends visible photos once scrolling settles", async () => {
     const backend = api();
     const progress = new AnalysisProgress(backend);

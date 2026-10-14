@@ -31,6 +31,7 @@
   let sidecarNaming = $state<Settings["sidecar_naming"]>("file_extension");
   let maxGap = $state(30);
   let maxDistance = $state(16);
+  let rescanMinutes = $state(5);
   let weights = $state({
     sharpness: 0.6,
     exposure: 0.3,
@@ -79,6 +80,7 @@
         sidecarNaming !== saved.sidecar_naming ||
         seriesChanged ||
         rankingChanged ||
+        rescanMinutes !== saved.import.rescan_minutes ||
         provider !== saved.ai.provider),
   );
 
@@ -118,6 +120,7 @@
     sidecarNaming = settings.sidecar_naming;
     maxGap = settings.series.max_gap_seconds;
     maxDistance = settings.series.max_distance;
+    rescanMinutes = settings.import.rescan_minutes;
     weights = { ...settings.ranking };
     provider = settings.ai.provider;
     loadAi();
@@ -140,6 +143,8 @@
         update.series = { max_gap_seconds: maxGap, max_distance: maxDistance };
       if (rankingChanged) update.ranking = { ...weights };
       if (provider !== saved.ai.provider) update.ai = { provider };
+      if (rescanMinutes !== saved.import.rescan_minutes)
+        update.import = { rescan_minutes: rescanMinutes };
       if (sidecarNaming !== saved.sidecar_naming)
         update.sidecar_naming = sidecarNaming;
       if (libraryRoot.trim() !== (saved.library_root ?? ""))
@@ -157,7 +162,7 @@
 </script>
 
 <section class="card settings" aria-labelledby="settings-title">
-  <h2 id="settings-title">Library</h2>
+  <h2 id="settings-title">Settings</h2>
 
   <div class="field">
     <span class="label">Library folder</span>
@@ -207,6 +212,24 @@
         {/each}
       </ul>
     {/if}
+  </div>
+
+  <div class="field">
+    <label class="inline">
+      <span class="label">Check watched import folders every</span>
+      <input
+        type="number"
+        min="0"
+        max="1440"
+        bind:value={rescanMinutes}
+        data-testid="rescan-minutes"
+      />
+      minutes
+    </label>
+    <p class="hint muted">
+      Folders also report new photos as they arrive; this catches what they
+      miss, such as network shares. 0 checks only on changes and at start.
+    </p>
   </div>
 
   <div class="field">

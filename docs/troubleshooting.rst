@@ -7,22 +7,24 @@ Importing
 HEIC photos are skipped as unreadable
    The HEVC decoder for libheif is missing; many Linux distributions leave
    it out for patent reasons. Install ``libde265`` support (on Fedora,
-   ``libheif-freeworld`` from RPM Fusion) and plan the import again
-   (:doc:`/development/building`).
+   ``libheif-freeworld`` from RPM Fusion; see :doc:`/development/building`),
+   then click **Retry failed** in **Activity**.
 
 A RAW file cannot be read
-   Very new cameras may not be supported by LibRaw yet. The import
-   summary lists the file with the reason; if the camera also wrote a
-   JPEG, that one is imported.
+   Very new cameras may not be supported by LibRaw yet. **Activity** lists
+   the photo as failed with the reason; if the camera also wrote a JPEG,
+   the photo is imported using the JPEG's metadata.
 
 Photos are reported as duplicates
    A photo whose image file is byte-for-byte identical to one already in
    the library is not imported twice, even under another name
    (:doc:`/features/import`).
 
-The import stopped
-   Photos already copied stay in the library. Open the import again and
-   **Resume**; the rest is copied, already-copied photos are skipped.
+Importing stopped
+   Photos already copied stay in the library. When the app starts again,
+   importing continues with the photos that were waiting; the one being
+   copied when it stopped starts over. If **Activity** says importing is
+   paused, it explains why (for example, no library folder is set).
 
 New photos in a watched folder are imported late
    The pipeline log says *Cannot watch … for new photos* when the system
@@ -54,11 +56,11 @@ Ratings do not show up in another program
    Picturesque writes decisions to XMP sidecars next to the photos.
    Choose the sidecar naming your other program expects (Lightroom reads
    ``IMG_0042.xmp``, darktable and digiKam ``IMG_0042.CR3.xmp``) under
-   **Import → Library** (:ref:`reference-settings-sidecar-naming`).
+   **Settings** (:ref:`reference-settings-sidecar-naming`).
 
 Series look wrong
-   Adjust the longest pause and similarity limit under **Import →
-   Library → Series**, or correct single photos with **S** (split before)
+   Adjust the longest pause and similarity limit under **Settings →
+   Series**, or correct single photos with **S** (split before)
    and **J** (join) (:doc:`/features/series`).
 
 AI features

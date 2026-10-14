@@ -1,65 +1,89 @@
 Import
 ======
 
-For a step-by-step walkthrough of the import screen, see
-:doc:`/getting-started/first-import`. The same operations are available
-to developers through the API (:doc:`/reference/api`).
+For a step-by-step walkthrough, see :doc:`/getting-started/first-import`.
+The same operations are available to developers through the API
+(:ref:`import commands <reference-api-import>`).
 
-Import copies photos from your existing folders (**sources**) into the
-Clean library, organized by a path template. Sources are never modified
+Import copies photos from your existing folders (**import folders**, or
+*sources*) into the Clean library, organized by a path template. Import
+folders are never modified
 (:doc:`ADR-0008 </architecture/decisions/0008-non-destructive-verified-import>`).
+Importing runs in the background, photo by photo
+(:doc:`ADR-0012 </architecture/decisions/0012-continuous-import-pipeline>`).
 
 .. _features-import-steps:
 
-How an import works
+How importing works
 -------------------
 
-1. **Plan.** Choose one or more source folders (in the desktop app with a
-   folder picker; in a browser during development, by typing the path). Picturesque scans them,
-   reads each photo's metadata, finds duplicates and works out where every
-   file will go. This runs in the background with progress, and nothing is
-   copied yet.
-2. **Review.** The plan lists every photo with its destination, the
-   duplicates that will be skipped and any problems (unreadable folders or
-   files, sidecars without a photo).
-3. **Copy.** Start the import. Each file is copied to a temporary file
-   next to its destination, the copy is read back and compared by hash
-   with what was read from the source, and only then is it given its real
-   name. A RAW+JPEG pair and its sidecars are imported together: if any of
-   its files fails, the copies already made for that photo are removed, and
-   the photo is reported as failed while the rest of the import continues.
-4. **Done.** Imported photos are in the catalog and the library; the plan
-   now shows what was imported, skipped and failed.
+Add a folder in **Activity** (in the desktop app with a folder picker; in a
+browser during development, by typing the path). Picturesque remembers it
+and scans it: every photo found is queued. One photo at a time then goes
+through these steps, shown for each photo in **Activity → Photos**:
+
+.. list-table::
+   :header-rows: 1
+
+   * - Step
+     - What happens
+   * - Found
+     - The photo was found in the folder and is waiting.
+   * - Read
+     - Date, camera, lens, GPS and place are read
+       (:ref:`features-import-metadata`), and any decision in an existing
+       sidecar. The photo is checked for duplicates.
+   * - Copied, Verified
+     - Each file is copied to a temporary file next to its destination,
+       the copy is read back and compared by hash with the original, and
+       only then given its real name. A RAW+JPEG pair and its sidecars are
+       imported together: if any file fails, the copies already made for
+       that photo are removed.
+   * - Catalogued
+     - The photo is in the catalog and appears in the **Library** right
+       away.
+   * - Thumbnail
+     - Its grid image has been rendered.
+   * - Analyzed
+     - Background analysis (quality, similarity, AI models when downloaded)
+       has run; see :ref:`features-library-analysis`.
+
+A photo that fails says why (for example, a file that cannot be read) and
+the rest continue. Fix the cause and click **Retry failed**. The **Log**
+records every photo imported, skipped or failed, folders found and
+problems, newest first; the newest 20,000 entries are kept.
+
+Importing waits while no library folder is set, and continues once one is
+chosen.
 
 Duplicates
 ~~~~~~~~~~
 
 A photo is skipped as a duplicate if one of its RAW or image files has
-exactly the same content as a file already in the library, or as a file
-earlier in the same import (for example the same card copied to two
-folders). When the same photo is in several of the chosen folders, the
-copy in the folder listed first is imported. Content is compared with a
-BLAKE3 hash, but only for files whose size matches another file, so
-planning does not read every file twice.
+exactly the same content as a file already in the library, for example
+the same card copied to two folders, or a backup of photos already
+imported. Content is compared with a BLAKE3 hash, but only for files whose
+size matches a file in the library, so most photos are read only once.
 
-Cancelling and resuming
-~~~~~~~~~~~~~~~~~~~~~~~
+Stopping and resuming
+~~~~~~~~~~~~~~~~~~~~~
 
-Planning and copying can be cancelled. Copying stops between photos, so a
-photo is never left half-copied. A cancelled import, or one interrupted
-because the app was closed or crashed, can be started again: it continues
-with the photos not yet imported, and a file already copied with the same
-content is recognized instead of being copied again.
+Quitting the app, or a crash, stops importing between steps. Folders and
+the queue are kept in the catalog: when the app starts again, the photo
+that was being copied starts over and the rest follow. A copy left at its
+destination by the interrupted attempt is recognized by its content and
+reused rather than copied again.
 
 Safety
 ~~~~~~
 
 - Source files are only ever read.
-- An existing file in the library is never overwritten. If a file with
-  different content already sits at a destination, that photo fails rather
-  than replacing it.
-- If a source file changes after planning (or while it is being copied),
-  it is not imported; plan the import again.
+- An existing file in the library is never overwritten. If another file
+  already uses a name, the photo gets a free name such as
+  ``IMG_0042 (2).CR3``.
+- A photo whose files changed after they were found, or while they were
+  being copied, is not kept; it is imported again with its new content
+  when the folder is next scanned.
 - A copy that does not match the original is retried once; if it fails
   again, the destination disk may be failing and the photo is reported.
 
@@ -103,15 +127,15 @@ Skipped:
   never imported into itself.
 - Links to folders, so a link cannot make the scan loop. Links to files
   are followed.
-- Files in unsupported formats (videos, documents). They are counted in
-  the import summary.
+- Files in unsupported formats (videos, documents).
 
-If you select a folder and also one of its subfolders, the subfolder is
-scanned once.
+If you add a folder and also one of its subfolders, each photo is still
+imported once.
 
-A folder that cannot be read (missing, or no permission) is listed in the
-import summary with the reason; the rest of the scan continues. Sidecars
-that match no photo are listed too and are not copied.
+A folder that cannot be read (missing, or no permission) is reported in
+the log with the reason, and for an import folder itself also under
+**Import folders**; the rest of the scan continues. Sidecars that match no
+photo are not copied.
 
 .. _features-import-metadata:
 
@@ -157,8 +181,8 @@ example GPS added later by a phone app) is taken from the JPEG.
 RAW files are read with `rawler <https://github.com/dnglab/dnglab>`_,
 which understands every common format including CR3, RAF, ORF and RW2;
 other images with `kamadak-exif <https://github.com/kamadak/exif-rs>`_.
-A file whose metadata cannot be read at all is reported in the import
-summary.
+A photo whose metadata cannot be read at all fails at *Read*, with the
+reason.
 
 .. _features-import-places:
 

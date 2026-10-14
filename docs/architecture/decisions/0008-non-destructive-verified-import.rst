@@ -1,7 +1,9 @@
 ADR-0008: Non-Destructive, Verified Import
 ==========================================
 
-:Status: Accepted
+:Status: Accepted; amended by
+   :doc:`ADR-0012 <0012-continuous-import-pipeline>` (import runs with a
+   review step replaced by a per-photo pipeline; the copy guarantees stand)
 :Date: 2026-10-12
 
 Context

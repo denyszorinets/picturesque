@@ -114,7 +114,7 @@ test("series thresholds are adjustable in settings", async ({ page }) => {
   await page.goto("/");
   await page
     .getByRole("navigation")
-    .getByRole("button", { name: "Import" })
+    .getByRole("button", { name: "Settings" })
     .click();
 
   await page.getByTestId("series-max-gap").fill("45");
@@ -123,7 +123,7 @@ test("series thresholds are adjustable in settings", async ({ page }) => {
   await page.reload();
   await page
     .getByRole("navigation")
-    .getByRole("button", { name: "Import" })
+    .getByRole("button", { name: "Settings" })
     .click();
   await expect(page.getByTestId("series-max-gap")).toHaveValue("45");
 

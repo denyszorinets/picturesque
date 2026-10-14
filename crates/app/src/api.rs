@@ -22,7 +22,6 @@ use crate::embeddings::{DEFAULT_LIMIT, EmbeddingIndex, MAX_LIMIT, SimilarArgs};
 use crate::explain::{self, SeriesPlace, Signals};
 use crate::export::{ExportArgs, ExportError, ExportService};
 use crate::hooks::EventHooks;
-use crate::import::{Deps, ImportError, ImportService, PlanImportArgs, RunArgs};
 use crate::info;
 use crate::library::{
     DecisionView, FacetsArgs, PhotoArgs, PhotoDetail, PhotoQuery, SetDecisionsArgs,
@@ -37,7 +36,6 @@ use crate::ports::events::EventSink;
 use crate::ports::fs::FileSystem;
 use crate::ports::geocoder::ReverseGeocoder;
 use crate::ports::images::ImageDecoder;
-use crate::ports::imports::ImportStore;
 use crate::ports::inference::InferenceEngine;
 use crate::ports::metadata::MetadataReader;
 use crate::ports::models::{ModelSpec, ModelStore};
@@ -104,7 +102,6 @@ impl std::error::Error for ApiError {}
 pub struct AppContext {
     pub settings_store: Arc<dyn SettingsStore>,
     pub catalog: Arc<dyn PhotoCatalog>,
-    pub imports: Arc<dyn ImportStore>,
     pub fs: Arc<dyn FileSystem>,
     pub metadata: Arc<dyn MetadataReader>,
     pub geocoder: Arc<dyn ReverseGeocoder>,
@@ -158,7 +155,6 @@ impl Analyzed {
 /// cases can do file and database I/O directly.
 pub struct Api {
     settings: SettingsService,
-    imports: ImportService,
     thumbnails: Arc<ThumbnailService>,
     catalog: Arc<dyn PhotoCatalog>,
     sidecars: Arc<SidecarService>,
@@ -180,8 +176,8 @@ impl fmt::Debug for Api {
 }
 
 impl Api {
-    /// Fails only if import runs left over from a previous session cannot
-    /// be marked interrupted (the catalog is unusable).
+    /// Builds the use cases; nothing runs until
+    /// [`start_background_work`](Self::start_background_work).
     pub fn new(ctx: AppContext) -> Result<Self, ApiError> {
         let decoder = Arc::clone(&ctx.decoder);
         let thumbnails = Arc::new(ThumbnailService::new(
@@ -192,7 +188,6 @@ impl Api {
             ctx.cache_dir,
         ));
         let events = Arc::new(EventHooks::new(ctx.events));
-        let _ = events.thumbnails.set(Arc::clone(&thumbnails));
         let models = Arc::new(ModelService::new(
             ctx.models,
             ctx.model_store,
@@ -264,17 +259,6 @@ impl Api {
             Arc::clone(&ctx.settings_store),
             Arc::clone(&ctx.sidecars),
         ));
-        let imports = ImportService::new(Deps {
-            sidecars: Arc::clone(&ctx.sidecars),
-            settings: Arc::clone(&ctx.settings_store),
-            catalog: ctx.catalog,
-            store: ctx.imports,
-            fs: Arc::clone(&ctx.fs),
-            metadata: ctx.metadata,
-            geocoder: ctx.geocoder,
-            events,
-        })
-        .map_err(import_error)?;
         let search = TextSearch::new(
             Arc::clone(&models),
             Arc::clone(&ctx.inference),
@@ -293,7 +277,6 @@ impl Api {
             rejects,
             ai: AiService::new(ctx.inference, Arc::clone(&ctx.settings_store)),
             settings: SettingsService::new(ctx.settings_store, ctx.fs, Arc::clone(&catalog)),
-            imports,
             thumbnails,
             catalog,
             sidecars,
@@ -466,11 +449,6 @@ impl Api {
                 format!("There is no photo {photo_id}."),
             )),
         }
-    }
-
-    /// Waits for a running import, if any (used on shutdown and in tests).
-    pub fn wait_for_imports(&self) {
-        self.imports.wait();
     }
 
     /// Runs `command` with JSON `args` and returns its JSON result.
@@ -773,29 +751,6 @@ impl Api {
                         .map_err(catalog_error)?,
                 )
             }
-            "plan_import" => {
-                let args: PlanImportArgs = parse_args(command, args)?;
-                let run_id = self.imports.plan(args.sources).map_err(import_error)?;
-                respond(self.imports.status(run_id).map_err(import_error)?)
-            }
-            "get_import" => {
-                let RunArgs { run_id } = parse_args(command, args)?;
-                respond(self.imports.plan_view(run_id).map_err(import_error)?)
-            }
-            "import_status" => {
-                let RunArgs { run_id } = parse_args(command, args)?;
-                respond(self.imports.status(run_id).map_err(import_error)?)
-            }
-            "start_import" => {
-                let RunArgs { run_id } = parse_args(command, args)?;
-                self.imports.start(run_id).map_err(import_error)?;
-                respond(self.imports.status(run_id).map_err(import_error)?)
-            }
-            "cancel_import" => {
-                let RunArgs { run_id } = parse_args(command, args)?;
-                self.imports.cancel(run_id).map_err(import_error)?;
-                respond(self.imports.status(run_id).map_err(import_error)?)
-            }
             _ => Err(ApiError::new(
                 ApiErrorCode::UnknownCommand,
                 format!("unknown command `{command}`"),
@@ -851,15 +806,6 @@ fn model_error(e: ModelError) -> ApiError {
 
 fn catalog_error(e: crate::ports::catalog::CatalogError) -> ApiError {
     ApiError::internal(e.to_string())
-}
-
-fn import_error(e: ImportError) -> ApiError {
-    match e {
-        ImportError::Invalid(_) | ImportError::NotFound(_) => {
-            ApiError::new(ApiErrorCode::InvalidArguments, e.to_string())
-        }
-        ImportError::Storage(e) => ApiError::internal(e.to_string()),
-    }
 }
 
 fn settings_error(e: SettingsError) -> ApiError {

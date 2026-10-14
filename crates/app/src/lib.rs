@@ -12,7 +12,6 @@ pub mod embeddings;
 pub mod explain;
 pub mod export;
 pub mod hooks;
-pub mod import;
 pub mod info;
 pub mod library;
 pub mod models;

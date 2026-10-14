@@ -95,6 +95,8 @@ pub struct Job {
     pub photo_id: Option<PhotoId>,
     pub error: Option<String>,
     pub updated_at: String,
+    /// For a failed job, the stage it failed in.
+    pub failed_stage: Option<JobStage>,
 }
 
 /// Severity of a log entry.

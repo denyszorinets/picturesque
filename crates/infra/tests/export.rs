@@ -79,7 +79,6 @@ fn exports_verified_originals_and_upright_jpegs_with_metadata() {
         watcher: Arc::new(picturesque_app::ports::watcher::NoWatcher),
         settings_store: catalog.clone(),
         catalog: catalog.clone(),
-        imports: catalog.clone(),
         fs: Arc::new(StdFileSystem),
         metadata: Arc::new(ExifMetadataReader),
         geocoder: Arc::new(GeoNamesGeocoder::default()),
