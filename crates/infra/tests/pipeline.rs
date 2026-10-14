@@ -71,7 +71,7 @@ fn photo(path: &Path, time: &'static str) {
 #[test]
 fn imports_photo_by_photo_and_survives_a_restart() {
     let dir = tempfile::tempdir().unwrap();
-    let card = dir.path().join("card/DCIM");
+    let card = dir.path().join("card").join("DCIM");
     let lib = dir.path().join("Clean");
     std::fs::create_dir_all(&card).unwrap();
     std::fs::create_dir_all(&lib).unwrap();

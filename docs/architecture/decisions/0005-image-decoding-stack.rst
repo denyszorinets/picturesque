@@ -41,10 +41,17 @@ HEIC
    platform; it is not part of default builds (see Consequences).
 
 Rust bindings
-   The ``libvips`` crate (2.3) for libvips. Our own FFI for LibRaw, because
-   the published LibRaw crates are unmaintained or little used. The FFI
-   module is the one place in ``picturesque-infra`` that allows
-   ``unsafe`` code.
+   Our own FFI for both, each a small module and the only places in
+   ``picturesque-infra`` that allow ``unsafe`` code:
+
+   - **LibRaw** (``libraw_r``, about a dozen functions), because the
+     published LibRaw crates are unmaintained or little used.
+   - **libvips** (the dozen operations the app uses, through libvips' C API
+     with name/value option lists). This replaced the ``libvips`` crate
+     (2.3) in October 2026: its bindings are generated once on 64-bit Linux
+     and do not compile on Windows, where C ``long`` and the C library's
+     structures differ. An image read from memory keeps that memory alive,
+     so no caller has to.
 
 Alternatives Considered
 -----------------------

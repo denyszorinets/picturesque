@@ -74,3 +74,10 @@ pub trait FileSystem: Send + Sync {
     /// Bytes free for this user on the disk holding `path`.
     fn available_space(&self, path: &Path) -> Result<u64, String>;
 }
+
+/// Whether `path` names a folder independently of the working directory:
+/// absolute, or on Windows also from the root of the current drive
+/// (`\Photos`), as Windows resolves it the same way everywhere in the app.
+pub fn is_absolute(path: &Path) -> bool {
+    path.is_absolute() || (cfg!(windows) && path.has_root())
+}

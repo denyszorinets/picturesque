@@ -667,3 +667,24 @@ fn a_full_catalog_disk_pauses_importing_and_reuses_the_copies() {
     // The copies made before the catalog filled up were used, not doubled.
     assert_eq!(world.fs.files_under(Path::new("/lib")).len(), 3);
 }
+
+#[test]
+fn a_job_without_files_fails_instead_of_stopping_the_queue() {
+    let world = world();
+    let p = world.pipeline();
+    let source = p.add_source(Path::new("/card"), false).unwrap();
+    world
+        .pipeline
+        .offer_job(source.id, Path::new("/card/DCIM/GONE.JPG"), &[])
+        .unwrap();
+
+    assert_eq!(p.run_until_idle(), 1);
+    let failed = p
+        .jobs(JobFilter::Failed, 10, None, &|_| (false, [0, 0]))
+        .unwrap();
+    assert_eq!(failed.len(), 1);
+    assert!(failed[0].error.as_deref().unwrap().contains("not found"));
+    // The photos still in the folder are imported.
+    scan_all(&p);
+    assert_eq!(p.run_until_idle(), 2);
+}

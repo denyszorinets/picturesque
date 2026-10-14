@@ -15,10 +15,15 @@ out=target/release/bundle/dmg
 
 [ -d "$app" ] || { echo "missing $app; run npx tauri build --bundles app first" >&2; exit 1; }
 
+# Search target/release too: ONNX Runtime's libwebgpu_dawn.dylib is copied
+# there and linked through @rpath. Without input, dylibbundler fails on a
+# library it cannot find instead of asking for its folder.
 dylibbundler -od -b \
   -x "$app/Contents/MacOS/picturesque-desktop" \
   -d "$app/Contents/Frameworks" \
-  -p @executable_path/../Frameworks/
+  -p @executable_path/../Frameworks/ \
+  -s target/release \
+  -s "$(brew --prefix)/lib" </dev/null
 codesign --force --deep --sign - "$app"
 mkdir -p "$out"
 hdiutil create -volname Picturesque -srcfolder "$app" -ov -format UDZO \

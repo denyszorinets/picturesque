@@ -102,6 +102,10 @@ fn shrinks_but_never_enlarges() {
 }
 
 #[test]
+#[cfg_attr(
+    windows,
+    ignore = "the libvips build for Windows has no HEVC decoder (issue #135)"
+)]
 fn decodes_heic_and_reports_its_displayed_size() {
     let dir = tempfile::tempdir().unwrap();
     let out = dir.path().join("h.jpg");

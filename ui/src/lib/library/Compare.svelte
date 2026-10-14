@@ -1,7 +1,7 @@
 <script lang="ts">
   import * as api from "../api";
   import type { PhotoSummary } from "../api";
-  import { CompareState } from "./compare.svelte";
+  import { CompareState } from "./compare-state.svelte";
   import ComparePane from "./ComparePane.svelte";
   import type { Culling } from "./culling.svelte";
 
