@@ -1,5 +1,8 @@
-// Smoke test of the real desktop app (#54): starts it through tauri-driver
-// (WebDriver), imports fixture photos and picks one.
+// Smoke test of the real desktop app (#54, #108): starts it through
+// tauri-driver (WebDriver), imports fixture photos from a watched folder,
+// picks one, restarts the app and checks that the library, the decision
+// and the folder are still there, then drops a new photo into the folder
+// and waits for it to be imported on its own.
 //
 //   node ui/smoke/app-smoke.mjs <path to picturesque-desktop> [screenshot dir]
 //
@@ -16,20 +19,23 @@ import { App, startDriver, until } from "./driver.mjs";
 const app = resolve(process.argv[2] ?? "target/release/picturesque-desktop");
 const shots = resolve(process.argv[3] ?? "smoke-results");
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
+const fixture = (n) =>
+  join(repo, "crates/infra/tests/fixtures", `orient_${n}.jpg`);
 
 const work = mkdtempSync(join(tmpdir(), "picturesque-smoke-"));
 const library = join(work, "Library");
-const card = join(work, "Card", "DCIM");
+const card = join(work, "Card");
 mkdirSync(library, { recursive: true });
-mkdirSync(card, { recursive: true });
-for (const n of [1, 3, 6]) {
-  copyFileSync(
-    join(repo, "crates/infra/tests/fixtures", `orient_${n}.jpg`),
-    join(card, `IMG_000${n}.JPG`),
-  );
-}
+mkdirSync(join(card, "DCIM"), { recursive: true });
+for (const n of [1, 3, 6])
+  copyFileSync(fixture(n), join(card, "DCIM", `IMG_000${n}.JPG`));
 
 const step = (name) => console.log(`smoke: ${name}`);
+const jpegsInLibrary = () =>
+  readdirSync(library, { recursive: true }).filter((f) =>
+    String(f).endsWith(".JPG"),
+  ).length;
+const nav = (tab) => `//nav//button[normalize-space()='${tab}']`;
 const driver = await startDriver(work);
 let window;
 
@@ -41,7 +47,7 @@ try {
   await window.screenshot("1-empty");
 
   step("set the library folder");
-  await window.click("//nav//button[normalize-space()='Settings']");
+  await window.click(nav("Settings"));
   await window.type("[data-testid=library-root]", library);
   await window.click("[data-testid=save-settings]");
   await until(
@@ -49,29 +55,65 @@ try {
     async () => (await window.enabled("[data-testid=save-settings]")) === false,
   );
 
-  step("import the card");
-  await window.click("//nav//button[normalize-space()='Activity']");
+  step("add the card as a watched import folder");
+  await window.click(nav("Library"));
+  await window.click("//button[normalize-space()='Add import folder']");
   await window.type("[data-testid=source-path]", card);
   await window.click("[data-testid=add-source]");
-  const jpegs = () =>
-    readdirSync(library, { recursive: true }).filter((f) =>
-      String(f).endsWith(".JPG"),
-    );
-  await until("3 photos imported", async () => jpegs().length === 3);
+
+  step("photos appear in the library without reloading");
+  await window.click(nav("Library"));
   await until(
-    "the activity shows them imported",
+    "3 photos in the library",
+    async () => (await window.count("button.tile")) === 3,
+  );
+  if (jpegsInLibrary() !== 3)
+    throw new Error(`expected 3 imported files, found ${jpegsInLibrary()}`);
+
+  step("each photo's steps are shown");
+  await window.click(nav("Activity"));
+  await until(
+    "3 photos imported",
     async () => (await window.count("tr[data-stage=imported]")) === 3,
   );
+  await window.screenshot("2-activity");
 
   step("pick a photo");
-  await window.click("//nav//button[normalize-space()='Library']");
+  await window.click(nav("Library"));
   await window.click("button.tile");
   await window.press("p");
   await window.find("button.tile .badge.pick", 10_000);
   await until("the picks count follows", async () =>
     (await window.text("//aside//button[contains(., 'Picks')]")).includes("1"),
   );
-  await window.screenshot("2-picked");
+  await window.screenshot("3-picked");
+
+  step("restart the app");
+  await window.close();
+  window = await App.launch(app, shots);
+
+  step("the library, the pick and the folder are still there");
+  await until(
+    "3 photos after restart",
+    async () => (await window.count("button.tile")) === 3,
+  );
+  await window.find("button.tile .badge.pick", 10_000);
+  await window.click(nav("Activity"));
+  await until("the folder is listed", async () =>
+    (await window.text("[data-testid=sources]")).includes(card),
+  );
+  await window.screenshot("4-restarted");
+
+  step("a photo dropped into the folder is imported on its own");
+  await window.click(nav("Library"));
+  copyFileSync(fixture(8), join(card, "DCIM", "IMG_0008.JPG"));
+  await until(
+    "4 photos in the library",
+    async () => (await window.count("button.tile")) === 4,
+  );
+  if (jpegsInLibrary() !== 4)
+    throw new Error(`expected 4 imported files, found ${jpegsInLibrary()}`);
+  await window.screenshot("5-auto-imported");
   step("passed");
 } catch (e) {
   console.error(`smoke: FAILED: ${e.message}`);

@@ -19,9 +19,8 @@ into ``develop`` or ``main``, on pushes to those branches, and on demand.
      - Ubuntu 24.04
      - ``make smoke``: builds the real desktop app and drives it on Xvfb
        through ``tauri-driver`` and WebKitWebDriver
-       (:repo:`ui/smoke/app-smoke.mjs`): the window opens, a library folder
-       is set, three fixture photos are imported and one is picked with
-       **P**. Screenshots are uploaded.
+       (:repo:`ui/smoke/app-smoke.mjs`); see below. Screenshots are
+       uploaded.
    * - macOS / Windows (build, test)
      - macOS 15, Windows Server 2025
      - ``cargo build`` and ``cargo test`` for the whole workspace,
@@ -36,11 +35,22 @@ Smoke test of the real app
 --------------------------
 
 The end-to-end tests drive the UI in a browser against the development
-server; the smoke test checks the real Tauri window. Run it locally with
-``make smoke`` (the devcontainer has Xvfb, ``tauri-driver`` and
+server; the smoke test checks the real Tauri window:
+
+1. The window opens on the empty library; a library folder is set.
+2. A folder with three fixture photos is added as a watched import folder;
+   the photos appear in the library without reloading, and **Activity**
+   shows each one imported.
+3. One photo is picked with **P**.
+4. The app is restarted: the three photos, the pick and the import folder
+   are still there.
+5. A new photo copied into the folder is imported on its own and appears
+   in the library.
+
+Run it locally with ``make smoke`` (the devcontainer has Xvfb, ``tauri-driver`` and
 WebKitWebDriver). It starts its own Xvfb on ``:99`` and clears
-``WAYLAND_DISPLAY``, so no window appears on a real screen, and gives the
-app fresh data folders. Screenshots land in ``target/smoke-results``.
+``WAYLAND_DISPLAY``, so no window appears on a real screen (an Xvfb
+already running there is reused), and gives the app fresh data folders. Screenshots land in ``target/smoke-results``.
 
 Conventions
 -----------
