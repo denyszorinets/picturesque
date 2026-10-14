@@ -89,7 +89,7 @@ fn read_all(
                     if i >= total || cancel.load(Ordering::Relaxed) {
                         break;
                     }
-                    let photo = read_one(deps, &sources[i]);
+                    let photo = read_one(&Readers::of(deps), &sources[i]);
                     results.lock().expect("results lock")[i] = Some(photo);
                     let d = done.fetch_add(1, Ordering::Relaxed) + 1;
                     progress(Progress::Reading { done: d, total });
@@ -109,7 +109,28 @@ fn read_all(
         .collect())
 }
 
-fn read_one(deps: &Deps, source: &SourcePhoto) -> PlannedPhoto {
+/// What reading a source photo needs.
+pub(crate) struct Readers<'a> {
+    pub fs: &'a dyn crate::ports::fs::FileSystem,
+    pub metadata: &'a dyn crate::ports::metadata::MetadataReader,
+    pub geocoder: &'a dyn crate::ports::geocoder::ReverseGeocoder,
+    pub sidecars: &'a dyn crate::ports::sidecars::SidecarStore,
+}
+
+impl<'a> Readers<'a> {
+    fn of(deps: &'a Deps) -> Self {
+        Self {
+            fs: deps.fs.as_ref(),
+            metadata: deps.metadata.as_ref(),
+            geocoder: deps.geocoder.as_ref(),
+            sidecars: deps.sidecars.as_ref(),
+        }
+    }
+}
+
+/// Reads a source photo's metadata, file stamps and existing sidecar
+/// decision. A photo whose files cannot be read gets a `reason`.
+pub(crate) fn read_one(deps: &Readers<'_>, source: &SourcePhoto) -> PlannedPhoto {
     let primary = source.primary();
     let mut reason = None;
     let mut metadata = match deps.metadata.read(&primary.path, primary.format) {

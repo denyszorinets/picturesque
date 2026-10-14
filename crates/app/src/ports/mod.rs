@@ -10,6 +10,7 @@ pub mod imports;
 pub mod inference;
 pub mod metadata;
 pub mod models;
+pub mod pipeline;
 pub mod pixels;
 pub mod settings;
 pub mod sidecars;

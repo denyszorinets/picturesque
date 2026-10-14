@@ -23,6 +23,7 @@ fn api() -> Arc<Api> {
 fn api_with(catalog: Arc<SqliteCatalog>, cache_dir: std::path::PathBuf) -> Arc<Api> {
     Arc::new(
         Api::new(AppContext {
+            pipeline_store: catalog.clone(),
             settings_store: catalog.clone(),
             catalog: catalog.clone(),
             imports: catalog,

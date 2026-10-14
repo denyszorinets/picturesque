@@ -5,9 +5,9 @@
 //! it, the plan is copied in the background. Both phases report progress
 //! as events and can be cancelled; copying resumes where it stopped.
 
-mod copy;
+pub(crate) mod copy;
 pub mod model;
-mod plan;
+pub(crate) mod plan;
 
 use std::collections::HashMap;
 use std::fmt;

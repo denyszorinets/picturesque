@@ -448,7 +448,7 @@ fn a_source_changed_after_planning_is_not_copied() {
             .reason
             .as_deref()
             .unwrap()
-            .contains("plan the import again")
+            .contains("imported again")
     );
     assert!(h.library_files().is_empty());
 }

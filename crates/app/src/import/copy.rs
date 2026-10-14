@@ -11,7 +11,7 @@ use picturesque_core::photo::{Asset, NewPhoto, PhotoAssets};
 use super::model::{FileStatus, ImportRun, ImportState, PhotoStatus, PlannedFile, PlannedPhoto};
 use super::{Deps, Progress};
 use crate::ports::catalog::CatalogError;
-use crate::ports::fs::RenameError;
+use crate::ports::fs::{FileSystem, RenameError};
 
 /// How copying ended.
 #[derive(Debug, PartialEq, Eq)]
@@ -65,7 +65,7 @@ fn import_photo(deps: &Deps, root: &Path, photo: &PlannedPhoto) -> Result<(), Ca
 
     for file in &photo.files {
         let file_row = file.id.expect("saved plan has ids");
-        match copy_file(deps, root, file) {
+        match copy_file(deps.fs.as_ref(), root, file) {
             Ok(hash) => {
                 deps.store
                     .update_file(file_row, FileStatus::Verified, Some(&hash), None)?;
@@ -126,8 +126,11 @@ fn import_photo(deps: &Deps, root: &Path, photo: &PlannedPhoto) -> Result<(), Ca
 /// Copies one file to its target via a temporary file, verifying the copy
 /// by hash. Returns the content hash. A target that already holds the same
 /// content (from an interrupted attempt) is accepted as is.
-fn copy_file(deps: &Deps, root: &Path, file: &PlannedFile) -> Result<ContentHash, String> {
-    let fs = deps.fs.as_ref();
+pub(crate) fn copy_file(
+    fs: &dyn FileSystem,
+    root: &Path,
+    file: &PlannedFile,
+) -> Result<ContentHash, String> {
     let dst = root.join(&file.target);
 
     if fs.exists(&dst) {
@@ -143,7 +146,7 @@ fn copy_file(deps: &Deps, root: &Path, file: &PlannedFile) -> Result<ContentHash
         };
     }
 
-    ensure_unchanged(deps, file)?;
+    ensure_unchanged(fs, file)?;
     let parent = dst.parent().expect("target has a folder");
     fs.create_dir_all(parent)?;
     let tmp = parent.join(format!(
@@ -173,7 +176,7 @@ fn copy_file(deps: &Deps, root: &Path, file: &PlannedFile) -> Result<ContentHash
         );
     };
 
-    if let Err(e) = ensure_unchanged(deps, file) {
+    if let Err(e) = ensure_unchanged(fs, file) {
         let _ = fs.remove_file(&tmp);
         return Err(e);
     }
@@ -190,8 +193,8 @@ fn copy_file(deps: &Deps, root: &Path, file: &PlannedFile) -> Result<ContentHash
     }
 }
 
-fn ensure_unchanged(deps: &Deps, file: &PlannedFile) -> Result<(), String> {
-    let stamp = deps.fs.stamp(&file.source)?;
+fn ensure_unchanged(fs: &dyn FileSystem, file: &PlannedFile) -> Result<(), String> {
+    let stamp = fs.stamp(&file.source)?;
     let modified_ns = stamp
         .modified
         .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
@@ -203,7 +206,7 @@ fn ensure_unchanged(deps: &Deps, file: &PlannedFile) -> Result<(), String> {
 }
 
 fn changed_message() -> String {
-    "the file changed after the import was planned; plan the import again".into()
+    "the file changed while it was being imported; it will be imported again".into()
 }
 
 /// The state a run ends in for a copy outcome.

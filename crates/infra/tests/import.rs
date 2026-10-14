@@ -24,6 +24,7 @@ fn api(catalog: &Arc<SqliteCatalog>) -> Api {
     let cache_dir =
         std::env::temp_dir().join(format!("picturesque-test-cache-{}", std::process::id()));
     Api::new(AppContext {
+        pipeline_store: catalog.clone(),
         settings_store: catalog.clone(),
         catalog: catalog.clone(),
         imports: catalog.clone(),

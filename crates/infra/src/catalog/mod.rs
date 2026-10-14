@@ -4,6 +4,7 @@ mod analysis;
 mod imports;
 mod migrations;
 mod photos;
+mod pipeline;
 mod query;
 mod rejects;
 mod series;

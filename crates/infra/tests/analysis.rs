@@ -21,6 +21,7 @@ use serde_json::{Value, json};
 
 fn api(catalog: &Arc<SqliteCatalog>, cache_dir: PathBuf) -> Api {
     Api::new(AppContext {
+        pipeline_store: catalog.clone(),
         settings_store: catalog.clone(),
         catalog: catalog.clone(),
         imports: catalog.clone(),

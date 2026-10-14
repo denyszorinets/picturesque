@@ -42,6 +42,10 @@ const MIGRATIONS: &[(&str, &str)] = &[
         "0011_reject_moves",
         include_str!("migrations/0011_reject_moves.sql"),
     ),
+    (
+        "0012_import_pipeline",
+        include_str!("migrations/0012_import_pipeline.sql"),
+    ),
 ];
 
 /// Schema version after all migrations have run.

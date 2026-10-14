@@ -70,6 +70,7 @@ fn moves_rejects_and_back_without_losing_files() {
     let b = add(&catalog, &lib, &[("2026/b.JPG", MediaFormat::Jpeg)], 2);
     let c = add(&catalog, &lib, &[("2026/c.JPG", MediaFormat::Jpeg)], 3);
     let api = Api::new(AppContext {
+        pipeline_store: catalog.clone(),
         settings_store: catalog.clone(),
         catalog: catalog.clone(),
         imports: catalog.clone(),

@@ -141,6 +141,7 @@ fn main() {
         }
     }
     let api = Api::new(AppContext {
+        pipeline_store: catalog.clone(),
         settings_store: catalog.clone(),
         catalog: catalog.clone(),
         imports: catalog.clone(),

@@ -44,6 +44,8 @@ task that introduces them. The rest is in the schema today
      IMPORT_RUN ||--|{ IMPORT_PHOTO : contains
      IMPORT_PHOTO ||--|{ IMPORT_FILE : has
      IMPORT_PHOTO }o--o| PHOTO : "becomes"
+     IMPORT_SOURCE ||--o{ IMPORT_JOB : "photos found"
+     IMPORT_JOB }o--o| PHOTO : "becomes"
 
 ``photo``
    One captured image. Capture time (with UTC offset when known), camera,
@@ -91,6 +93,14 @@ task that introduces them. The rest is in the schema today
    (source path, size and modification time at planning, hash when known,
    target path, status: planned, verified or failed). Lets plans be
    reviewed and interrupted imports resume.
+
+``import_source`` / ``import_job`` / ``pipeline_log``
+   The continuous import pipeline
+   (:doc:`ADR-0012 </architecture/decisions/0012-continuous-import-pipeline>`):
+   each source folder (watched or not, when last scanned and why the scan
+   failed), one job per source photo (its files with size and modification
+   time as JSON, stage, error, and the catalog photo once imported or found
+   as a duplicate) and the pipeline log (newest 20,000 entries).
 
 .. _architecture-data-schema:
 
@@ -156,6 +166,10 @@ how many have run. Each migration runs in its own transaction.
    * - 11
      - ``0011_reject_moves.sql``
      - ``reject_move`` (photos moved to ``_Rejected``, by batch, for undo)
+   * - 12
+     - ``0012_import_pipeline.sql``
+     - ``import_source``, ``import_job``, ``pipeline_log``
+       (:doc:`ADR-0012 </architecture/decisions/0012-continuous-import-pipeline>`)
 
 Conventions:
 
