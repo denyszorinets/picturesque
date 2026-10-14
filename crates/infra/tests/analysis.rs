@@ -113,7 +113,7 @@ fn scores_separate_sharp_from_blurred_photos() {
     assert!(score(&a, "exposure") > 0.9, "{a}");
     assert_eq!(
         api.call("analysis_status", Value::Null).unwrap(),
-        json!({ "analyzed": 2, "total": 2, "running": false })
+        json!({ "analyzed": 2, "total": 2, "running": false, "paused": null })
     );
 }
 

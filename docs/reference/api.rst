@@ -188,9 +188,10 @@ Commands
    models are ``not_found``.
 
 ``analysis_status``
-   No arguments. ``{ "analyzed": 120, "total": 300, "running": true }``:
-   photos with every analysis done, all photos, and whether workers are
-   busy (:doc:`/architecture/decisions/0011-resumable-background-analysis`).
+   No arguments. ``{ "analyzed": 120, "total": 300, "running": true,
+   "paused": null }``: photos with every analysis done, all photos, whether
+   workers are busy, and why analysis waits (a full disk), if it does
+   (:doc:`/architecture/decisions/0011-resumable-background-analysis`).
 
 ``prioritize_analysis``
    ``{ "photo_ids": [7, 8, 9] }``. Analyzes these photos next; the library

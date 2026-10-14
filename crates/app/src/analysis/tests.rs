@@ -144,7 +144,8 @@ fn analyzes_every_photo_once_from_its_preview() {
         AnalysisStatus {
             analyzed: 3,
             total: 3,
-            running: false
+            running: false,
+            paused: None,
         }
     );
 
@@ -262,7 +263,7 @@ fn background_workers_analyze_new_photos_when_woken_and_report_progress() {
         .unwrap()
         .iter()
         .filter_map(|e| match e {
-            AppEvent::AnalysisProgress(s) => Some(*s),
+            AppEvent::AnalysisProgress(s) => Some(s.clone()),
             _ => None,
         })
         .collect();
@@ -304,14 +305,14 @@ fn api_reports_status_and_accepts_priorities() {
 
     assert_eq!(
         api.call("analysis_status", Value::Null).unwrap(),
-        json!({ "analyzed": 0, "total": 2, "running": false })
+        json!({ "analyzed": 0, "total": 2, "running": false, "paused": null })
     );
     api.call("prioritize_analysis", json!({ "photo_ids": [ids[1].0] }))
         .unwrap();
     assert_eq!(api.run_analysis(), 2);
     assert_eq!(
         api.call("analysis_status", json!({})).unwrap(),
-        json!({ "analyzed": 2, "total": 2, "running": false })
+        json!({ "analyzed": 2, "total": 2, "running": false, "paused": null })
     );
 
     let err = api
@@ -374,4 +375,45 @@ mod clip {
         assert_eq!(embedding.values().len(), 3 * 224 * 224);
         assert!(Embedding::new(embedding.values()).is_some());
     }
+}
+
+#[test]
+fn a_full_cache_disk_pauses_analysis_instead_of_storing_errors() {
+    let (world, ids) = world(1);
+    // The preview cannot be made, and the cache disk is full.
+    world.fs.delete(&PathBuf::from("/lib/IMG_0.JPG"));
+    world.fs.set_space(Some(0));
+    let analyzer = Recorder::new("sharpness", 1);
+    let analysis = service(&world, vec![analyzer.clone()]);
+
+    assert_eq!(analysis.run_until_idle(), 0);
+    assert!(result(&world, ids[0], "sharpness").is_none());
+    let status = analysis.status();
+    assert!(status.paused.unwrap().contains("thumbnail cache is full"));
+    assert_eq!((status.analyzed, status.total), (0, 1));
+}
+
+#[test]
+fn a_full_catalog_disk_pauses_analysis_until_space_is_freed() {
+    use std::sync::atomic::Ordering;
+    let (world, ids) = world(2);
+    let analyzer = Recorder::new("sharpness", 1);
+    let analysis = service(&world, vec![analyzer.clone()]);
+    world.catalog.full.store(true, Ordering::Relaxed);
+
+    assert_eq!(analysis.run_until_idle(), 0);
+    // It stopped at the first photo instead of going round in circles.
+    assert_eq!(analyzer.seen().len(), 1);
+    assert!(
+        analysis
+            .status()
+            .paused
+            .unwrap()
+            .contains("catalog is full")
+    );
+
+    world.catalog.full.store(false, Ordering::Relaxed);
+    assert_eq!(analysis.run_until_idle(), 2);
+    assert!(analysis.status().paused.is_none());
+    assert!(result(&world, ids[1], "sharpness").is_some());
 }

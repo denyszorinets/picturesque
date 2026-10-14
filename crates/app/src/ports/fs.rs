@@ -70,4 +70,7 @@ pub trait FileSystem: Send + Sync {
 
     /// Removes a file; succeeds if it does not exist.
     fn remove_file(&self, path: &Path) -> Result<(), String>;
+
+    /// Bytes free for this user on the disk holding `path`.
+    fn available_space(&self, path: &Path) -> Result<u64, String>;
 }

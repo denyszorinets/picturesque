@@ -16,7 +16,7 @@ use picturesque_core::pixels::RgbImage;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use crate::ports::catalog::{AnalyzerId, PhotoCatalog};
+use crate::ports::catalog::{AnalyzerId, CatalogError, PhotoCatalog};
 use crate::ports::events::{AppEvent, EventSink};
 use crate::ports::pixels::PixelLoader;
 use crate::thumbnails::{ImageSize, ThumbnailService};
@@ -60,7 +60,7 @@ pub trait Analyzer: Send + Sync {
 }
 
 /// Analysis progress, sent as an event and returned by `analysis_status`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 #[ts(export)]
 pub struct AnalysisStatus {
     /// Photos with every analyzer done.
@@ -68,6 +68,8 @@ pub struct AnalysisStatus {
     pub total: usize,
     /// Whether workers are busy.
     pub running: bool,
+    /// Why analysis waits (a disk is full), or `null`.
+    pub paused: Option<String>,
 }
 
 /// Arguments of `prioritize_analysis`.
@@ -87,7 +89,17 @@ struct Queue {
     /// Set when there may be new work.
     wake: bool,
     busy: usize,
+    /// Why analysis waits; it tries again after `PAUSE_RETRY`.
+    paused: Option<String>,
 }
+
+const CACHE_FULL: &str =
+    "the disk holding the thumbnail cache is full; analysis continues when space is freed";
+const CATALOG_FULL: &str =
+    "the disk holding the catalog is full; analysis continues when space is freed";
+
+/// While a disk is full, how often analysis tries again.
+const PAUSE_RETRY: std::time::Duration = std::time::Duration::from_secs(30);
 
 /// Runs analyzers over the library on background threads.
 pub struct AnalysisService {
@@ -130,6 +142,7 @@ impl AnalysisService {
                 in_progress: Vec::new(),
                 wake: true,
                 busy: 0,
+                paused: None,
             }),
             signal: Condvar::new(),
             started: AtomicBool::new(false),
@@ -150,11 +163,12 @@ impl AnalysisService {
             .catalog
             .analysis_progress(&self.ids())
             .unwrap_or((0, 0));
-        let running = self.queue.lock().expect("queue lock").busy > 0;
+        let q = self.queue.lock().expect("queue lock");
         AnalysisStatus {
             analyzed: total.saturating_sub(pending),
             total,
-            running,
+            running: q.busy > 0,
+            paused: q.paused.clone(),
         }
     }
 
@@ -199,8 +213,13 @@ impl AnalysisService {
     pub fn run_until_idle(&self) -> usize {
         let mut done = 0;
         while let Some(id) = self.next() {
-            self.process(id);
+            let result = self.process(id);
             self.finish(id);
+            if let Err(reason) = result {
+                self.queue.lock().expect("queue lock").paused = Some(reason);
+                break;
+            }
+            self.queue.lock().expect("queue lock").paused = None;
             done += 1;
         }
         if done > 0 {
@@ -213,8 +232,35 @@ impl AnalysisService {
         loop {
             match self.next() {
                 Some(id) => {
-                    self.process(id);
+                    let result = self.process(id);
                     self.finish(id);
+                    match result {
+                        Ok(()) => {
+                            let resumed = self
+                                .queue
+                                .lock()
+                                .expect("queue lock")
+                                .paused
+                                .take()
+                                .is_some();
+                            if resumed {
+                                self.report();
+                            }
+                        }
+                        Err(reason) => {
+                            self.queue.lock().expect("queue lock").paused = Some(reason);
+                            self.report();
+                            // Not the photo's fault: wait, then try again.
+                            let deadline = std::time::Instant::now() + PAUSE_RETRY;
+                            let mut q = self.queue.lock().expect("queue lock");
+                            while let Some(left) =
+                                deadline.checked_duration_since(std::time::Instant::now())
+                            {
+                                q = self.signal.wait_timeout(q, left).expect("queue lock").0;
+                            }
+                            continue;
+                        }
+                    }
                     self.report();
                 }
                 None => {
@@ -274,11 +320,13 @@ impl AnalysisService {
     }
 
     /// Runs the analyzers a photo still needs. A failure is stored as an
-    /// `{"error": ...}` result so the photo is not retried forever.
-    fn process(&self, id: PhotoId) {
+    /// `{"error": ...}` result so the photo is not retried forever; a full
+    /// disk is not the photo's fault, so it stores nothing and returns why
+    /// analysis must wait.
+    fn process(&self, id: PhotoId) -> Result<(), String> {
         let ids = self.ids();
         let Ok(Some(photo)) = self.catalog.photo(id) else {
-            return;
+            return Ok(());
         };
         let done = self.catalog.analyzed(id, &ids).unwrap_or_default();
         let needed: Vec<&Arc<dyn Analyzer>> = self
@@ -287,13 +335,16 @@ impl AnalysisService {
             .filter(|a| !done.contains(&a.id()))
             .collect();
         if needed.is_empty() {
-            return;
+            return Ok(());
         }
         let image = self
             .thumbnails
             .image(id, ImageSize::Preview)
             .map_err(|e| e.to_string())
             .and_then(|path| self.pixels.load(&path, ANALYSIS_EDGE));
+        if image.is_err() && self.thumbnails.cache_full() {
+            return Err(CACHE_FULL.into());
+        }
         for analyzer in needed {
             let result = match &image {
                 Ok(image) => analyzer
@@ -304,8 +355,12 @@ impl AnalysisService {
                     .unwrap_or_else(|e| serde_json::json!({ "error": e })),
                 Err(e) => serde_json::json!({ "error": e }),
             };
-            let _ = self.catalog.store_analysis(id, analyzer.id(), &result);
+            if let Err(CatalogError::Full) = self.catalog.store_analysis(id, analyzer.id(), &result)
+            {
+                return Err(CATALOG_FULL.into());
+            }
         }
+        Ok(())
     }
 
     /// Sends the current status (also when analyzers became ready or not).

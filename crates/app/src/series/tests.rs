@@ -260,6 +260,7 @@ fn analysis_progress_triggers_a_debounced_recompute_in_the_background() {
         analyzed: 3,
         total: 3,
         running: false,
+        paused: None,
     }));
     wait_until("debounced run", || {
         series(&world) == [vec![ids[0].0, ids[1].0, more[0].0]]

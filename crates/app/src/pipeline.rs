@@ -53,8 +53,15 @@ use schedule::Schedule;
 
 /// Log entries kept.
 const LOG_KEEP: usize = 20_000;
-/// While paused (no usable library folder), how often to look again.
+/// While paused (no usable library folder, a disk full), how often to
+/// look again.
 const PAUSE_RETRY: Duration = Duration::from_secs(10);
+/// Space left free on the library disk beyond a photo's own files, so the
+/// system, the catalog and thumbnails keep working.
+const SPACE_RESERVE: u64 = 256 * 1024 * 1024;
+const LIBRARY_FULL: &str = "the library disk is full; importing continues when space is freed";
+const CATALOG_FULL: &str =
+    "the disk holding the catalog is full; importing continues when space is freed";
 /// How often progress is sent while photos are being imported.
 const PROGRESS_INTERVAL: Duration = Duration::from_millis(250);
 
@@ -306,6 +313,15 @@ fn modified_ns(fs: &dyn FileSystem, path: &Path) -> Option<i64> {
         .modified
         .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
         .and_then(|d| i64::try_from(d.as_nanos()).ok())
+}
+
+/// Free space a photo needs on the library disk before it is copied.
+fn space_needed(job: &Job) -> u64 {
+    job.files.iter().map(|f| f.size).sum::<u64>() + SPACE_RESERVE
+}
+
+fn megabytes(bytes: u64) -> String {
+    format!("{} MB", bytes / 1_000_000)
 }
 
 /// RAW if present, else the image, else the first file.
@@ -837,32 +853,58 @@ impl ImportPipeline {
             }
         };
         let root = match self.usable_library() {
-            Ok(root) => {
-                let was_paused = self.shared.lock().expect("pipeline lock").paused.take();
-                if was_paused.is_some() {
-                    self.log(LogLevel::Info, None, None, "Importing resumed");
-                    self.emit_progress(true);
-                }
-                root
-            }
+            Ok(root) => root,
             Err(reason) => {
-                let mut shared = self.shared.lock().expect("pipeline lock");
-                if shared.paused.as_deref() != Some(reason.as_str()) {
-                    shared.paused = Some(reason.clone());
-                    drop(shared);
-                    self.log(
-                        LogLevel::Warn,
-                        None,
-                        None,
-                        &format!("Importing paused: {reason}"),
-                    );
-                    self.emit_progress(true);
-                }
+                self.pause(&reason, None);
                 return false;
             }
         };
-        self.process(&root, &job);
+        let needed = space_needed(&job);
+        if let Ok(free) = self.deps.fs.available_space(&root)
+            && free < needed
+        {
+            self.pause(
+                LIBRARY_FULL,
+                Some(format!(
+                    "{} free in {}, {} needs {}",
+                    megabytes(free),
+                    root.display(),
+                    file_name(&primary(&job.files).path),
+                    megabytes(needed)
+                )),
+            );
+            return false;
+        }
+        let was_paused = self.shared.lock().expect("pipeline lock").paused.take();
+        if was_paused.is_some() {
+            // Photos left in progress when a disk filled up.
+            let _ = self.deps.store.requeue_unfinished();
+            self.log(LogLevel::Info, None, None, "Importing resumed");
+            self.emit_progress(true);
+        }
+        if let Some(reason) = self.process(&root, &job) {
+            // Not the photo's fault: it waits for space instead of failing.
+            self.set_stage(&job, JobStage::Queued, None, None);
+            self.pause(reason, None);
+            return false;
+        }
         true
+    }
+
+    /// Stops taking photos until the cause is gone; logs a new cause once.
+    fn pause(&self, reason: &str, detail: Option<String>) {
+        let mut shared = self.shared.lock().expect("pipeline lock");
+        if shared.paused.as_deref() == Some(reason) {
+            return;
+        }
+        shared.paused = Some(reason.to_owned());
+        drop(shared);
+        let message = match detail {
+            Some(detail) => format!("Importing paused: {reason} ({detail})"),
+            None => format!("Importing paused: {reason}"),
+        };
+        self.log(LogLevel::Warn, None, None, &message);
+        self.emit_progress(true);
     }
 
     fn usable_library(&self) -> Result<PathBuf, String> {
@@ -895,7 +937,9 @@ impl ImportPipeline {
         self.emit_progress(stage.is_final() && stage != JobStage::Imported);
     }
 
-    fn process(&self, root: &Path, job: &Job) {
+    /// Imports one photo. Returns why importing must pause (a disk is
+    /// full) instead of failing the photo.
+    fn process(&self, root: &Path, job: &Job) -> Option<&'static str> {
         let name = file_name(&primary(&job.files).path);
         let fail = |message: String| {
             self.set_stage(job, JobStage::Failed, None, Some(&message));
@@ -905,6 +949,7 @@ impl ImportPipeline {
                 None,
                 &format!("{name}: {message}"),
             );
+            None
         };
 
         // 1. Read.
@@ -985,7 +1030,7 @@ impl ImportPipeline {
                                 Some(existing),
                                 &format!("{name}: skipped, {message}"),
                             );
-                            return;
+                            return None;
                         }
                         Ok(None) => {}
                         Err(e) => return fail(e.to_string()),
@@ -1024,6 +1069,14 @@ impl ImportPipeline {
                     for (done, _) in &copied {
                         let _ = self.deps.fs.remove_file(&root.join(&done.target));
                     }
+                    if self
+                        .deps
+                        .fs
+                        .available_space(root)
+                        .is_ok_and(|free| free < space_needed(job))
+                    {
+                        return Some(LIBRARY_FULL);
+                    }
                     return fail(format!("{}: {reason}", file_name(&file.source)));
                 }
             }
@@ -1056,9 +1109,12 @@ impl ImportPipeline {
                     .photo_with_media_hash(&new.assets.primary().hash)
                 {
                     Ok(Some(id)) => id,
+                    Err(CatalogError::Full) => return Some(CATALOG_FULL),
                     _ => return fail("the photo is in the catalog but cannot be found".into()),
                 }
             }
+            // The copies stay and are reused when it is tried again.
+            Err(CatalogError::Full) => return Some(CATALOG_FULL),
             Err(e) => return fail(e.to_string()),
         };
         if let Some(decision) = photo.decision {
@@ -1078,6 +1134,7 @@ impl ImportPipeline {
         if let Some(hook) = self.on_imported.lock().expect("hook lock").as_ref() {
             hook();
         }
+        None
     }
 }
 

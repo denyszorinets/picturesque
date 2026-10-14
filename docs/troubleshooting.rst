@@ -26,6 +26,13 @@ Importing stopped
    copied when it stopped starts over. If **Activity** says importing is
    paused, it explains why (for example, no library folder is set).
 
+Importing or analysis is paused because a disk is full
+   Free space on the disk named in **Activity** (the library disk, or the
+   disk holding the catalog and thumbnail cache, see
+   :doc:`/reference/data-locations`); work continues on its own within a
+   few seconds (:ref:`features-import-disk-full`). Deleting the thumbnail
+   cache is safe and frees space on the system disk.
+
 New photos in a watched folder are imported late
    The pipeline log says *Cannot watch … for new photos* when the system
    refuses to watch a folder, usually because a large folder tree exceeds

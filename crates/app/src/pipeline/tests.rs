@@ -587,3 +587,83 @@ fn decisions_in_existing_sidecars_are_imported() {
     );
     assert!(world.fs.exists(Path::new("/lib/Undated/IMG_1.CR3.xmp")));
 }
+
+// ---- Full disks ----
+
+#[test]
+fn a_full_library_disk_pauses_importing_until_space_is_freed() {
+    let world = world();
+    let p = world.pipeline();
+    p.add_source(Path::new("/card"), true).unwrap();
+    scan_all(&p);
+    // Room for the reserve and a little more, not for a photo.
+    world.fs.set_space(Some(SPACE_RESERVE + 3));
+    assert_eq!(p.run_until_idle(), 0);
+    let status = p.status();
+    assert_eq!((status.queued, status.failed), (2, 0));
+    assert!(status.paused.unwrap().contains("library disk is full"));
+    let messages = world.pipeline.messages();
+    assert_eq!(
+        messages
+            .iter()
+            .filter(|m| m.starts_with("Importing paused"))
+            .count(),
+        1,
+        "{messages:?}"
+    );
+    // Retrying while still full logs nothing new.
+    p.run_until_idle();
+    assert_eq!(world.pipeline.messages().len(), messages.len());
+
+    world.fs.set_space(None);
+    assert_eq!(p.run_until_idle(), 2);
+    assert!(p.status().paused.is_none());
+    assert_eq!(world.catalog.photo_count().unwrap(), 2);
+    assert!(
+        world
+            .pipeline
+            .messages()
+            .iter()
+            .any(|m| m == "Importing resumed")
+    );
+}
+
+#[test]
+fn a_disk_filling_up_during_a_copy_requeues_the_photo() {
+    let world = world();
+    let p = world.pipeline();
+    p.add_source(Path::new("/card"), true).unwrap();
+    scan_all(&p);
+    // The check passes, but the disk fills up while copying.
+    world.fs.fill_during_next_copy();
+    assert_eq!(p.run_until_idle(), 0);
+    let status = p.status();
+    assert_eq!((status.queued, status.failed), (2, 0), "{:?}", stages(&p));
+    assert!(status.paused.unwrap().contains("library disk is full"));
+    // Nothing half-imported is left behind.
+    assert!(world.fs.files_under(Path::new("/lib")).is_empty());
+
+    world.fs.set_space(None);
+    assert_eq!(p.run_until_idle(), 2);
+    assert_eq!(world.catalog.photo_count().unwrap(), 2);
+}
+
+#[test]
+fn a_full_catalog_disk_pauses_importing_and_reuses_the_copies() {
+    use std::sync::atomic::Ordering;
+    let world = world();
+    let p = world.pipeline();
+    p.add_source(Path::new("/card"), true).unwrap();
+    scan_all(&p);
+    world.catalog.full.store(true, Ordering::Relaxed);
+    assert_eq!(p.run_until_idle(), 0);
+    let status = p.status();
+    assert_eq!((status.queued, status.failed), (2, 0));
+    assert!(status.paused.unwrap().contains("catalog is full"));
+
+    world.catalog.full.store(false, Ordering::Relaxed);
+    assert_eq!(p.run_until_idle(), 2);
+    assert_eq!(world.catalog.photo_count().unwrap(), 2);
+    // The copies made before the catalog filled up were used, not doubled.
+    assert_eq!(world.fs.files_under(Path::new("/lib")).len(), 3);
+}

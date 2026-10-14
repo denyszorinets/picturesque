@@ -41,6 +41,10 @@ struct State {
     failing_sources: BTreeSet<PathBuf>,
     /// Sources whose contents change right after the next copy of them.
     change_after_copy: BTreeSet<PathBuf>,
+    /// Free space; `None` is unlimited. Copies use it up.
+    space: Option<u64>,
+    /// The next copy fills the disk (someone else wrote a big file).
+    fill_during_next_copy: bool,
     clock: u64,
 }
 
@@ -157,6 +161,16 @@ impl MemFs {
             .remove(Path::new(path));
     }
 
+    /// Limits free space (`None`: unlimited); copies that do not fit fail.
+    pub fn set_space(&self, bytes: Option<u64>) {
+        self.state.lock().unwrap().space = bytes;
+    }
+
+    /// The next copy fails because the disk filled up meanwhile.
+    pub fn fill_during_next_copy(&self) {
+        self.state.lock().unwrap().fill_during_next_copy = true;
+    }
+
     pub fn change_after_copy(&self, path: &str) {
         self.state
             .lock()
@@ -258,6 +272,15 @@ impl FileSystem for MemFs {
                 .get(src)
                 .map(|(b, _)| b.clone())
                 .ok_or("it does not exist")?;
+            if std::mem::take(&mut s.fill_during_next_copy) {
+                s.space = Some(0);
+            }
+            if let Some(space) = s.space.as_mut() {
+                if (bytes.len() as u64) > *space {
+                    return Err("No space left on device (os error 28)".into());
+                }
+                *space -= bytes.len() as u64;
+            }
             let corrupt = s.corrupt_next_copies > 0;
             if corrupt {
                 s.corrupt_next_copies -= 1;
@@ -292,8 +315,17 @@ impl FileSystem for MemFs {
     }
 
     fn remove_file(&self, path: &Path) -> Result<(), String> {
-        self.state.lock().unwrap().files.remove(path);
+        let mut s = self.state.lock().unwrap();
+        if let Some((bytes, _)) = s.files.remove(path)
+            && let Some(space) = s.space.as_mut()
+        {
+            *space += bytes.len() as u64;
+        }
         Ok(())
+    }
+
+    fn available_space(&self, _path: &Path) -> Result<u64, String> {
+        Ok(self.state.lock().unwrap().space.unwrap_or(u64::MAX))
     }
 }
 
@@ -356,6 +388,18 @@ pub struct MemoryCatalog {
     pub scores: Mutex<HashMap<PhotoId, crate::ports::catalog::PhotoScore>>,
     /// Photos moved to the rejected folder → batch.
     pub reject_moves: Mutex<HashMap<PhotoId, i64>>,
+    /// Writes of photos and analysis fail as if the disk were full.
+    pub full: std::sync::atomic::AtomicBool,
+}
+
+impl MemoryCatalog {
+    fn check_space(&self) -> Result<(), CatalogError> {
+        if self.full.load(std::sync::atomic::Ordering::Relaxed) {
+            Err(CatalogError::Full)
+        } else {
+            Ok(())
+        }
+    }
 }
 
 impl MemoryCatalog {
@@ -370,6 +414,7 @@ impl MemoryCatalog {
 
 impl PhotoCatalog for MemoryCatalog {
     fn insert_photo(&self, photo: &NewPhoto) -> Result<PhotoId, CatalogError> {
+        self.check_space()?;
         let mut photos = self.photos.lock().unwrap();
         for asset in photo
             .assets
@@ -645,6 +690,7 @@ impl PhotoCatalog for MemoryCatalog {
         analyzer: AnalyzerId,
         result: &serde_json::Value,
     ) -> Result<(), CatalogError> {
+        self.check_space()?;
         if self.photo(id)?.is_none() {
             return Err(CatalogError::Storage(format!("no photo {}", id.0)));
         }

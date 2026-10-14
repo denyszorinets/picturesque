@@ -194,7 +194,7 @@ fn ranks_like_colours_together(model: &Path) {
     assert!(ranked[0].1 > ranked[1].1 + 0.05, "{ranked:?}");
     assert_eq!(
         l.api.call("analysis_status", Value::Null).unwrap(),
-        json!({ "analyzed": 3, "total": 3, "running": false })
+        json!({ "analyzed": 3, "total": 3, "running": false, "paused": null })
     );
 }
 
