@@ -50,8 +50,8 @@ test("analyzes selected photos, or all of them, again", async ({
 }) => {
   const day = "2006-02-03";
   await importFiles(request, {
-    "reanalyze/a.JPG": { bytes: jpeg(9201), time: new Date(`${day}T08:00:00`) },
-    "reanalyze/b.JPG": { bytes: jpeg(9202), time: new Date(`${day}T09:00:00`) },
+    "reanalyze/a.JPG": { bytes: jpeg(14001), time: new Date(`${day}T08:00:00`) },
+    "reanalyze/b.JPG": { bytes: jpeg(14002), time: new Date(`${day}T09:00:00`) },
   });
   const done = () =>
     expect
