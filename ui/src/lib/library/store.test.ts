@@ -24,6 +24,7 @@ function photo(id: number, city: string | null = null): PhotoSummary {
     aesthetic: null,
     eyes_closed: null,
     faces: 0,
+    keeper: false,
   };
 }
 
@@ -37,6 +38,7 @@ function facets(total: number): PhotoFacets {
     lenses: [],
     places: [],
     flags: [],
+    auto_picked: 0,
     ratings: [0, 0, 0, 0, 0, 0],
   };
 }

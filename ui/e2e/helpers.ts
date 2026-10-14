@@ -2,7 +2,7 @@ import { readFileSync, utimesSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { expect, type APIRequestContext } from "@playwright/test";
+import { expect, type APIRequestContext, type Page } from "@playwright/test";
 import { folder } from "./fixtures";
 
 /**
@@ -113,4 +113,41 @@ export async function serveModels(): Promise<Server> {
     server.listen(5175, "127.0.0.1", resolve),
   );
   return server;
+}
+
+/** A detailed JPEG drawn in the browser, optionally blurred. */
+export async function drawn(
+  page: Page,
+  blur: number,
+  hue: number,
+): Promise<Buffer> {
+  const data = await page.evaluate(
+    ([blur, hue]) => {
+      const canvas = document.createElement("canvas");
+      canvas.width = 2400;
+      canvas.height = 1600;
+      const ctx = canvas.getContext("2d")!;
+      ctx.fillStyle = `hsl(${hue} 50% 45%)`;
+      ctx.fillRect(0, 0, 2400, 1600);
+      for (let x = 0; x < 2400; x += 24)
+        for (let y = 0; y < 1600; y += 24) {
+          ctx.fillStyle = (x + y) % 48 === 0 ? "#111" : "#eee";
+          ctx.fillRect(x, y, 12, 12);
+        }
+      ctx.fillStyle = "#000";
+      ctx.fillRect(0, 0, 1200, 800);
+      let out = canvas;
+      if (blur > 0) {
+        out = document.createElement("canvas");
+        out.width = canvas.width;
+        out.height = canvas.height;
+        const blurred = out.getContext("2d")!;
+        blurred.filter = `blur(${blur}px)`;
+        blurred.drawImage(canvas, 0, 0);
+      }
+      return out.toDataURL("image/jpeg", 0.92).split(",")[1]!;
+    },
+    [blur, hue],
+  );
+  return Buffer.from(data, "base64");
 }

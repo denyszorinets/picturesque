@@ -211,8 +211,8 @@ impl SqliteCatalog {
         {
             let mut insert = tx
                 .prepare(
-                    "INSERT INTO photo_score (photo_id, score, aesthetic, eyes_closed, faces)
-                     VALUES (?1, ?2, ?3, ?4, ?5)",
+                    "INSERT INTO photo_score (photo_id, score, aesthetic, eyes_closed, faces, keeper)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
                 )
                 .map_err(storage)?;
             for s in scores {
@@ -222,7 +222,8 @@ impl SqliteCatalog {
                         f64::from(s.score),
                         s.aesthetic.map(f64::from),
                         s.eyes_closed,
-                        s.faces
+                        s.faces,
+                        s.keeper
                     ])
                     .map_err(storage)?;
             }

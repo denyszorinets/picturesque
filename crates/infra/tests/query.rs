@@ -128,6 +128,7 @@ fn score(id: i64, score: f32) -> PhotoScore {
         aesthetic: Some(score),
         eyes_closed: None,
         faces: 0,
+        keeper: false,
     }
 }
 
@@ -978,4 +979,67 @@ fn ai_signals_filter_and_show_in_summaries() {
         (by_id(4).aesthetic, by_id(4).eyes_closed, by_id(4).faces),
         (None, None, 0)
     );
+}
+
+#[test]
+fn auto_picked_photos_are_keepers_without_a_flag() {
+    use picturesque_core::decision::{Decision, Flag};
+    let c = sample();
+    c.replace_scores(&[
+        PhotoScore {
+            keeper: true,
+            ..score(1, 0.9)
+        },
+        PhotoScore {
+            keeper: true,
+            ..score(2, 0.8)
+        },
+        PhotoScore {
+            keeper: true,
+            ..score(3, 0.7)
+        },
+        score(5, 0.2),
+    ])
+    .unwrap();
+    // The user's own decisions win over the suggestion.
+    c.set_decision(
+        PhotoId(2),
+        Decision {
+            flag: Flag::Pick,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    c.set_decision(
+        PhotoId(3),
+        Decision {
+            flag: Flag::Reject,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+
+    let photos = c.query(&PhotoQuery::default()).unwrap().photos;
+    // Keepers stay keepers; flags decide whether they show as auto-picked.
+    let keepers: Vec<i64> = photos.iter().filter(|p| p.keeper).map(|p| p.id).collect();
+    assert_eq!(keepers, [1, 2, 3]);
+    let only = |q: PhotoQuery| ids(&c, q);
+    assert_eq!(
+        only(PhotoQuery {
+            auto_picked: Some(true),
+            ..Default::default()
+        }),
+        [1]
+    );
+    // With flags: photos matching either.
+    assert_eq!(
+        only(PhotoQuery {
+            auto_picked: Some(true),
+            flags: Some(vec![Flag::Pick]),
+            ..Default::default()
+        }),
+        [1, 2]
+    );
+    let facets = c.facets(None).unwrap();
+    assert_eq!(facets.auto_picked, 1);
 }

@@ -464,7 +464,9 @@ impl Api {
             }
             "update_settings" => {
                 let update: SettingsUpdate = parse_args(command, args)?;
-                let series_changed = update.series.is_some() || update.ranking.is_some();
+                let series_changed = update.series.is_some()
+                    || update.ranking.is_some()
+                    || update.auto_pick.is_some();
                 let settings = self.settings.update(update).map_err(settings_error)?;
                 if series_changed {
                     self.series.recompute().map_err(catalog_error)?;
@@ -910,7 +912,8 @@ mod tests {
                 "series": { "max_gap_seconds": 30, "max_distance": 16 },
                 "ranking": { "sharpness": 0.6, "exposure": 0.3, "noise": 0.1, "aesthetic": 0.4 },
                 "ai": { "provider": "auto" },
-                "import": { "rescan_minutes": 5 }
+                "import": { "rescan_minutes": 5 },
+                "auto_pick": { "enabled": true, "min_quality": 0.5 }
             })
         );
     }

@@ -106,10 +106,33 @@ keys apply to every selected photo; in the loupe, to the photo shown. Hold
 **Shift** (Shift+P, Shift+X, Shift+U) to move on to the next photo
 afterwards, in the loupe or with one photo selected in the timeline.
 
-**Picks** counts only photos you marked: nothing is picked automatically.
-The suggested best photo of each series is marked with a green border and
-★ instead (:ref:`features-series`); **Best of each series only** shows just
-those, ready to pick.
+**Picks** counts only photos you marked. The app's suggestions are
+separate: see :ref:`features-library-auto-pick`.
+
+.. _features-library-auto-pick:
+
+Auto-pick
+~~~~~~~~~
+
+Once photos are analyzed, the app marks the ones it thinks are keepers as
+**Auto-picked** (a green *✓ Auto* badge on the tile, *Auto-picked* in the
+loupe). A photo is auto-picked when all of these hold:
+
+- it is the best photo of its series (:ref:`features-series`), or in no
+  series;
+- its combined quality score (:ref:`features-series-score`) is at least
+  50% (:ref:`reference-settings-auto-pick`);
+- nobody important has closed eyes (:ref:`features-ai-faces`).
+
+A best photo you chose yourself (**B**) is always auto-picked. When you
+reject the best photo of a series, the next best one takes its place.
+
+Auto-pick is only a suggestion and never overrides you: picking or
+rejecting a photo replaces it, and **U** (unflag) brings it back. It is
+not written to XMP sidecars and not exported as a pick. To keep the
+suggestions, click **Pick all N auto-picked** under **Flag** in the
+filters: every auto-picked photo becomes a pick, in one step that
+**Undo** reverses. Filter by **Auto-picked** to go through them first.
 
 Decisions are saved immediately. **Undo** and **Redo** (above the
 timeline, or Ctrl+Z / Ctrl+Shift+Z) step back and forward through the
@@ -131,7 +154,10 @@ The **Filters** panel beside the timeline (toggle it with the
    * - Filter
      - Shows
    * - Flag
-     - Picks, unflagged and/or rejects (any of the chosen ones)
+     - Picks, auto-picked, unflagged and/or rejects (any of the chosen
+       ones; auto-picked photos are also unflagged). A decision under a
+       Flag or Rating filter updates the view right away, so a photo you
+       reject leaves a *Picks* view.
    * - Rating
      - Photos with at least the chosen number of stars
    * - Date

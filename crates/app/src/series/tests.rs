@@ -523,3 +523,75 @@ fn embeddings_join_retakes_and_scores_are_stored() {
         .unwrap();
     assert!((detail["score"].as_f64().unwrap() - 0.75).abs() < 1e-6);
 }
+
+fn keepers(world: &TestWorld) -> Vec<i64> {
+    let mut ids: Vec<i64> = world
+        .catalog
+        .scores
+        .lock()
+        .unwrap()
+        .values()
+        .filter(|s| s.keeper)
+        .map(|s| s.id.0)
+        .collect();
+    ids.sort_unstable();
+    ids
+}
+
+fn set_overall(world: &TestWorld, id: i64, overall: f32) {
+    use crate::analysis::technical::TechnicalAnalyzer;
+    world
+        .catalog
+        .store_analysis(
+            PhotoId(id),
+            TechnicalAnalyzer::ID,
+            &json!({
+                "sharpness": overall, "exposure": 1.0, "noise": 1.0, "overall": overall,
+                "laplacian_variance": 1000.0 * overall, "highlights_clipped": 0.0,
+                "shadows_clipped": 0.0, "mean_brightness": 0.5, "noise_sigma": 1.0,
+            }),
+        )
+        .unwrap();
+}
+
+#[test]
+fn keepers_are_the_good_best_and_single_photos() {
+    // A burst of two, a good single photo and a poor one.
+    let (world, api, ids) = setup(&[0, 1, 300, 600]);
+    set_overall(&world, ids[0], 0.7);
+    set_overall(&world, ids[1], 0.9);
+    set_overall(&world, ids[2], 0.6);
+    set_overall(&world, ids[3], 0.2);
+    api.recompute_series().unwrap();
+    assert_eq!(keepers(&world), [ids[1], ids[2]]);
+
+    // Rejecting the best of the burst makes the other one the keeper.
+    api.call(
+        "set_decisions",
+        json!({ "changes": [{ "photo_id": ids[1], "flag": "reject" }] }),
+    )
+    .unwrap();
+    api.recompute_series().unwrap();
+    assert_eq!(keepers(&world), [ids[0], ids[2]]);
+
+    // A lower threshold takes the poor one too; switching off takes none.
+    api.call(
+        "update_settings",
+        json!({ "auto_pick": { "enabled": true, "min_quality": 0.1 } }),
+    )
+    .unwrap();
+    assert_eq!(keepers(&world), [ids[0], ids[2], ids[3]]);
+    api.call(
+        "update_settings",
+        json!({ "auto_pick": { "enabled": false, "min_quality": 0.1 } }),
+    )
+    .unwrap();
+    assert!(keepers(&world).is_empty());
+    let err = api
+        .call(
+            "update_settings",
+            json!({ "auto_pick": { "enabled": true, "min_quality": 1.5 } }),
+        )
+        .unwrap_err();
+    assert_eq!(err.code, ApiErrorCode::InvalidArguments);
+}

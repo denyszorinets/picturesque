@@ -18,6 +18,7 @@ vi.mock("./lib/api", async (importOriginal) => {
         ranking: { sharpness: 0.6, exposure: 0.3, noise: 0.1, aesthetic: 0.4 },
         ai: { provider: "auto" },
         import: { rescan_minutes: 5 },
+        auto_pick: { enabled: true, min_quality: 0.5 },
       }),
     listModels: () => Promise.resolve([]),
     aiStatus: () =>
@@ -40,6 +41,7 @@ vi.mock("./lib/api", async (importOriginal) => {
         lenses: [],
         places: [],
         flags: [],
+        auto_picked: 0,
         ratings: [0, 0, 0, 0, 0, 0],
       }),
     queryPhotos: () =>

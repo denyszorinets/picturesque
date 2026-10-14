@@ -54,6 +54,8 @@ pub struct PhotoScore {
     /// Whether someone important has closed eyes; `None` when undecided.
     pub eyes_closed: Option<bool>,
     pub faces: u32,
+    /// Suggested as a keeper (auto-pick; `core::ranking::is_keeper`).
+    pub keeper: bool,
 }
 
 /// A series as stored: members in capture order, their ranking and the

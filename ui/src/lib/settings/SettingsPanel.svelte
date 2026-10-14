@@ -32,6 +32,9 @@
   let maxGap = $state(30);
   let maxDistance = $state(16);
   let rescanMinutes = $state(5);
+  let autoPick = $state(true);
+  /** Minimum quality for auto-pick, in percent. */
+  let autoPickPercent = $state(50);
   let weights = $state({
     sharpness: 0.6,
     exposure: 0.3,
@@ -73,6 +76,11 @@
         weights.noise !== saved.ranking.noise ||
         weights.aesthetic !== saved.ranking.aesthetic),
   );
+  const autoPickChanged = $derived(
+    saved !== null &&
+      (autoPick !== saved.auto_pick.enabled ||
+        autoPickPercent !== Math.round(saved.auto_pick.min_quality * 100)),
+  );
   const dirty = $derived(
     saved !== null &&
       (libraryRoot.trim() !== (saved.library_root ?? "") ||
@@ -81,6 +89,7 @@
         seriesChanged ||
         rankingChanged ||
         rescanMinutes !== saved.import.rescan_minutes ||
+        autoPickChanged ||
         provider !== saved.ai.provider),
   );
 
@@ -121,6 +130,8 @@
     maxGap = settings.series.max_gap_seconds;
     maxDistance = settings.series.max_distance;
     rescanMinutes = settings.import.rescan_minutes;
+    autoPick = settings.auto_pick.enabled;
+    autoPickPercent = Math.round(settings.auto_pick.min_quality * 100);
     weights = { ...settings.ranking };
     provider = settings.ai.provider;
     loadAi();
@@ -143,6 +154,11 @@
         update.series = { max_gap_seconds: maxGap, max_distance: maxDistance };
       if (rankingChanged) update.ranking = { ...weights };
       if (provider !== saved.ai.provider) update.ai = { provider };
+      if (autoPickChanged)
+        update.auto_pick = {
+          enabled: autoPick,
+          min_quality: autoPickPercent / 100,
+        };
       if (rescanMinutes !== saved.import.rescan_minutes)
         update.import = { rescan_minutes: rescanMinutes };
       if (sidecarNaming !== saved.sidecar_naming)
@@ -295,6 +311,30 @@
     <p class="hint muted">
       How much each score counts when choosing the best photo; only the ratios
       matter.
+    </p>
+    <span class="label">Auto-pick</span>
+    <label class="inline">
+      <input
+        type="checkbox"
+        bind:checked={autoPick}
+        data-testid="auto-pick-enabled"
+      />
+      Mark keepers with quality of at least
+      <input
+        type="number"
+        min="0"
+        max="100"
+        step="5"
+        bind:value={autoPickPercent}
+        disabled={!autoPick}
+        data-testid="auto-pick-quality"
+      />
+      %
+    </label>
+    <p class="hint muted">
+      The best photo of each series (or a photo in none) with nobody's eyes
+      closed is shown as <em>Auto-picked</em> until you pick or reject it. It is only
+      a suggestion: it is not written to sidecars or exported as a pick.
     </p>
   </fieldset>
 

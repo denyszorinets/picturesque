@@ -48,4 +48,9 @@ eyes_closed: boolean | null,
 /**
  * Faces found (0 also before the face models ran).
  */
-faces: number, };
+faces: number, 
+/**
+ * Suggested as a keeper by auto-pick. It shows as *auto-picked* while
+ * the photo is unflagged; the user's pick or reject wins.
+ */
+keeper: boolean, };

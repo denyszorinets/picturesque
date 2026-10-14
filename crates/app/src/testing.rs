@@ -536,6 +536,7 @@ impl PhotoCatalog for MemoryCatalog {
                     aesthetic: None,
                     eyes_closed: None,
                     faces: 0,
+                    keeper: false,
                 }
             })
             .collect();

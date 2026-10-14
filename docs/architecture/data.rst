@@ -164,6 +164,10 @@ how many have run. Each migration runs in its own transaction.
      - ``0013_pipeline_only.sql``
      - ``import_job.failed_stage``; drops the import run tables, replaced
        by the pipeline
+   * - 14
+     - ``0014_auto_pick.sql``
+     - ``photo_score.keeper`` (suggested keepers, derived with the score;
+       :ref:`features-library-auto-pick`)
 
 Conventions:
 

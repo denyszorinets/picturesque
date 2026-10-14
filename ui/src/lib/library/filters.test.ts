@@ -17,6 +17,24 @@ describe("Filters", () => {
     expect(f.active).toBe(false);
   });
 
+  it("filters auto-picked photos, kept for the session", () => {
+    const storage = memoryStorage();
+    const f = new Filters(storage);
+    f.autoPicked = true;
+    f.toggleFlag("pick");
+
+    expect(f.toQuery()).toEqual({ flags: ["pick"], auto_picked: true });
+    expect(f.chips.map((c) => c.label)).toContain("Auto-picked");
+    f.save();
+    expect(new Filters(storage).autoPicked).toBe(true);
+
+    f.chips.find((c) => c.label === "Auto-picked")!.clear();
+    expect(f.toQuery()).toEqual({ flags: ["pick"] });
+    f.autoPicked = true;
+    f.clear();
+    expect(f.autoPicked).toBe(false);
+  });
+
   it("builds the query from every filter", () => {
     const f = new Filters(memoryStorage());
     f.from = "2026-10-01";
