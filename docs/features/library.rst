@@ -160,12 +160,17 @@ The **Filters** panel beside the timeline (toggle it with the
        reject leaves a *Picks* view.
    * - Rating
      - Photos with at least the chosen number of stars
+   * - Camera
+     - Photos taken with that camera: one button per camera, with its
+       photo count, the most used first (the six most used, then **All N
+       cameras**). Click the chosen camera again, or **Any**, to show
+       every camera.
+   * - Lens
+     - Photos taken with that lens
    * - Date
      - Photos taken from / until a day (both included)
    * - Place
      - A country, or one city in it
-   * - Camera, Lens
-     - Photos taken with that camera or lens
    * - Quality
      - Photos whose sharpness, exposure and/or low-noise score is at least
        25, 50 or 75% (:doc:`/reference/quality-scores`). Photos not analyzed

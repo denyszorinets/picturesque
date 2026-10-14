@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { jpeg } from "./fixtures";
+import { jpeg, jpegWithGear } from "./fixtures";
 import { call, importFiles } from "./helpers";
 
 const DAY = "2003-04-05";
@@ -179,4 +179,46 @@ test("never shows a previous photo's thumbnail after filtering", async ({
       `tile ${id} showed ${before}`,
     ).toBe(true);
   await page.getByTestId("clear-filters").click();
+});
+
+test("filters by camera with one click", async ({ page, request }) => {
+  const day = "2005-03-04";
+  const gear = (model: string) => ({ make: "Filtercam", model });
+  await importFiles(request, {
+    ...Object.fromEntries(
+      [0, 1, 2].map((i) => [
+        `cams/one_${i}.JPG`,
+        {
+          bytes: jpegWithGear(13000 + i, gear("One")),
+          time: new Date(`${day}T09:00:0${i}`),
+        },
+      ]),
+    ),
+    "cams/two.JPG": {
+      bytes: jpegWithGear(13010, gear("Two")),
+      time: new Date(`${day}T10:00:00`),
+    },
+  });
+
+  await page.goto("/");
+  const count = page.getByTestId("library-count");
+  const cameras = page.getByTestId("filter-cameras");
+  const one = cameras.getByRole("radio", { name: /^Filtercam One/ });
+  await expect(one).toContainText("3");
+  await one.click();
+  await expect(count).toHaveText("3 photos");
+  await expect(one).toHaveAttribute("aria-checked", "true");
+  await expect(
+    page.getByRole("button", { name: "Remove filter Filtercam One" }),
+  ).toBeVisible();
+
+  await cameras.getByRole("radio", { name: /^Filtercam Two/ }).click();
+  await expect(count).toHaveText("1 photo");
+  // Clicking the chosen camera again shows every camera.
+  await cameras.getByRole("radio", { name: /^Filtercam Two/ }).click();
+  await expect(cameras.getByRole("radio", { name: "Any" })).toHaveAttribute(
+    "aria-checked",
+    "true",
+  );
+  await expect(count).not.toHaveText("1 photo");
 });

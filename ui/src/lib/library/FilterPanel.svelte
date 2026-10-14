@@ -39,8 +39,19 @@
     return Object.entries(byCode).sort((a, b) => b[1].count - a[1].count);
   });
 
-  const cameraValue = $derived(
-    filters.camera ? `${filters.camera.make}\u0000${filters.camera.model}` : "",
+  /** Cameras shown before "All N cameras" (the most used first). */
+  const CAMERAS_SHOWN = 6;
+  let allCameras = $state(false);
+  const keyOf = (k: { make: string; model: string }) =>
+    `${k.make}\u0000${k.model}`;
+  const cameraValue = $derived(filters.camera ? keyOf(filters.camera) : "");
+  // The chosen camera stays visible when the list is short.
+  const shownCameras = $derived(
+    allCameras
+      ? facets.cameras
+      : facets.cameras.filter(
+          (c, i) => i < CAMERAS_SHOWN || keyOf(c.value.key) === cameraValue,
+        ),
   );
   const placeValue = $derived(
     filters.place
@@ -49,9 +60,7 @@
   );
 
   function setCamera(value: string) {
-    const facet = facets.cameras.find(
-      (c) => `${c.value.key.make}\u0000${c.value.key.model}` === value,
-    );
+    const facet = facets.cameras.find((c) => keyOf(c.value.key) === value);
     filters.camera = facet ? { ...facet.value.key } : null;
     filters.cameraLabel = facet?.value.label ?? "";
   }
@@ -123,6 +132,59 @@
       {/each}
     </div>
   </section>
+
+  {#if facets.cameras.length > 0}
+    <section data-testid="filter-cameras">
+      <h3>Camera</h3>
+      <div class="toggles" role="radiogroup" aria-label="Camera">
+        <button
+          role="radio"
+          aria-checked={filters.camera === null}
+          class:on={filters.camera === null}
+          onclick={() => setCamera("")}>Any</button
+        >
+        {#each shownCameras as c (keyOf(c.value.key))}
+          {@const on = cameraValue === keyOf(c.value.key)}
+          <button
+            role="radio"
+            aria-checked={on}
+            class:on
+            onclick={() => setCamera(on ? "" : keyOf(c.value.key))}
+            data-testid="filter-camera"
+          >
+            {c.value.label} <span class="count">{c.count}</span>
+          </button>
+        {/each}
+      </div>
+      {#if facets.cameras.length > CAMERAS_SHOWN}
+        <button
+          class="more"
+          onclick={() => (allCameras = !allCameras)}
+          aria-expanded={allCameras}
+          >{allCameras
+            ? "Fewer cameras"
+            : `All ${facets.cameras.length} cameras`}</button
+        >
+      {/if}
+    </section>
+  {/if}
+
+  {#if facets.lenses.length > 0}
+    <section>
+      <h3>Lens</h3>
+      <select
+        value={filters.lens ?? ""}
+        onchange={(e) => (filters.lens = e.currentTarget.value || null)}
+        aria-label="Lens"
+        data-testid="filter-lens"
+      >
+        <option value="">Any lens</option>
+        {#each facets.lenses as l (l.value)}
+          <option value={l.value}>{l.value} ({l.count})</option>
+        {/each}
+      </select>
+    </section>
+  {/if}
 
   <section data-testid="filter-quality">
     <h3>Quality</h3>
@@ -220,42 +282,6 @@
       </select>
     </section>
   {/if}
-
-  {#if facets.cameras.length > 0}
-    <section>
-      <h3>Camera</h3>
-      <select
-        value={cameraValue}
-        onchange={(e) => setCamera(e.currentTarget.value)}
-        aria-label="Camera"
-        data-testid="filter-camera"
-      >
-        <option value="">Any camera</option>
-        {#each facets.cameras as c (c.value.label + c.value.key.make)}
-          <option value={`${c.value.key.make}\u0000${c.value.key.model}`}
-            >{c.value.label} ({c.count})</option
-          >
-        {/each}
-      </select>
-    </section>
-  {/if}
-
-  {#if facets.lenses.length > 0}
-    <section>
-      <h3>Lens</h3>
-      <select
-        value={filters.lens ?? ""}
-        onchange={(e) => (filters.lens = e.currentTarget.value || null)}
-        aria-label="Lens"
-        data-testid="filter-lens"
-      >
-        <option value="">Any lens</option>
-        {#each facets.lenses as l (l.value)}
-          <option value={l.value}>{l.value} ({l.count})</option>
-        {/each}
-      </select>
-    </section>
-  {/if}
 </div>
 
 <style>
@@ -315,6 +341,16 @@
 
   .count {
     opacity: 0.6;
+  }
+
+  .more {
+    align-self: flex-start;
+    padding: 0;
+    border: none;
+    background: none;
+    font-size: 0.8rem;
+    color: var(--muted);
+    text-decoration: underline;
   }
 
   .accept {
