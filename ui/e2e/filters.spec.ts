@@ -81,7 +81,7 @@ test("shows the filtered photos right away after scrolling down", async ({
 }) => {
   // Many days, so the timeline is much taller than the window.
   const days = Array.from({ length: 40 }, (_, i) => {
-    const d = new Date(Date.UTC(2001, 0, 1 + i));
+    const d = new Date(Date.UTC(1999, 0, 1 + i));
     return d.toISOString().slice(0, 10);
   });
   await importFiles(
@@ -101,7 +101,7 @@ test("shows the filtered photos right away after scrolling down", async ({
   // Scroll far down, past where the filtered result will end.
   await timeline.evaluate((el) => (el.scrollTop = el.scrollHeight));
   await expect(
-    page.locator("[data-testid=day-header][data-day='2001-01-01']"),
+    page.locator("[data-testid=day-header][data-day='1999-01-01']"),
   ).toBeVisible();
 
   // The newest day only: the timeline gets much shorter.
