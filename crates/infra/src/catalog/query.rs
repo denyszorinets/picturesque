@@ -14,13 +14,13 @@ use rusqlite::{Connection, OptionalExtension, params, params_from_iter};
 
 use super::{SqliteCatalog, storage};
 
+/// A camera's make and model as stored (either may be missing).
+type Spelling = (Option<String>, Option<String>);
+
 /// The stored make and model of every camera that displays as `camera`
 /// does (files spell one camera in different ways). Read from the camera
 /// index, so it costs one row per distinct camera.
-fn camera_spellings(
-    conn: &Connection,
-    camera: &CameraKey,
-) -> Result<Vec<(Option<String>, Option<String>)>, CatalogError> {
+fn camera_spellings(conn: &Connection, camera: &CameraKey) -> Result<Vec<Spelling>, CatalogError> {
     let label = Camera::new(&camera.make, &camera.model).display_name();
     let mut stmt = conn
         .prepare_cached(
@@ -101,7 +101,7 @@ fn filters(
 /// models of the camera filtered by (`camera_spellings`).
 fn photo_filters(
     query: &PhotoQuery,
-    spellings: &[(Option<String>, Option<String>)],
+    spellings: &[Spelling],
     p: &str,
     d: &str,
 ) -> (Vec<String>, Vec<Value>) {
