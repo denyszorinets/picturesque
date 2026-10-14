@@ -1,24 +1,33 @@
 # Picturesque
 
-Open-source photo culling for Linux, macOS and Windows.
+Free, open-source photo culling for Linux, Windows and macOS.
 
-Picturesque imports photos from scattered folders into a clean, organized
-library, groups shots into series, and highlights the best photos using
-technical analysis and on-device AI. Nothing leaves your machine.
+Picturesque groups your bursts, finds the sharpest frame and suggests the
+keepers, with AI that runs on your own computer. No subscription, no
+account, no uploads.
 
-> **Status:** early development. See the
-> [milestones](https://github.com/denyszorinets/picturesque/milestones).
+**[Website](https://denyszorinets.github.io/picturesque/)** ·
+**[Download](https://github.com/denyszorinets/picturesque/releases/latest)** ·
+**[Documentation](https://denyszorinets.github.io/picturesque/docs/)**
 
-## Planned features
+![The Picturesque library: bursts framed as series, the best frame of each marked, picks and rejects](site/assets/library-light.webp)
 
-- **Import:** copy photos into a "Clean" folder structure built from a template
-  (date, place from GPS, camera, …), skipping duplicates and verifying every copy.
-  Source folders are never modified.
-- **Series:** bursts and retakes grouped together, with the best shot highlighted.
-- **Scores:** sharpness, exposure, closed eyes and an AI aesthetic score.
-- **Culling:** keyboard-driven pick/reject/rating, filters, compare view.
-- **Interoperability:** decisions written to XMP sidecars for Lightroom,
-  darktable and digiKam.
+## Features
+
+- **Import:** copies photos from watched folders into a clean library built
+  from a template (date, place, camera, …), skipping duplicates and
+  verifying every copy. Originals are never modified.
+- **Series and best shots:** bursts grouped into series, each photo scored for
+  sharpness, exposure and noise (plus aesthetics and closed eyes with the
+  optional local models), the best frame marked and suggested as a keeper.
+- **Culling:** pick, reject and rate from the keyboard, in the grid, the
+  photo view or side by side in Compare; every decision can be undone.
+- **Search and filters:** by flag, rating, camera, lens, place, date and
+  scores, or by describing a photo ("dog on a beach").
+- **Statistics:** which cameras and lenses give you keepers, and the focal
+  lengths you use.
+- **Interoperability:** decisions written to XMP sidecars for darktable,
+  digiKam and Lightroom; export picks as originals or resized JPEGs.
 
 ## Development
 

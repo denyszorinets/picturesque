@@ -14,7 +14,8 @@ Installers are attached to each
 - **Other Linux**: ``Picturesque_*_amd64.AppImage``: make it executable and
   run it. For HEIC photos, prefer the rpm or deb.
 - **macOS** (Apple Silicon): ``Picturesque_*.dmg``. The app is not signed
-  yet: the first time, right-click it and choose **Open**.
+  yet: the first time macOS refuses to open it, open **System Settings →
+  Privacy & Security** and click **Open Anyway** next to Picturesque.
 - **Windows**: not available yet.
 
 Until the first release is published, build the app from source

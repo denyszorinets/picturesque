@@ -8,7 +8,9 @@ analysis and on-device AI.
 
 .. note::
 
-   Picturesque is in early development. Track progress on the
+   Picturesque is young: 0.1 is its first release. Download it from the
+   `releases page <https://github.com/denyszorinets/picturesque/releases>`_
+   (:doc:`getting-started/install`), and see what comes next on the
    `milestones page <https://github.com/denyszorinets/picturesque/milestones>`_.
 
 .. toctree::
