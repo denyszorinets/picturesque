@@ -63,6 +63,26 @@ Safety
 - A copy that does not match the original is retried once; if it fails
   again, the destination disk may be failing and the photo is reported.
 
+.. _features-import-watching:
+
+Watched folders
+---------------
+
+An import folder is *watched* unless you turn it off. Picturesque then
+imports new and changed photos in it without being asked:
+
+- When something in the folder changes, it is scanned once the folder has
+  been quiet for 2 seconds, so files still being copied in are complete.
+- Every 5 minutes (:ref:`reference-settings-import`), in case a change was
+  missed, for example on a network share that does not report changes.
+- When the app starts.
+
+A scan only queues photos that are new, or whose files changed size or
+modification time since they were imported, skipped or failed; the rest are
+not read again. A folder that cannot be watched (for example when the
+system limit on watches is reached) is still scanned periodically, and the
+pipeline log says so.
+
 .. _features-import-scanning:
 
 What gets scanned

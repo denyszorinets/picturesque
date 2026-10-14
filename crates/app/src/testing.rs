@@ -1340,6 +1340,51 @@ pub struct TestWorld {
     pub sidecars: Arc<MemorySidecars>,
     pub pixels: Arc<FakePixels>,
     pub pipeline: Arc<MemoryPipelineStore>,
+    pub watcher: Arc<FakeWatcher>,
+}
+
+/// Records what is watched; tests report changes with [`FakeWatcher::touch`].
+#[derive(Default)]
+pub struct FakeWatcher {
+    state: Mutex<(Vec<PathBuf>, Option<crate::ports::watcher::ChangeHandler>)>,
+    /// Folders that cannot be watched.
+    pub failing: Mutex<Vec<PathBuf>>,
+}
+
+impl std::fmt::Debug for FakeWatcher {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("FakeWatcher").finish_non_exhaustive()
+    }
+}
+
+impl FakeWatcher {
+    pub fn folders(&self) -> Vec<PathBuf> {
+        self.state.lock().unwrap().0.clone()
+    }
+
+    /// Reports a change in a watched folder.
+    pub fn touch(&self, folder: &str) {
+        let handler = self.state.lock().unwrap().1.clone();
+        if let Some(handler) = handler {
+            handler(Path::new(folder));
+        }
+    }
+}
+
+impl crate::ports::watcher::FolderWatcher for FakeWatcher {
+    fn watch(
+        &self,
+        folders: &[PathBuf],
+        changed: crate::ports::watcher::ChangeHandler,
+    ) -> Vec<(PathBuf, String)> {
+        *self.state.lock().unwrap() = (folders.to_vec(), Some(changed));
+        let failing = self.failing.lock().unwrap();
+        folders
+            .iter()
+            .filter(|f| failing.contains(f))
+            .map(|f| (f.clone(), "too many watches".into()))
+            .collect()
+    }
 }
 
 impl TestWorld {
@@ -1361,6 +1406,7 @@ impl TestWorld {
             metadata: Arc::new(metadata),
             events: Arc::default(),
             pipeline: Arc::default(),
+            watcher: Arc::default(),
         }
     }
 
@@ -1376,6 +1422,7 @@ impl TestWorld {
                 geocoder: Arc::new(FakeGeocoder),
                 sidecars: self.sidecars.clone(),
                 events: self.events.clone(),
+                watcher: self.watcher.clone(),
             },
         ))
     }
@@ -1398,6 +1445,7 @@ impl TestWorld {
             models: Vec::new(),
             model_store: Arc::new(MemoryModelStore::default()),
             pipeline_store: self.pipeline.clone(),
+            watcher: self.watcher.clone(),
         }
     }
 }

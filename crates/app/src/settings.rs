@@ -38,6 +38,24 @@ pub struct Settings {
     pub ranking: RankingSettings,
     /// Local AI models.
     pub ai: AiSettings,
+    /// Watched import folders.
+    pub import: ImportSettings,
+}
+
+/// Watched import folders (`docs/features/import.rst`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(default)]
+#[ts(export)]
+pub struct ImportSettings {
+    /// How often watched folders are scanned again, in minutes, 0–1440;
+    /// 0 rescans only when the folder reports a change.
+    pub rescan_minutes: u32,
+}
+
+impl Default for ImportSettings {
+    fn default() -> Self {
+        Self { rescan_minutes: 5 }
+    }
 }
 
 /// Local AI settings (`docs/features/ai.rst`).
@@ -137,6 +155,7 @@ impl Default for Settings {
             series: SeriesSettings::default(),
             ranking: RankingSettings::default(),
             ai: AiSettings::default(),
+            import: ImportSettings::default(),
         }
     }
 }
@@ -158,6 +177,8 @@ pub struct SettingsUpdate {
     pub ranking: Option<RankingSettings>,
     #[ts(optional)]
     pub ai: Option<AiSettings>,
+    #[ts(optional)]
+    pub import: Option<ImportSettings>,
 }
 
 /// Why settings could not be read or changed.
@@ -277,6 +298,15 @@ impl SettingsService {
         }
         if let Some(ai) = update.ai {
             settings.ai = ai;
+        }
+        if let Some(import) = update.import {
+            if import.rescan_minutes > 1440 {
+                return Err(SettingsError::Invalid(format!(
+                    "Watched folders must be rescanned at least once a day (0–1440 minutes), got {}.",
+                    import.rescan_minutes
+                )));
+            }
+            settings.import = import;
         }
         self.store.save_settings(&settings)?;
         Ok(settings)
@@ -588,5 +618,21 @@ pub(crate) mod tests {
             settings.series.max_distance,
             SeriesSettings::default().max_distance
         );
+    }
+
+    #[test]
+    fn rescan_interval_is_validated() {
+        let (service, _) = service(&[]);
+        assert_eq!(service.get().unwrap().import.rescan_minutes, 5);
+        for (minutes, ok) in [(0, true), (1440, true), (1441, false)] {
+            let result = service.update(SettingsUpdate {
+                import: Some(ImportSettings {
+                    rescan_minutes: minutes,
+                }),
+                ..Default::default()
+            });
+            assert_eq!(result.is_ok(), ok, "{minutes}");
+        }
+        assert_eq!(service.get().unwrap().import.rescan_minutes, 1440);
     }
 }

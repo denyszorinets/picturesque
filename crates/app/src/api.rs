@@ -124,6 +124,8 @@ pub struct AppContext {
     pub model_store: Arc<dyn ModelStore>,
     /// Import sources, jobs and the pipeline log (usually the catalog).
     pub pipeline_store: Arc<dyn PipelineStore>,
+    /// Change notifications for watched import folders.
+    pub watcher: Arc<dyn crate::ports::watcher::FolderWatcher>,
 }
 
 impl fmt::Debug for AppContext {
@@ -241,6 +243,7 @@ impl Api {
             geocoder: Arc::clone(&ctx.geocoder),
             sidecars: Arc::clone(&ctx.sidecars),
             events: Arc::clone(&events) as Arc<dyn EventSink>,
+            watcher: Arc::clone(&ctx.watcher),
         }));
         {
             // Each imported photo gets its thumbnail, analysis and series.
@@ -349,6 +352,11 @@ impl Api {
         let imported = self.pipeline.run_until_idle();
         self.thumbnails.wait_for_prefill();
         imported
+    }
+
+    /// Waits for background thumbnail generation (tests and tools).
+    pub fn wait_for_thumbnails(&self) {
+        self.thumbnails.wait_for_prefill();
     }
 
     /// Recomputes series now (tests and tools).
@@ -955,7 +963,8 @@ mod tests {
                 "sidecar_naming": "file_extension",
                 "series": { "max_gap_seconds": 30, "max_distance": 16 },
                 "ranking": { "sharpness": 0.6, "exposure": 0.3, "noise": 0.1, "aesthetic": 0.4 },
-                "ai": { "provider": "auto" }
+                "ai": { "provider": "auto" },
+                "import": { "rescan_minutes": 5 }
             })
         );
     }

@@ -19,7 +19,7 @@ use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::sync::{Arc, Condvar, Mutex};
+use std::sync::{Arc, Condvar, Mutex, OnceLock, Weak};
 use std::time::{Duration, Instant, UNIX_EPOCH};
 
 use picturesque_core::grouping::base_name;
@@ -43,7 +43,11 @@ use crate::ports::pipeline::{
 };
 use crate::ports::settings::SettingsStore;
 use crate::ports::sidecars::SidecarStore;
+use crate::ports::watcher::FolderWatcher;
 use crate::scan::{SourcePhoto, scan_sources};
+
+mod schedule;
+use schedule::Schedule;
 
 /// Log entries kept.
 const LOG_KEEP: usize = 20_000;
@@ -62,6 +66,7 @@ pub struct PipelineDeps {
     pub geocoder: Arc<dyn ReverseGeocoder>,
     pub sidecars: Arc<dyn SidecarStore>,
     pub events: Arc<dyn EventSink>,
+    pub watcher: Arc<dyn FolderWatcher>,
 }
 
 impl fmt::Debug for PipelineDeps {
@@ -256,6 +261,9 @@ struct Shared {
     work: bool,
     active: Option<ActiveJob>,
     paused: Option<String>,
+    /// Watched sources by folder, for change notifications.
+    watched: Vec<(PathBuf, i64)>,
+    schedule: Option<Schedule>,
 }
 
 /// Runs the pipeline on two background threads: a scanner and a worker.
@@ -272,6 +280,8 @@ pub struct ImportPipeline {
     media_sizes: Mutex<Option<HashSet<u64>>>,
     /// Called after a photo was catalogued (thumbnails, analysis, series).
     on_imported: Mutex<Option<Box<dyn Fn() + Send + Sync>>>,
+    /// Set once started, for the watcher's callback.
+    me: OnceLock<Weak<Self>>,
 }
 
 impl fmt::Debug for ImportPipeline {
@@ -321,6 +331,7 @@ impl ImportPipeline {
             last_progress: Mutex::new(None),
             media_sizes: Mutex::new(None),
             on_imported: Mutex::new(None),
+            me: OnceLock::new(),
         }
     }
 
@@ -361,6 +372,7 @@ impl ImportPipeline {
             ));
         }
         let source = self.deps.store.add_source(path, watch)?;
+        self.sync_watches();
         self.log(
             LogLevel::Info,
             None,
@@ -374,6 +386,7 @@ impl ImportPipeline {
     pub fn remove_source(&self, id: i64) -> Result<(), PipelineError> {
         let source = self.source(id)?;
         self.deps.store.remove_source(id)?;
+        self.sync_watches();
         self.log(
             LogLevel::Info,
             None,
@@ -387,6 +400,7 @@ impl ImportPipeline {
     pub fn set_watch(&self, id: i64, watch: bool) -> Result<ImportSource, PipelineError> {
         self.source(id)?;
         self.deps.store.set_source_watch(id, watch)?;
+        self.sync_watches();
         if watch {
             self.request_scan(Some(id));
         }
@@ -525,7 +539,9 @@ impl ImportPipeline {
         if self.started.swap(true, Ordering::AcqRel) {
             return;
         }
+        let _ = self.me.set(Arc::downgrade(self));
         self.resume();
+        self.sync_watches();
         self.scan_watched();
         self.wake_worker();
         let scanner = Arc::clone(self);
@@ -557,14 +573,105 @@ impl ImportPipeline {
         }
     }
 
+    /// Watches the watched sources' folders (once started).
+    fn sync_watches(&self) {
+        let Some(me) = self.me.get().cloned() else {
+            return;
+        };
+        let watched: Vec<(PathBuf, i64)> = self
+            .deps
+            .store
+            .sources()
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|s| s.watch)
+            .map(|s| (s.path, s.id))
+            .collect();
+        let folders: Vec<PathBuf> = watched.iter().map(|(p, _)| p.clone()).collect();
+        self.shared.lock().expect("pipeline lock").watched = watched;
+        let failed = self.deps.watcher.watch(
+            &folders,
+            Arc::new(move |folder: &Path| {
+                if let Some(pipeline) = me.upgrade() {
+                    pipeline.folder_changed(folder);
+                }
+            }),
+        );
+        for (folder, reason) in failed {
+            self.log(
+                LogLevel::Warn,
+                None,
+                None,
+                &format!(
+                    "Cannot watch {} for new photos ({reason}); it is still scanned periodically",
+                    folder.display()
+                ),
+            );
+        }
+    }
+
+    /// Something changed in a watched folder: scan it once it is quiet.
+    pub fn folder_changed(&self, folder: &Path) {
+        let mut shared = self.shared.lock().expect("pipeline lock");
+        let Some(id) = shared
+            .watched
+            .iter()
+            .find(|(p, _)| p == folder)
+            .map(|&(_, id)| id)
+        else {
+            return;
+        };
+        let now = Instant::now();
+        shared
+            .schedule
+            .get_or_insert_with(|| Schedule::new(now))
+            .changed(id, now);
+        self.signal.notify_all();
+    }
+
+    /// The periodic rescan interval, if any.
+    fn rescan_interval(&self) -> Option<Duration> {
+        let minutes = self
+            .deps
+            .settings
+            .load_settings()
+            .map(|s| s.import.rescan_minutes)
+            .unwrap_or(5);
+        (minutes > 0).then(|| Duration::from_secs(60 * u64::from(minutes)))
+    }
+
     fn scanner(&self) {
+        // Settings changes take effect within this long.
+        const MAX_WAIT: Duration = Duration::from_secs(60);
         loop {
+            let rescan = self.rescan_interval();
             let requests = {
                 let mut shared = self.shared.lock().expect("pipeline lock");
-                while shared.scan_requests.is_empty() {
-                    shared = self.signal.wait(shared).expect("pipeline lock");
+                loop {
+                    let now = Instant::now();
+                    let due = shared
+                        .schedule
+                        .get_or_insert_with(|| Schedule::new(now))
+                        .due(now, rescan);
+                    let mut requests = std::mem::take(&mut shared.scan_requests);
+                    requests.extend(due.changed.into_iter().map(Some));
+                    if due.rescan {
+                        requests.extend(shared.watched.iter().map(|&(_, id)| Some(id)));
+                    }
+                    if !requests.is_empty() {
+                        break requests;
+                    }
+                    let wait = due.wait.unwrap_or(MAX_WAIT).min(MAX_WAIT);
+                    let (guard, timeout) = self
+                        .signal
+                        .wait_timeout(shared, wait)
+                        .expect("pipeline lock");
+                    shared = guard;
+                    if timeout.timed_out() && due.wait.is_none_or(|w| w >= MAX_WAIT) {
+                        // Pick up a changed rescan interval.
+                        break HashSet::new();
+                    }
                 }
-                std::mem::take(&mut shared.scan_requests)
             };
             self.scan_now(&requests);
         }

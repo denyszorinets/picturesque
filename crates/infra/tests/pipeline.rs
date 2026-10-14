@@ -12,18 +12,25 @@ use picturesque_app::ports::catalog::PhotoCatalog;
 use picturesque_app::ports::events::NoEvents;
 use picturesque_app::ports::pipeline::{JobStage, PipelineStore};
 use picturesque_app::ports::settings::SettingsStore;
+use picturesque_app::ports::watcher::{FolderWatcher, NoWatcher};
 use picturesque_app::settings::Settings;
 use picturesque_infra::catalog::SqliteCatalog;
 use picturesque_infra::fs::StdFileSystem;
 use picturesque_infra::geocode::GeoNamesGeocoder;
 use picturesque_infra::images::VipsDecoder;
 use picturesque_infra::metadata::ExifMetadataReader;
+use picturesque_infra::watcher::NotifyWatcher;
 use serde_json::{Value, json};
 use support::{ExifValue::*, write_jpeg};
 
 fn api(catalog: &Arc<SqliteCatalog>, cache: &Path) -> Api {
+    api_with(catalog, cache, Arc::new(NoWatcher))
+}
+
+fn api_with(catalog: &Arc<SqliteCatalog>, cache: &Path, watcher: Arc<dyn FolderWatcher>) -> Api {
     Api::new(AppContext {
         pipeline_store: catalog.clone(),
+        watcher,
         settings_store: catalog.clone(),
         catalog: catalog.clone(),
         imports: catalog.clone(),
@@ -158,4 +165,56 @@ fn imports_photo_by_photo_and_survives_a_restart() {
         err.code,
         picturesque_app::api::ApiErrorCode::InvalidArguments
     );
+}
+
+fn eventually(what: &str, check: impl Fn() -> bool) {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+    while !check() {
+        assert!(std::time::Instant::now() < deadline, "timed out: {what}");
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+}
+
+#[test]
+fn a_photo_dropped_into_a_watched_folder_is_imported() {
+    let dir = tempfile::tempdir().unwrap();
+    let (card, lib) = (dir.path().join("Inbox"), dir.path().join("Clean"));
+    std::fs::create_dir_all(&card).unwrap();
+    std::fs::create_dir_all(&lib).unwrap();
+    photo(&card.join("IMG_0001.JPG"), "2026:10:12 09:00:00");
+    let catalog = Arc::new(SqliteCatalog::open(&dir.path().join("catalog.sqlite")).unwrap());
+    catalog
+        .save_settings(&Settings {
+            library_root: Some(lib.clone()),
+            ..Default::default()
+        })
+        .unwrap();
+    let api = api_with(
+        &catalog,
+        &dir.path().join("cache"),
+        Arc::new(NotifyWatcher::new()),
+    );
+    call(&api, "add_import_source", json!({ "path": card }));
+    api.start_background_work();
+    eventually("the folder is imported", || {
+        catalog.photo_count().unwrap() == 1
+    });
+
+    // A new photo in a subfolder, written in two steps like a slow copy.
+    std::fs::create_dir_all(card.join("2026-10-13")).unwrap();
+    let staged = dir.path().join("staged.jpg");
+    photo(&staged, "2026:10:13 10:00:00");
+    let bytes = std::fs::read(&staged).unwrap();
+    let target = card.join("2026-10-13/IMG_0002.JPG");
+    std::fs::write(&target, &bytes[..bytes.len() / 2]).unwrap();
+    std::thread::sleep(std::time::Duration::from_millis(300));
+    std::fs::write(&target, &bytes).unwrap();
+    eventually("the new photo is imported", || {
+        catalog.photo_count().unwrap() == 2
+    });
+    assert_eq!(
+        std::fs::read(lib.join("2026/2026-10-13/IMG_0002.JPG")).unwrap(),
+        bytes
+    );
+    api.wait_for_thumbnails();
 }
