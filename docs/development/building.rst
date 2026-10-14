@@ -108,6 +108,13 @@ The :repo:`Makefile` is the entry point for everyday tasks.
    * - ``make app-dev``
      - Run the desktop app with hot reload (``tauri dev``). Needs a
        display, so it does not work in the devcontainer.
+   * - ``make smoke``
+     - Build the desktop app and smoke-test it on Xvfb
+       (:ref:`development-ci-smoke`).
+   * - ``make dist``
+     - Build the installers for the current OS; ``dist-deb``, ``dist-rpm``,
+       ``dist-appimage``, ``dist-linux``, ``dist-macos`` and
+       ``dist-windows`` build one kind (:doc:`packaging`).
    * - ``make clean``
      - Remove Rust and documentation build output.
    * - ``make docs`` / ``docs-serve`` / ``docs-check``

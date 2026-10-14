@@ -1,8 +1,42 @@
 Packaging
 =========
 
-Installers are built with ``npx tauri build`` (:issue:`52`); the release
-workflow builds them for every platform (:doc:`releasing`).
+Installers are built with ``make dist`` on each platform (:issue:`52`);
+the release workflow builds them for every platform (:doc:`releasing`).
+They land in ``target/release/bundle/<format>/``.
+
+.. list-table::
+   :header-rows: 1
+
+   * - Target
+     - Builds
+     - Runs on
+   * - ``make dist``
+     - Everything for the current OS
+     - Linux, macOS, Windows
+   * - ``make dist-deb``
+     - ``.deb``
+     - Linux (Ubuntu or Debian for the right dependencies)
+   * - ``make dist-rpm``
+     - ``.rpm``
+     - Linux (Fedora for the right dependencies)
+   * - ``make dist-appimage``
+     - ``.AppImage``
+     - Linux
+   * - ``make dist-linux``
+     - ``.deb``, ``.rpm`` and ``.AppImage`` in one build
+     - Linux
+   * - ``make dist-macos``
+     - ``.dmg`` (:repo:`scripts/bundle-macos.sh`)
+     - macOS, with ``brew install vips libraw libheif dylibbundler``
+   * - ``make dist-windows``
+     - ``.msi`` and the NSIS setup ``.exe``
+     - Windows (``make`` from Git Bash or MSYS2); does not work yet, see
+       below
+
+A target run on the wrong OS stops with a message. Any Linux can produce
+every Linux format, but a package's declared dependencies only match the
+distribution it was built on.
 
 .. list-table::
    :header-rows: 1
@@ -29,11 +63,12 @@ workflow builds them for every platform (:doc:`releasing`).
      - macOS 15 (Apple Silicon)
      - Homebrew's libvips and LibRaw are copied into the app bundle with
        ``dylibbundler``. Not verified yet.
-   * - ``.msi``
+   * - ``.msi``, setup ``.exe``
      - Windows
      - Not available yet: the workspace does not build on Windows until
        libvips and LibRaw import libraries are set up
-       (:doc:`building`).
+       (:doc:`building`). ``make dist-windows`` runs the Tauri build that
+       will produce them once it does.
 
 Each package must be built on the system it targets, because the binary
 links the libvips and LibRaw versions of the build host.
@@ -43,11 +78,13 @@ Linux
 
 .. code-block:: bash
 
-   # rpm (on Fedora), deb (on Ubuntu)
-   npx tauri build --bundles rpm
-   npx tauri build --bundles deb
-   # AppImage: linuxdeploy must find libwebgpu_dawn.so
-   LD_LIBRARY_PATH=$PWD/target/release npx tauri build --bundles appimage
+   make dist-rpm        # on Fedora
+   make dist-deb        # on Ubuntu
+   make dist-appimage
+
+The AppImage build points ``LD_LIBRARY_PATH`` at ``target/release`` so
+linuxdeploy finds ``libwebgpu_dawn.so``, and runs linuxdeploy extracted
+(``APPIMAGE_EXTRACT_AND_RUN=1``) so no FUSE is needed.
 
 The executable finds ``libwebgpu_dawn.so`` (ONNX Runtime's WebGPU provider)
 through its run path: next to itself in development builds and AppImages,
