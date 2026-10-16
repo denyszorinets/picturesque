@@ -1,5 +1,6 @@
-// Smoke test of the real desktop app (#54, #108): starts it through
-// tauri-driver (WebDriver), imports fixture photos from a watched folder,
+// Smoke test of the real desktop app (#54, #108, #144): starts it through
+// tauri-driver (WebDriver), sets it up in the first-launch wizard, imports
+// fixture photos from a watched folder,
 // picks one, restarts the app and checks that the library, the decision
 // and the folder are still there, then drops a new photo into the folder
 // and waits for it to be imported on its own.
@@ -42,24 +43,29 @@ let window;
 try {
   window = await App.launch(app, shots);
 
-  step("the window shows the empty library");
-  await window.find("//button[normalize-space()='Add import folder']");
-  await window.screenshot("1-empty");
+  step("first launch opens the setup wizard");
+  await window.find("[data-testid=setup-wizard]");
+  await window.screenshot("1-setup");
 
-  step("set the library folder");
-  await window.click(nav("Settings"));
-  await window.type("[data-testid=library-root]", library);
-  await window.click("[data-testid=save-settings]");
-  await until(
-    "settings saved",
-    async () => (await window.enabled("[data-testid=save-settings]")) === false,
-  );
+  step("set the output (library) folder in the wizard");
+  await window.type("[data-testid=setup-library-root]", library);
+  await window.click("[data-testid=setup-next]");
 
   step("add the card as a watched import folder");
-  await window.click(nav("Library"));
-  await window.click("//button[normalize-space()='Add import folder']");
-  await window.type("[data-testid=source-path]", card);
-  await window.click("[data-testid=add-source]");
+  await window.type("[data-testid=setup-source]", card);
+  await window.click("[data-testid=setup-add-source]");
+  await until("the card is listed", async () =>
+    (await window.text("[data-testid=setup-sources]")).includes(card),
+  );
+  await window.click("[data-testid=setup-next]");
+
+  step("skip the AI models and finish");
+  await window.find("[data-testid=model-list]");
+  await window.click("[data-testid=setup-next]");
+  await until(
+    "the wizard closed",
+    async () => (await window.count("[data-testid=setup-wizard]")) === 0,
+  );
 
   step("photos appear in the library without reloading");
   await window.click(nav("Library"));

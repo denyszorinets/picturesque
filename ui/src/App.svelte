@@ -6,7 +6,9 @@
   import { Pipeline } from "./lib/activity/pipeline.svelte";
   import LibraryView from "./lib/library/LibraryView.svelte";
   import SettingsPanel from "./lib/settings/SettingsPanel.svelte";
+  import SetupWizard from "./lib/setup/SetupWizard.svelte";
   import StatsView from "./lib/stats/StatsView.svelte";
+  import HelpDialog from "./lib/help/HelpDialog.svelte";
 
   type Tab = "library" | "activity" | "statistics" | "settings";
   const TABS: { id: Tab; label: string }[] = [
@@ -20,6 +22,11 @@
   let error = $state<string | null>(null);
   let settings = $state<Settings | null>(null);
   let tab = $state<Tab>("library");
+  let help = $state(false);
+  /** The setup wizard: opened on first launch, or from Settings. */
+  let setup = $state(false);
+  /** Bumped after the wizard so Settings shows what it saved. */
+  let settingsRevision = $state(0);
   const pipeline = new Pipeline(api);
 
   const versionLabel = (i: AppInfo) => `v${i.version}`;
@@ -31,9 +38,40 @@
       .catch((e: unknown) => (error = String(e)));
     api
       .getSettings()
-      .then((s) => (settings = s))
+      .then((s) => {
+        settings = s;
+        // First launch: nothing set up yet.
+        if (!s.library_root) setup = true;
+      })
       .catch(() => {});
   });
+
+  /** ? opens Help, except while typing. */
+  function onkeydown(e: KeyboardEvent) {
+    const target = e.target instanceof Element ? e.target : null;
+    if (
+      e.key !== "?" ||
+      help ||
+      setup ||
+      e.defaultPrevented ||
+      target?.closest("input, select, textarea, [contenteditable]")
+    )
+      return;
+    e.preventDefault();
+    help = true;
+  }
+
+  async function closeSetup() {
+    setup = false;
+    tab = "library";
+    settingsRevision += 1;
+    void pipeline.loadStatus();
+    try {
+      settings = await api.getSettings();
+    } catch {
+      // Settings reloads itself.
+    }
+  }
 
   // The header indicator follows the pipeline everywhere.
   $effect(() => {
@@ -49,6 +87,8 @@
     };
   });
 </script>
+
+<svelte:window {onkeydown} />
 
 <div class="app">
   <header>
@@ -67,6 +107,12 @@
       </nav>
       <div class="status">
         <PipelineIndicator {pipeline} onclick={() => (tab = "activity")} />
+        <button
+          class="help"
+          onclick={() => (help = true)}
+          title="Keyboard shortcuts and guides (?)"
+          data-testid="open-help">Help</button
+        >
         <p
           class="version"
           data-testid="app-version"
@@ -102,9 +148,20 @@
         <StatsView load={api.libraryStats} visible={tab === "statistics"} />
       </div>
       <div class="view page settings" hidden={tab !== "settings"}>
-        <SettingsPanel onchange={(s) => (settings = s)} />
+        {#key settingsRevision}
+          <SettingsPanel
+            onchange={(s) => (settings = s)}
+            onsetup={() => (setup = true)}
+          />
+        {/key}
       </div>
     </main>
+    {#if help}
+      <HelpDialog onclose={() => (help = false)} />
+    {/if}
+    {#if setup}
+      <SetupWizard onclose={() => void closeSetup()} />
+    {/if}
   {/if}
 </div>
 
@@ -156,6 +213,14 @@
     align-items: center;
     gap: 0.9rem;
     min-width: 0;
+  }
+
+  .help {
+    border: none;
+    background: none;
+    padding: 0.35rem 0.6rem;
+    color: var(--muted);
+    font-weight: 600;
   }
 
   .version {
