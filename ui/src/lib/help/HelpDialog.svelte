@@ -8,16 +8,17 @@
 
   let { onclose }: Props = $props();
 
+  // Captured first, so dialogs below (the setup wizard) do not also close.
   function onkeydown(e: KeyboardEvent) {
     if (e.key === "Escape" || e.key === "?") {
       e.preventDefault();
-      e.stopPropagation();
+      e.stopImmediatePropagation();
       onclose();
     }
   }
 </script>
 
-<svelte:window {onkeydown} />
+<svelte:window onkeydowncapture={onkeydown} />
 
 <div class="backdrop" role="presentation">
   <div

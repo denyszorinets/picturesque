@@ -22,9 +22,11 @@
   interface Props {
     /** Called whenever settings are loaded or saved. */
     onchange?: (settings: Settings) => void;
+    /** Opens the setup wizard. */
+    onsetup?: () => void;
   }
 
-  let { onchange }: Props = $props();
+  let { onchange, onsetup }: Props = $props();
 
   let saved = $state<Settings | null>(null);
   let presets = $state<TemplatePresetView[]>([]);
@@ -180,17 +182,25 @@
 </script>
 
 <section class="card settings" aria-labelledby="settings-title">
-  <h2 id="settings-title">Settings</h2>
+  <div class="title">
+    <h2 id="settings-title">Settings</h2>
+    {#if onsetup}
+      <button class="small" onclick={onsetup} data-testid="open-setup"
+        >Run setup again</button
+      >
+    {/if}
+  </div>
 
   <div class="field">
-    <span class="label">Library folder</span>
+    <span class="label">Library folder (output)</span>
     <PathInput
       label="Library folder"
       bind:value={libraryRoot}
       testid="library-root"
     />
     <p class="hint muted">
-      Imported photos are copied here. Your original folders are never changed.
+      Imported photos are <strong>copied</strong> here. Your originals are only read:
+      never moved, renamed, edited or deleted.
     </p>
   </div>
 
@@ -409,6 +419,18 @@
 </section>
 
 <style>
+  .title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+
+  .title .small {
+    padding: 0.2rem 0.6rem;
+    font-size: 0.85rem;
+  }
+
   .settings {
     display: flex;
     flex-direction: column;
