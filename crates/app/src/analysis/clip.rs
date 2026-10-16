@@ -109,6 +109,10 @@ impl Analyzer for ClipAnalyzer {
         self.model.available()
     }
 
+    fn purpose(&self) -> &'static str {
+        "AI scores and similar photos"
+    }
+
     fn analyze(&self, input: &AnalysisInput<'_>) -> Result<Value, String> {
         let model = self.model.get()?;
         let size = INPUT_SIZE as usize;

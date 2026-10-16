@@ -15,4 +15,9 @@ running: boolean,
 /**
  * Why analysis waits (a disk is full), or `null`.
  */
-paused: string | null, };
+paused: string | null, 
+/**
+ * What is not analyzed until its model is downloaded (for example
+ * "faces and closed eyes").
+ */
+waiting_for_models: Array<string>, };

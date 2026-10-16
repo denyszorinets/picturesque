@@ -7,4 +7,8 @@ export type ReanalyzeResult = {
 /**
  * Photos that will be analyzed again.
  */
-photos: number, };
+photos: number, 
+/**
+ * What is not analyzed until its model is downloaded.
+ */
+waiting_for_models: Array<string>, };

@@ -194,7 +194,11 @@ fn ranks_like_colours_together(model: &Path) {
     assert!(ranked[0].1 > ranked[1].1 + 0.05, "{ranked:?}");
     assert_eq!(
         l.api.call("analysis_status", Value::Null).unwrap(),
-        json!({ "analyzed": 3, "total": 3, "running": false, "paused": null })
+        json!({
+            "analyzed": 3, "total": 3, "running": false, "paused": null,
+            // CLIP is downloaded, the face models are not.
+            "waiting_for_models": ["faces and closed eyes"],
+        })
     );
 }
 

@@ -86,6 +86,7 @@
       <div class="view" hidden={tab !== "library"}>
         <LibraryView
           onimport={() => (tab = "activity")}
+          onsettings={() => (tab = "settings")}
           importing={pipeline.busy}
         />
       </div>

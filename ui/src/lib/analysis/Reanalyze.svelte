@@ -1,5 +1,6 @@
 <script lang="ts">
   import { ApiError, type ReanalyzeResult } from "../api";
+  import { waitingNote } from "./models";
 
   interface Props {
     /** Queues photos for analysis again (all of them without ids). */
@@ -30,6 +31,8 @@
   let busy = $state(false);
   let message = $state<string | null>(null);
   let error = $state<string | null>(null);
+  /** What the last re-analysis could not do without models. */
+  let modelsNote = $state<string | null>(null);
   let timer: ReturnType<typeof setTimeout> | undefined;
 
   /** How long the confirmation stays. */
@@ -40,7 +43,8 @@
     busy = true;
     error = null;
     try {
-      const { photos } = await reanalyze(photoIds);
+      const { photos, waiting_for_models } = await reanalyze(photoIds);
+      modelsNote = waitingNote(waiting_for_models);
       message =
         photos === 0
           ? "No photos to analyze."
@@ -82,6 +86,9 @@
     <span class="muted" role="status" data-testid="reanalyze-message"
       >{message}</span
     >
+  {/if}
+  {#if modelsNote && !small}
+    <span class="muted" data-testid="reanalyze-models">{modelsNote}</span>
   {/if}
 </span>
 

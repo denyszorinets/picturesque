@@ -146,6 +146,7 @@ fn analyzes_every_photo_once_from_its_preview() {
             total: 3,
             running: false,
             paused: None,
+            waiting_for_models: Vec::new(),
         }
     );
 
@@ -311,14 +312,20 @@ fn api_reports_status_and_accepts_priorities() {
 
     assert_eq!(
         api.call("analysis_status", Value::Null).unwrap(),
-        json!({ "analyzed": 0, "total": 2, "running": false, "paused": null })
+        json!({
+            "analyzed": 0, "total": 2, "running": false, "paused": null,
+            "waiting_for_models": ["AI scores and similar photos", "faces and closed eyes"],
+        })
     );
     api.call("prioritize_analysis", json!({ "photo_ids": [ids[1].0] }))
         .unwrap();
     assert_eq!(api.run_analysis(), 2);
     assert_eq!(
         api.call("analysis_status", json!({})).unwrap(),
-        json!({ "analyzed": 2, "total": 2, "running": false, "paused": null })
+        json!({
+            "analyzed": 2, "total": 2, "running": false, "paused": null,
+            "waiting_for_models": ["AI scores and similar photos", "faces and closed eyes"],
+        })
     );
 
     let err = api
@@ -370,9 +377,15 @@ mod clip {
         assert_eq!(analysis.run_until_idle(), 2);
         assert_eq!(analysis.status().analyzed, 2);
         assert!(result(&world, ids[0], "clip").is_none());
+        // The status says what waits for the model.
+        assert_eq!(
+            analysis.status().waiting_for_models,
+            ["AI scores and similar photos"]
+        );
 
         install(&store);
         assert_eq!(analysis.status().analyzed, 0);
+        assert!(analysis.status().waiting_for_models.is_empty());
         assert_eq!(analysis.run_until_idle(), 2);
         let (version, stored) = result(&world, ids[0], "clip").unwrap();
         assert_eq!(version, ClipAnalyzer::ID.version);
@@ -467,4 +480,20 @@ fn reanalyzes_every_photo() {
     )));
     assert_eq!(analysis.run_until_idle(), 2);
     assert_eq!(analyzer.seen().len(), 4);
+}
+
+#[test]
+fn reanalyzing_says_which_analyses_wait_for_models() {
+    let (world, _) = world(1);
+    // The API adds the AI analyzers; no model is downloaded.
+    let api = Api::new(world.context()).unwrap();
+
+    let result = api.call("reanalyze_photos", Value::Null).unwrap();
+    assert_eq!(
+        result,
+        json!({
+            "photos": 1,
+            "waiting_for_models": ["AI scores and similar photos", "faces and closed eyes"],
+        })
+    );
 }

@@ -178,6 +178,10 @@ impl Analyzer for FaceAnalyzer {
         self.detector.available()
     }
 
+    fn purpose(&self) -> &'static str {
+        "faces and closed eyes"
+    }
+
     fn analyze(&self, input: &AnalysisInput<'_>) -> Result<Value, String> {
         let image = input.image;
         let (w, h) = (image.width() as f32, image.height() as f32);

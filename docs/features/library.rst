@@ -223,6 +223,13 @@ to a day gets its results within seconds. Analysis continues where it left
 off after the app restarts. With the CLIP model downloaded, analysis also
 computes image embeddings (:ref:`features-ai-embeddings`).
 
+AI analysis (aesthetic scores and similar photos, faces and closed eyes)
+needs its models, which are not bundled with the app
+(:ref:`features-ai-models`). Until they are downloaded, photos get only
+the other analyses, and the toolbar shows **AI analysis needs models**:
+click it to open Settings, where **AI models** downloads them. Photos are
+then analyzed with the new models automatically.
+
 .. _features-library-reanalyze:
 
 Analyzing photos again
@@ -239,7 +246,8 @@ toolbar shows **Analyzing …** again. Until a photo's new results are
 ready, its earlier ones stay in use, so scores, series, auto-picks and
 quality filters keep working meanwhile; when the new results are stored,
 series and auto-picks are updated. Your decisions (picks, rejects,
-ratings, a best photo you chose) are never changed.
+ratings, a best photo you chose) are never changed. If AI models are not
+downloaded yet, **Re-analyze all photos** says which analyses need them.
 
 .. _features-library-sidecars:
 

@@ -47,6 +47,8 @@ work on your hardware (for example, no Vulkan driver) is detected. If the
 chosen provider fails, models **fall back to the CPU** and the reason is
 shown. Changing the choice takes effect for models loaded afterwards.
 
+.. _features-ai-models:
+
 Models
 ------
 

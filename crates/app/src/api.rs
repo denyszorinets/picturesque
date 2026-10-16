@@ -748,7 +748,10 @@ impl Api {
                     .analysis
                     .reanalyze(ids.as_deref())
                     .map_err(catalog_error)?;
-                respond(ReanalyzeResult { photos })
+                respond(ReanalyzeResult {
+                    photos,
+                    waiting_for_models: self.analysis.waiting_for_models(),
+                })
             }
             "photo_series" => {
                 let PhotoArgs { photo_id } = parse_args(command, args)?;
