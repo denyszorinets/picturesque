@@ -12,6 +12,9 @@ use std::time::Duration;
 use picturesque_app::ports::models::{FetchError, ModelFile, ModelSpec, ModelStore};
 use sha2::{Digest, Sha256};
 
+/// How long downloading one model file may take.
+const DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(60 * 60);
+
 /// Models stored under a folder and downloaded with HTTP(S).
 #[derive(Debug)]
 pub struct HttpModelStore {
@@ -23,8 +26,8 @@ impl HttpModelStore {
     pub fn new(root: PathBuf) -> Self {
         let agent = ureq::Agent::config_builder()
             .timeout_connect(Some(Duration::from_secs(20)))
-            // Per read, so slow but steady downloads of large models work.
-            .timeout_recv_body(Some(Duration::from_secs(60)))
+            // The whole body: large models take long on slow connections.
+            .timeout_recv_body(Some(DOWNLOAD_TIMEOUT))
             .user_agent(concat!("picturesque/", env!("CARGO_PKG_VERSION")))
             .build()
             .into();
@@ -159,5 +162,18 @@ impl ModelStore for HttpModelStore {
             Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(e.to_string()),
             _ => Ok(()),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn allows_an_hour_to_download_each_file() {
+        let store = HttpModelStore::new(PathBuf::from("models"));
+        let timeouts = store.agent.config().timeouts();
+        assert_eq!(timeouts.recv_body, Some(Duration::from_secs(60 * 60)));
+        assert_eq!(timeouts.connect, Some(Duration::from_secs(20)));
     }
 }
