@@ -20,6 +20,10 @@
     onimport?: () => void;
     /** Opens Settings (to download AI models). */
     onsettings?: () => void;
+    /** Opens the setup wizard. */
+    onsetup?: () => void;
+    /** Whether an output (library) folder is set; importing waits for one. */
+    hasLibrary?: boolean;
     /** Whether photos are being imported. */
     importing?: boolean;
     store?: LibraryStore;
@@ -29,6 +33,8 @@
   let {
     onimport,
     onsettings,
+    onsetup,
+    hasLibrary = true,
     importing = false,
     store = new LibraryStore(api),
     selection = new Selection(),
@@ -347,7 +353,7 @@
   }
 
   function onkeydown(e: KeyboardEvent) {
-    const target = e.target as HTMLElement | null;
+    const target = e.target instanceof Element ? e.target : null;
     if (
       e.defaultPrevented ||
       target?.closest("input, select, textarea, [contenteditable]")
@@ -421,6 +427,15 @@
         <h2>Importing…</h2>
         <p class="muted">Photos appear here as soon as they are imported.</p>
         <button onclick={() => onimport?.()}>Show activity</button>
+      {:else if !hasLibrary}
+        <h2>Choose an output folder first</h2>
+        <p class="muted">
+          Picturesque copies your photos into a library folder and never changes
+          the originals. Choose that folder, then the folders to import from.
+        </p>
+        <button class="primary" onclick={() => onsetup?.()}
+          >Set up Picturesque</button
+        >
       {:else}
         <h2>No photos yet</h2>
         <p class="muted">
@@ -601,11 +616,19 @@
       {/if}
       <div class="grid">
         {#if store.total === 0}
-          <p class="muted no-match" data-testid="no-match">
-            {filters.search
-              ? `No photos match “${filters.search}”.`
-              : "No photos match these filters."}
-          </p>
+          <div class="no-match">
+            <p class="muted" data-testid="no-match">
+              {filters.search
+                ? `No photos match “${filters.search}”.`
+                : "No photos match these filters."}
+            </p>
+            {#if filters.active}
+              <button
+                onclick={() => filters.clear()}
+                data-testid="no-match-clear">Clear filters</button
+              >
+            {/if}
+          </div>
         {:else}
           <Timeline
             {store}
@@ -741,7 +764,10 @@
 
   .no-match {
     margin-top: 3rem;
-    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.6rem;
   }
 
   .paused {

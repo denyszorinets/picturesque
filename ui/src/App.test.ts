@@ -1,4 +1,11 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/svelte";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/svelte";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App.svelte";
 
@@ -86,7 +93,31 @@ describe("App", () => {
     expect(
       await screen.findByRole("button", { name: "Library" }),
     ).toBeInTheDocument();
-    expect(await screen.findByText("No photos yet")).toBeInTheDocument();
+  });
+
+  it("points an empty library without a folder to setup", async () => {
+    appInfo.mockResolvedValue({ name: "Picturesque", version: "0.1.0" });
+
+    render(App);
+
+    // Close the first-launch wizard: the library says what to do next.
+    await screen.findByTestId("setup-wizard");
+    await fireEvent.keyDown(window, { key: "Escape" });
+    const empty = await screen.findByTestId("library-empty");
+    expect(empty).toHaveTextContent("Choose an output folder first");
+    await fireEvent.click(
+      within(empty).getByRole("button", { name: "Set up Picturesque" }),
+    );
+    expect(await screen.findByTestId("setup-wizard")).toBeInTheDocument();
+
+    // Activity says the same, and goes to the same place.
+    await fireEvent.keyDown(window, { key: "Escape" });
+    await fireEvent.click(screen.getByRole("button", { name: "Activity" }));
+    const notice = await screen.findByTestId("needs-library");
+    await fireEvent.click(
+      within(notice).getByRole("button", { name: "Set up Picturesque" }),
+    );
+    expect(await screen.findByTestId("setup-wizard")).toBeInTheDocument();
   });
 
   it("shows import progress in the header and opens the activity", async () => {
