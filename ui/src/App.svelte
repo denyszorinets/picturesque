@@ -133,6 +133,8 @@
         <LibraryView
           onimport={() => (tab = "activity")}
           onsettings={() => (tab = "settings")}
+          onsetup={() => (setup = true)}
+          hasLibrary={settings === null || !!settings.library_root}
           importing={pipeline.busy}
         />
       </div>
@@ -142,10 +144,18 @@
           visible={tab === "activity"}
           hasLibrary={settings === null || !!settings.library_root}
           onsettings={() => (tab = "settings")}
+          onsetup={() => (setup = true)}
         />
       </div>
       <div class="view page" hidden={tab !== "statistics"}>
-        <StatsView load={api.libraryStats} visible={tab === "statistics"} />
+        <StatsView
+          load={api.libraryStats}
+          visible={tab === "statistics"}
+          onimport={() =>
+            settings && !settings.library_root
+              ? (setup = true)
+              : (tab = "activity")}
+        />
       </div>
       <div class="view page settings" hidden={tab !== "settings"}>
         {#key settingsRevision}

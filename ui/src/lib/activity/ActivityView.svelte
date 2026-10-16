@@ -10,9 +10,11 @@
     /** Whether a library folder is set; importing waits for one. */
     hasLibrary: boolean;
     onsettings?: () => void;
+    /** Opens the setup wizard. */
+    onsetup?: () => void;
   }
 
-  let { pipeline, visible, hasLibrary, onsettings }: Props = $props();
+  let { pipeline, visible, hasLibrary, onsettings, onsetup }: Props = $props();
   let draft = $state("");
 
   /** How often the view reloads while visible. */
@@ -98,11 +100,18 @@
     </p>
 
     {#if !hasLibrary}
-      <p class="notice" data-testid="needs-library">
-        Choose a library folder in
-        <button class="link" onclick={() => onsettings?.()}>Settings</button>
-        first; photos wait until then.
-      </p>
+      <div class="notice" data-testid="needs-library">
+        <p>
+          Choose an output folder first: photos are copied into it, and wait
+          until it is set. Your originals are never changed.
+        </p>
+        <button class="primary" onclick={() => onsetup?.()}
+          >Set up Picturesque</button
+        >
+        <button class="link" onclick={() => onsettings?.()}
+          >or choose it in Settings</button
+        >
+      </div>
     {:else if status?.paused}
       <p class="notice" data-testid="paused">
         Importing paused: {status.paused}
@@ -401,6 +410,18 @@
     border-radius: 8px;
     background: color-mix(in srgb, var(--warn) 15%, transparent);
     font-size: 0.9rem;
+  }
+
+  div.notice {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 0.8rem;
+  }
+
+  div.notice p {
+    flex-basis: 100%;
+    margin: 0;
   }
 
   .source-list {

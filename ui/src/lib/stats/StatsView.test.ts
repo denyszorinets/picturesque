@@ -1,4 +1,10 @@
-import { cleanup, render, screen, within } from "@testing-library/svelte";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from "@testing-library/svelte";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { GearStats, KeeperCounts, LibraryStats } from "../api";
 import StatsView from "./StatsView.svelte";
@@ -104,11 +110,19 @@ describe("StatsView", () => {
       cameras: [],
       lenses: [],
     });
-    const view = render(StatsView, { props: { load, visible: false } });
+    const onimport = vi.fn();
+    const view = render(StatsView, {
+      props: { load, visible: false, onimport },
+    });
     expect(load).not.toHaveBeenCalled();
-    await view.rerender({ load, visible: true });
+    await view.rerender({ load, visible: true, onimport });
     expect(await screen.findByTestId("stats-empty")).toBeInTheDocument();
     expect(load).toHaveBeenCalledTimes(1);
+    // It says where photos come from, and goes there.
+    await fireEvent.click(
+      screen.getByRole("button", { name: "Import photos" }),
+    );
+    expect(onimport).toHaveBeenCalledOnce();
   });
 
   it("shows an error instead of loading forever when drawing fails", async () => {
