@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/svelte";
+import { cleanup, render, screen, waitFor } from "@testing-library/svelte";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App.svelte";
 
@@ -115,6 +115,25 @@ describe("App", () => {
       "aria-current",
       "page",
     );
+  });
+
+  it("opens the setup wizard on first launch", async () => {
+    appInfo.mockResolvedValue({ name: "Picturesque", version: "0.1.0" });
+
+    render(App);
+
+    // No library folder is set yet.
+    const wizard = await screen.findByTestId("setup-wizard");
+    expect(wizard).toHaveTextContent("Welcome to Picturesque");
+    screen.getByRole("button", { name: "Close" }).click();
+    await waitFor(() =>
+      expect(screen.queryByTestId("setup-wizard")).toBeNull(),
+    );
+
+    // Settings opens it again.
+    screen.getByRole("button", { name: "Settings" }).click();
+    (await screen.findByTestId("open-setup")).click();
+    expect(await screen.findByTestId("setup-wizard")).toBeInTheDocument();
   });
 
   it("shows an error when the backend is unavailable", async () => {
