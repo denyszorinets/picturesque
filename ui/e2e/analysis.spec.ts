@@ -2,7 +2,12 @@ import { expect, test } from "@playwright/test";
 import { jpeg } from "./fixtures";
 import { call, importFiles } from "./helpers";
 
-type Status = { analyzed: number; total: number; running: boolean };
+type Status = {
+  analyzed: number;
+  total: number;
+  running: boolean;
+  waiting_for_models: string[];
+};
 
 test("analyzes photos in the background and shows their quality", async ({
   page,
@@ -83,7 +88,7 @@ test("analyzes selected photos, or all of them, again", async ({
   await page.locator("button.tile").first().click();
   const response = page.waitForResponse("**/api/commands/reanalyze_photos");
   await reanalyze.click();
-  expect(await (await response).json()).toEqual({ photos: 1 });
+  expect(await (await response).json()).toMatchObject({ photos: 1 });
   await done();
   // The photo keeps (or regains) its scores.
   await page.locator("button.tile").first().dblclick();
@@ -116,4 +121,31 @@ test("re-analysis rejects bad arguments", async ({ request }) => {
     photo_ids: [987654],
   });
   expect(none.photos).toBe(0);
+});
+
+test("says AI analysis needs models while they are not downloaded", async ({
+  page,
+  request,
+}) => {
+  // Other tests download and remove models: go by the current status.
+  const { waiting_for_models: waiting } = await call<Status>(
+    request,
+    "analysis_status",
+    null,
+  );
+  expect(waiting).toContain("faces and closed eyes");
+
+  await page.goto("/");
+  const note = page.getByTestId("analysis-needs-models");
+  await expect(note).toHaveText("AI analysis needs models");
+  await expect(note).toHaveAttribute("title", /faces and closed eyes/);
+  await note.click();
+  const settings = page.getByRole("region", { name: "Settings" });
+  await expect(settings).toBeVisible();
+
+  await settings.getByRole("button", { name: "Re-analyze all photos" }).click();
+  await settings.getByTestId("reanalyze-start").click();
+  await expect(settings.getByTestId("reanalyze-models")).toContainText(
+    "download them in Settings → AI models",
+  );
 });

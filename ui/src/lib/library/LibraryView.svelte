@@ -4,6 +4,7 @@
   import Compare from "./Compare.svelte";
   import ExportDialog from "./ExportDialog.svelte";
   import Reanalyze from "../analysis/Reanalyze.svelte";
+  import { waitingNote } from "../analysis/models";
   import RejectsMove from "./RejectsMove.svelte";
   import { Culling } from "./culling.svelte";
   import FilterPanel from "./FilterPanel.svelte";
@@ -17,6 +18,8 @@
   interface Props {
     /** Opens the import activity. */
     onimport?: () => void;
+    /** Opens Settings (to download AI models). */
+    onsettings?: () => void;
     /** Whether photos are being imported. */
     importing?: boolean;
     store?: LibraryStore;
@@ -25,6 +28,7 @@
 
   let {
     onimport,
+    onsettings,
     importing = false,
     store = new LibraryStore(api),
     selection = new Selection(),
@@ -556,6 +560,14 @@
           data-testid="analysis-progress"
           title="Scoring photos in the background; photos on screen go first"
           >Analyzing {analysis.status.analyzed} / {analysis.status.total}</span
+        >
+      {/if}
+      {#if analysis.status && analysis.status.waiting_for_models.length > 0}
+        <button
+          class="link"
+          onclick={() => onsettings?.()}
+          title={waitingNote(analysis.status.waiting_for_models)}
+          data-testid="analysis-needs-models">AI analysis needs models</button
         >
       {/if}
       {#if seriesError}
