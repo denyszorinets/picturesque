@@ -79,7 +79,11 @@ export async function importFiles(
   for (const [name, f] of Object.entries(files)) {
     if (f.time) utimesSync(join(src, name), f.time, f.time);
   }
-  await call(request, "update_settings", { library_root: LIBRARY });
+  // The culling tour is tested on its own (tour.spec.ts).
+  await call(request, "update_settings", {
+    library_root: LIBRARY,
+    onboarding: { tour_done: true },
+  });
   await call(request, "add_import_source", { path: src, watch: false });
   await waitForFolder(request, src);
 }

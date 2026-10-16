@@ -5,6 +5,11 @@ After :doc:`first-import`, this tour goes from a full library to the
 photos worth keeping. Every step works with the keyboard
 (:doc:`/reference/keyboard-shortcuts`).
 
+The first time the library has photos, a short **culling tour** in the
+app points at each of these controls. Use **Next** or the arrow keys,
+or **Skip tour**; **Show the culling tour** at the top of **Settings**
+plays it again.
+
 1. Look through the timeline
 ----------------------------
 
