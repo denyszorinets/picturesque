@@ -167,6 +167,24 @@ describe("App", () => {
     expect(await screen.findByTestId("setup-wizard")).toBeInTheDocument();
   });
 
+  it("opens Help with ? or the header button", async () => {
+    appInfo.mockResolvedValue({ name: "Picturesque", version: "0.1.0" });
+
+    render(App);
+
+    // Close the first-launch wizard first.
+    await screen.findByTestId("setup-wizard");
+    await fireEvent.keyDown(window, { key: "Escape" });
+    const button = await screen.findByTestId("open-help");
+    await fireEvent.keyDown(window, { key: "?" });
+    expect(await screen.findByTestId("help-dialog")).toBeInTheDocument();
+    await fireEvent.keyDown(window, { key: "Escape" });
+    expect(screen.queryByTestId("help-dialog")).toBeNull();
+
+    await fireEvent.click(button);
+    expect(await screen.findByTestId("help-dialog")).toBeInTheDocument();
+  });
+
   it("shows an error when the backend is unavailable", async () => {
     appInfo.mockRejectedValue(new Error("no backend"));
 

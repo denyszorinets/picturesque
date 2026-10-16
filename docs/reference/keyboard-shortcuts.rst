@@ -5,6 +5,10 @@ Shortcuts work in the Library tab, both in the timeline and in the loupe.
 They are ignored while typing in a text field. On macOS use ⌘ where Ctrl
 is listed.
 
+In the app, press **?** (or click **Help** in the header) to see these
+shortcuts, with links to the Getting Started guides and this
+documentation; the links open in your browser.
+
 Culling
 -------
 
