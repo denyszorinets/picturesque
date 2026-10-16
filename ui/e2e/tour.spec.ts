@@ -18,11 +18,27 @@ test("tours the library once, and again from Settings", async ({
   await expect(tour).toContainText("Your photos");
   await expect(page.getByTestId("tour-highlight")).toBeVisible();
 
+  // Every step's card is fully on screen, even next to the whole timeline.
+  const onScreen = async () => {
+    const box = (await tour.boundingBox())!;
+    const view = page.viewportSize()!;
+    return (
+      box.y >= 0 &&
+      box.x >= 0 &&
+      box.y + box.height <= view.height &&
+      box.x + box.width <= view.width
+    );
+  };
+  await expect.poll(onScreen).toBe(true);
+
   // Arrow keys and buttons move through it; the library ignores them.
   await page.keyboard.press("ArrowRight");
   await expect(tour).toContainText("Pick, reject, rate");
   await expect(page.getByTestId("loupe")).toHaveCount(0);
-  for (let i = 2; i < 7; i++) await page.getByTestId("tour-next").click();
+  for (let i = 2; i < 7; i++) {
+    await page.getByTestId("tour-next").click();
+    await expect.poll(onScreen).toBe(true);
+  }
   await expect(tour).toContainText("Need a hand?");
   await page.getByTestId("tour-next").click();
   await expect(tour).toBeHidden();

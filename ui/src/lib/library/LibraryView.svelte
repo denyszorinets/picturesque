@@ -5,6 +5,8 @@
   import ExportDialog from "./ExportDialog.svelte";
   import Reanalyze from "../analysis/Reanalyze.svelte";
   import { waitingNote } from "../analysis/models";
+  import Tour from "../tour/Tour.svelte";
+  import { CULLING_TOUR } from "../tour/steps";
   import RejectsMove from "./RejectsMove.svelte";
   import { Culling } from "./culling.svelte";
   import FilterPanel from "./FilterPanel.svelte";
@@ -24,6 +26,10 @@
     onsetup?: () => void;
     /** Whether an output (library) folder is set; importing waits for one. */
     hasLibrary?: boolean;
+    /** Whether to show the culling tour (once photos are on screen). */
+    tour?: boolean;
+    /** Called when the tour is finished or skipped. */
+    ontourend?: () => void;
     /** Whether photos are being imported. */
     importing?: boolean;
     store?: LibraryStore;
@@ -35,6 +41,8 @@
     onsettings,
     onsetup,
     hasLibrary = true,
+    tour = false,
+    ontourend,
     importing = false,
     store = new LibraryStore(api),
     selection = new Selection(),
@@ -644,6 +652,9 @@
         {/if}
       </div>
     </div>
+    {#if tour && store.total > 0 && loupe === null && !compare && !exporting}
+      <Tour steps={CULLING_TOUR} onend={() => ontourend?.()} />
+    {/if}
     {#if exporting}
       <ExportDialog
         view={filters.search

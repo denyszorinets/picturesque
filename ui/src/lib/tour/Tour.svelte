@@ -42,17 +42,22 @@
     };
   });
 
-  /** The card goes below the control, or above it when there is no room. */
+  /** The card's height, once shown. */
+  let cardHeight = $state(0);
+
+  /** Below the control, else above it, else over it; always on screen. */
   const position = $derived.by(() => {
     if (!rect) return "left: 50%; top: 50%; transform: translate(-50%, -50%);";
-    const left = Math.max(
-      GAP,
-      Math.min(rect.left, viewport.width - CARD_WIDTH - GAP),
-    );
+    const h = cardHeight || 200;
+    const clamp = (v: number, max: number) => Math.max(GAP, Math.min(v, max));
+    const left = clamp(rect.left, viewport.width - CARD_WIDTH - GAP);
     const below = rect.bottom + PAD + GAP;
-    if (below + 180 < viewport.height)
-      return `left: ${left}px; top: ${below}px;`;
-    return `left: ${left}px; bottom: ${viewport.height - rect.top + PAD + GAP}px;`;
+    const above = rect.top - PAD - GAP - h;
+    let top: number;
+    if (below + h + GAP <= viewport.height) top = below;
+    else if (above >= GAP) top = above;
+    else top = rect.top + GAP;
+    return `left: ${left}px; top: ${clamp(top, viewport.height - h - GAP)}px;`;
   });
 
   function next() {
@@ -102,6 +107,7 @@
     data-testid="tour"
     style={position}
     style:width={`${CARD_WIDTH}px`}
+    bind:offsetHeight={cardHeight}
   >
     <p class="count muted">{index + 1} of {steps.length}</p>
     <h3>{step.title}</h3>

@@ -26,6 +26,7 @@ vi.mock("./lib/api", async (importOriginal) => {
         ai: { provider: "auto" },
         import: { rescan_minutes: 5 },
         auto_pick: { enabled: true, min_quality: 0.5 },
+        onboarding: { tour_done: false },
       }),
     listModels: () => Promise.resolve([]),
     aiStatus: () =>
