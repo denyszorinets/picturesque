@@ -221,14 +221,17 @@ jobs:
           merge-multiple: true
 
       - name: Checksums
-        working-directory: installers
-        run: sha256sum -- * > SHA256SUMS.txt
+        # Artifacts keep their bundle folders (deb/, nsis/, ...): flatten them.
+        run: |
+          mkdir release
+          find installers -type f -exec mv -t release {} +
+          cd release && sha256sum -- * > SHA256SUMS.txt
 
       - name: Create the draft release
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
         run: |
-          gh release create "$TAG" installers/* \
+          gh release create "$TAG" release/* \
             --draft --verify-tag --generate-notes \
             --title "Picturesque ${TAG#v}"
