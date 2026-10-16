@@ -2,6 +2,7 @@
 import type { AiSettings } from "./AiSettings";
 import type { AutoPickSettings } from "./AutoPickSettings";
 import type { ImportSettings } from "./ImportSettings";
+import type { OnboardingSettings } from "./OnboardingSettings";
 import type { RankingSettings } from "./RankingSettings";
 import type { SeriesSettings } from "./SeriesSettings";
 import type { SidecarNaming } from "./SidecarNaming";
@@ -9,4 +10,4 @@ import type { SidecarNaming } from "./SidecarNaming";
 /**
  * A change to some settings; absent fields are left as they are.
  */
-export type SettingsUpdate = { library_root?: string | null, path_template?: string, sidecar_naming?: SidecarNaming, series?: SeriesSettings, ranking?: RankingSettings, ai?: AiSettings, import?: ImportSettings, auto_pick?: AutoPickSettings, };
+export type SettingsUpdate = { library_root?: string | null, path_template?: string, sidecar_naming?: SidecarNaming, series?: SeriesSettings, ranking?: RankingSettings, ai?: AiSettings, import?: ImportSettings, auto_pick?: AutoPickSettings, onboarding?: OnboardingSettings, };
