@@ -34,6 +34,7 @@ signals, and **Best quality first** sorts the whole library by score.
   every selected photo (select with **Shift+click**, **Ctrl+click** or
   **Shift+arrows**).
 - **Ctrl+Z** undoes.
+- **?** shows every shortcut (:doc:`/reference/keyboard-shortcuts`).
 
 Decisions are saved right away, and written to XMP sidecars so
 Lightroom, darktable and digiKam see them.
