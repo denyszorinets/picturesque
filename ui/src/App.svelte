@@ -8,6 +8,7 @@
   import SettingsPanel from "./lib/settings/SettingsPanel.svelte";
   import SetupWizard from "./lib/setup/SetupWizard.svelte";
   import StatsView from "./lib/stats/StatsView.svelte";
+  import HelpDialog from "./lib/help/HelpDialog.svelte";
 
   type Tab = "library" | "activity" | "statistics" | "settings";
   const TABS: { id: Tab; label: string }[] = [
@@ -21,6 +22,7 @@
   let error = $state<string | null>(null);
   let settings = $state<Settings | null>(null);
   let tab = $state<Tab>("library");
+  let help = $state(false);
   /** The setup wizard: opened on first launch, or from Settings. */
   let setup = $state(false);
   /** Bumped after the wizard so Settings shows what it saved. */
@@ -43,6 +45,21 @@
       })
       .catch(() => {});
   });
+
+  /** ? opens Help, except while typing. */
+  function onkeydown(e: KeyboardEvent) {
+    const target = e.target instanceof Element ? e.target : null;
+    if (
+      e.key !== "?" ||
+      help ||
+      setup ||
+      e.defaultPrevented ||
+      target?.closest("input, select, textarea, [contenteditable]")
+    )
+      return;
+    e.preventDefault();
+    help = true;
+  }
 
   async function closeSetup() {
     setup = false;
@@ -71,6 +88,8 @@
   });
 </script>
 
+<svelte:window {onkeydown} />
+
 <div class="app">
   <header>
     <h1>Picturesque</h1>
@@ -88,6 +107,12 @@
       </nav>
       <div class="status">
         <PipelineIndicator {pipeline} onclick={() => (tab = "activity")} />
+        <button
+          class="help"
+          onclick={() => (help = true)}
+          title="Keyboard shortcuts and guides (?)"
+          data-testid="open-help">Help</button
+        >
         <p
           class="version"
           data-testid="app-version"
@@ -131,6 +156,9 @@
         {/key}
       </div>
     </main>
+    {#if help}
+      <HelpDialog onclose={() => (help = false)} />
+    {/if}
     {#if setup}
       <SetupWizard onclose={() => void closeSetup()} />
     {/if}
@@ -185,6 +213,14 @@
     align-items: center;
     gap: 0.9rem;
     min-width: 0;
+  }
+
+  .help {
+    border: none;
+    background: none;
+    padding: 0.35rem 0.6rem;
+    color: var(--muted);
+    font-weight: 600;
   }
 
   .version {

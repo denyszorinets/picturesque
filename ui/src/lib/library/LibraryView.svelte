@@ -347,7 +347,7 @@
   }
 
   function onkeydown(e: KeyboardEvent) {
-    const target = e.target as HTMLElement | null;
+    const target = e.target instanceof Element ? e.target : null;
     if (
       e.defaultPrevented ||
       target?.closest("input, select, textarea, [contenteditable]")
