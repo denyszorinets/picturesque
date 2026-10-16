@@ -72,7 +72,9 @@ test("filters the timeline and keeps filters for the session", async ({
   await page.getByTestId("filter-from").fill("1990-01-01");
   await page.getByTestId("filter-to").fill("1990-01-02");
   await expect(page.getByTestId("no-match")).toBeVisible();
-  await page.getByTestId("clear-filters").click();
+  // The empty result offers the way back.
+  await page.getByTestId("no-match-clear").click();
+  await expect(count).toHaveText(`${all} photos`);
 });
 
 test("shows the filtered photos right away after scrolling down", async ({

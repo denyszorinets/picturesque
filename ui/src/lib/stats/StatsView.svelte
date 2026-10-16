@@ -6,9 +6,11 @@
     load: () => Promise<LibraryStats>;
     /** Whether the view is on screen; it reloads each time it is shown. */
     visible: boolean;
+    /** Goes to where photos are imported (or set up first). */
+    onimport?: () => void;
   }
 
-  let { load, visible }: Props = $props();
+  let { load, visible, onimport }: Props = $props();
   let stats = $state<LibraryStats | null>(null);
   let error = $state<string | null>(null);
 
@@ -110,9 +112,14 @@
     {:else if !stats}
       <p class="muted">Loading…</p>
     {:else if stats.all.photos === 0}
-      <p class="muted" data-testid="stats-empty">
-        No photos yet. Statistics appear once photos are imported.
-      </p>
+      <div class="empty" data-testid="stats-empty">
+        <p class="muted">
+          No photos yet. Statistics appear once photos are imported.
+        </p>
+        {#if onimport}
+          <button class="primary" onclick={onimport}>Import photos</button>
+        {/if}
+      </div>
     {:else}
       <div class="tiles">
         <div class="tile">
@@ -245,6 +252,13 @@
 </div>
 
 <style>
+  .empty {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.6rem;
+  }
+
   .stats {
     display: flex;
     flex-direction: column;

@@ -1,4 +1,11 @@
-import { cleanup, render, screen } from "@testing-library/svelte";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/svelte";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App.svelte";
 
@@ -19,6 +26,7 @@ vi.mock("./lib/api", async (importOriginal) => {
         ai: { provider: "auto" },
         import: { rescan_minutes: 5 },
         auto_pick: { enabled: true, min_quality: 0.5 },
+        onboarding: { tour_done: false },
       }),
     listModels: () => Promise.resolve([]),
     aiStatus: () =>
@@ -86,7 +94,31 @@ describe("App", () => {
     expect(
       await screen.findByRole("button", { name: "Library" }),
     ).toBeInTheDocument();
-    expect(await screen.findByText("No photos yet")).toBeInTheDocument();
+  });
+
+  it("points an empty library without a folder to setup", async () => {
+    appInfo.mockResolvedValue({ name: "Picturesque", version: "0.1.0" });
+
+    render(App);
+
+    // Close the first-launch wizard: the library says what to do next.
+    await screen.findByTestId("setup-wizard");
+    await fireEvent.keyDown(window, { key: "Escape" });
+    const empty = await screen.findByTestId("library-empty");
+    expect(empty).toHaveTextContent("Choose an output folder first");
+    await fireEvent.click(
+      within(empty).getByRole("button", { name: "Set up Picturesque" }),
+    );
+    expect(await screen.findByTestId("setup-wizard")).toBeInTheDocument();
+
+    // Activity says the same, and goes to the same place.
+    await fireEvent.keyDown(window, { key: "Escape" });
+    await fireEvent.click(screen.getByRole("button", { name: "Activity" }));
+    const notice = await screen.findByTestId("needs-library");
+    await fireEvent.click(
+      within(notice).getByRole("button", { name: "Set up Picturesque" }),
+    );
+    expect(await screen.findByTestId("setup-wizard")).toBeInTheDocument();
   });
 
   it("shows import progress in the header and opens the activity", async () => {
@@ -115,6 +147,43 @@ describe("App", () => {
       "aria-current",
       "page",
     );
+  });
+
+  it("opens the setup wizard on first launch", async () => {
+    appInfo.mockResolvedValue({ name: "Picturesque", version: "0.1.0" });
+
+    render(App);
+
+    // No library folder is set yet.
+    const wizard = await screen.findByTestId("setup-wizard");
+    expect(wizard).toHaveTextContent("Welcome to Picturesque");
+    screen.getByRole("button", { name: "Close" }).click();
+    await waitFor(() =>
+      expect(screen.queryByTestId("setup-wizard")).toBeNull(),
+    );
+
+    // Settings opens it again.
+    screen.getByRole("button", { name: "Settings" }).click();
+    (await screen.findByTestId("open-setup")).click();
+    expect(await screen.findByTestId("setup-wizard")).toBeInTheDocument();
+  });
+
+  it("opens Help with ? or the header button", async () => {
+    appInfo.mockResolvedValue({ name: "Picturesque", version: "0.1.0" });
+
+    render(App);
+
+    // Close the first-launch wizard first.
+    await screen.findByTestId("setup-wizard");
+    await fireEvent.keyDown(window, { key: "Escape" });
+    const button = await screen.findByTestId("open-help");
+    await fireEvent.keyDown(window, { key: "?" });
+    expect(await screen.findByTestId("help-dialog")).toBeInTheDocument();
+    await fireEvent.keyDown(window, { key: "Escape" });
+    expect(screen.queryByTestId("help-dialog")).toBeNull();
+
+    await fireEvent.click(button);
+    expect(await screen.findByTestId("help-dialog")).toBeInTheDocument();
   });
 
   it("shows an error when the backend is unavailable", async () => {

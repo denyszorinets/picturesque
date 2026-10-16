@@ -2,7 +2,18 @@ Your First Import
 =================
 
 This walks through bringing photos from existing folders into a clean,
-organized library. Your original folders are only read, never changed.
+organized library. Picturesque **copies** every photo into the library
+(the output folder); your original folders are only read: nothing in
+them is ever moved, renamed, edited or deleted.
+
+On first launch, a **setup wizard** leads through steps 1 to 3 and
+offers the AI models (:ref:`features-ai-models`): choose the output
+(library) folder and its layout, add the folders to import from, then
+download models or skip them. Any step can be skipped, and **Run setup again** at
+the top of **Settings** reopens it. Until an output folder is chosen, the
+**Library**, **Activity** and **Statistics** tabs say so and offer **Set
+up Picturesque**. The rest of this page does the same
+by hand, and explains what happens next.
 
 1. Choose the library folder
 ----------------------------

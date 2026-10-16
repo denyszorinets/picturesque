@@ -57,6 +57,11 @@ pub trait Analyzer: Send + Sync {
     fn ready(&self) -> bool {
         true
     }
+
+    /// What the analyzer adds, to tell users what waits for a model.
+    fn purpose(&self) -> &'static str {
+        self.id().name
+    }
 }
 
 /// Analysis progress, sent as an event and returned by `analysis_status`.
@@ -70,6 +75,9 @@ pub struct AnalysisStatus {
     pub running: bool,
     /// Why analysis waits (a disk is full), or `null`.
     pub paused: Option<String>,
+    /// What is not analyzed until its model is downloaded (for example
+    /// "faces and closed eyes").
+    pub waiting_for_models: Vec<String>,
 }
 
 /// Arguments of `prioritize_analysis`.
@@ -92,11 +100,13 @@ pub struct ReanalyzeArgs {
 }
 
 /// Result of `reanalyze_photos`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 #[ts(export)]
 pub struct ReanalyzeResult {
     /// Photos that will be analyzed again.
     pub photos: usize,
+    /// What is not analyzed until its model is downloaded.
+    pub waiting_for_models: Vec<String>,
 }
 
 struct Queue {
@@ -176,6 +186,15 @@ impl AnalysisService {
         self.active().iter().map(|a| a.id()).collect()
     }
 
+    /// What the analyzers that wait for their model add.
+    pub fn waiting_for_models(&self) -> Vec<String> {
+        self.analyzers
+            .iter()
+            .filter(|a| !a.ready())
+            .map(|a| a.purpose().to_owned())
+            .collect()
+    }
+
     pub fn status(&self) -> AnalysisStatus {
         let (pending, total) = self
             .catalog
@@ -187,6 +206,7 @@ impl AnalysisService {
             total,
             running: q.busy > 0,
             paused: q.paused.clone(),
+            waiting_for_models: self.waiting_for_models(),
         }
     }
 

@@ -7,7 +7,13 @@ import {
 } from "./analysis.svelte";
 
 function status(analyzed: number, total = 10): AnalysisStatus {
-  return { analyzed, total, running: analyzed < total, paused: null };
+  return {
+    analyzed,
+    total,
+    running: analyzed < total,
+    paused: null,
+    waiting_for_models: [],
+  };
 }
 
 function api(initial = status(2)) {

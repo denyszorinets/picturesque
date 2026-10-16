@@ -47,6 +47,8 @@ work on your hardware (for example, no Vulkan driver) is detected. If the
 chosen provider fails, models **fall back to the CPU** and the reason is
 shown. Changing the choice takes effect for models loaded afterwards.
 
+.. _features-ai-models:
+
 Models
 ------
 
@@ -58,7 +60,9 @@ offered has a license that allows its use in a GPL-3.0 application.
 - **Download** fetches the model once. Each file is checked against the
   size and SHA-256 checksum Picturesque expects; a corrupt or tampered
   download is rejected, nothing of it is kept, and **Retry** starts over
-  (files that were already complete are kept).
+  (files that were already complete are kept). Each file may take up to
+  an hour to download, enough for slow connections; a download that
+  takes longer fails and can be retried.
 - After that, models are used **offline**: Picturesque contacts the
   network only when you press Download.
 - **Cancel** stops a download; **Remove** deletes a model's files.

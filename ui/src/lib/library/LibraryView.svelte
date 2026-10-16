@@ -4,6 +4,9 @@
   import Compare from "./Compare.svelte";
   import ExportDialog from "./ExportDialog.svelte";
   import Reanalyze from "../analysis/Reanalyze.svelte";
+  import { waitingNote } from "../analysis/models";
+  import Tour from "../tour/Tour.svelte";
+  import { CULLING_TOUR } from "../tour/steps";
   import RejectsMove from "./RejectsMove.svelte";
   import { Culling } from "./culling.svelte";
   import FilterPanel from "./FilterPanel.svelte";
@@ -17,6 +20,16 @@
   interface Props {
     /** Opens the import activity. */
     onimport?: () => void;
+    /** Opens Settings (to download AI models). */
+    onsettings?: () => void;
+    /** Opens the setup wizard. */
+    onsetup?: () => void;
+    /** Whether an output (library) folder is set; importing waits for one. */
+    hasLibrary?: boolean;
+    /** Whether to show the culling tour (once photos are on screen). */
+    tour?: boolean;
+    /** Called when the tour is finished or skipped. */
+    ontourend?: () => void;
     /** Whether photos are being imported. */
     importing?: boolean;
     store?: LibraryStore;
@@ -25,6 +38,11 @@
 
   let {
     onimport,
+    onsettings,
+    onsetup,
+    hasLibrary = true,
+    tour = false,
+    ontourend,
     importing = false,
     store = new LibraryStore(api),
     selection = new Selection(),
@@ -343,7 +361,7 @@
   }
 
   function onkeydown(e: KeyboardEvent) {
-    const target = e.target as HTMLElement | null;
+    const target = e.target instanceof Element ? e.target : null;
     if (
       e.defaultPrevented ||
       target?.closest("input, select, textarea, [contenteditable]")
@@ -417,6 +435,15 @@
         <h2>Importing…</h2>
         <p class="muted">Photos appear here as soon as they are imported.</p>
         <button onclick={() => onimport?.()}>Show activity</button>
+      {:else if !hasLibrary}
+        <h2>Choose an output folder first</h2>
+        <p class="muted">
+          Picturesque copies your photos into a library folder and never changes
+          the originals. Choose that folder, then the folders to import from.
+        </p>
+        <button class="primary" onclick={() => onsetup?.()}
+          >Set up Picturesque</button
+        >
       {:else}
         <h2>No photos yet</h2>
         <p class="muted">
@@ -558,6 +585,14 @@
           >Analyzing {analysis.status.analyzed} / {analysis.status.total}</span
         >
       {/if}
+      {#if analysis.status && analysis.status.waiting_for_models.length > 0}
+        <button
+          class="link"
+          onclick={() => onsettings?.()}
+          title={waitingNote(analysis.status.waiting_for_models)}
+          data-testid="analysis-needs-models">AI analysis needs models</button
+        >
+      {/if}
       {#if seriesError}
         <span class="error-text" role="alert">{seriesError}</span>
       {/if}
@@ -589,11 +624,19 @@
       {/if}
       <div class="grid">
         {#if store.total === 0}
-          <p class="muted no-match" data-testid="no-match">
-            {filters.search
-              ? `No photos match “${filters.search}”.`
-              : "No photos match these filters."}
-          </p>
+          <div class="no-match">
+            <p class="muted" data-testid="no-match">
+              {filters.search
+                ? `No photos match “${filters.search}”.`
+                : "No photos match these filters."}
+            </p>
+            {#if filters.active}
+              <button
+                onclick={() => filters.clear()}
+                data-testid="no-match-clear">Clear filters</button
+              >
+            {/if}
+          </div>
         {:else}
           <Timeline
             {store}
@@ -609,6 +652,9 @@
         {/if}
       </div>
     </div>
+    {#if tour && store.total > 0 && loupe === null && !compare && !exporting}
+      <Tour steps={CULLING_TOUR} onend={() => ontourend?.()} />
+    {/if}
     {#if exporting}
       <ExportDialog
         view={filters.search
@@ -729,7 +775,10 @@
 
   .no-match {
     margin-top: 3rem;
-    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.6rem;
   }
 
   .paused {

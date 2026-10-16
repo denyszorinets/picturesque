@@ -113,7 +113,11 @@ fn scores_separate_sharp_from_blurred_photos() {
     assert!(score(&a, "exposure") > 0.9, "{a}");
     assert_eq!(
         api.call("analysis_status", Value::Null).unwrap(),
-        json!({ "analyzed": 2, "total": 2, "running": false, "paused": null })
+        json!({
+            "analyzed": 2, "total": 2, "running": false, "paused": null,
+            // No AI model is downloaded here.
+            "waiting_for_models": ["AI scores and similar photos", "faces and closed eyes"],
+        })
     );
 }
 

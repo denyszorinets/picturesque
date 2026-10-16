@@ -1,5 +1,6 @@
 <script lang="ts">
   import * as api from "../api";
+  import ExternalLink from "../components/ExternalLink.svelte";
   import { formatSize, Models } from "./models.svelte";
 
   const models = new Models(api);
@@ -21,11 +22,9 @@
         <span class="muted">{model.purpose}</span>
         <span class="meta muted">
           {formatSize(model.size)} ·
-          <a href={model.license_url} target="_blank" rel="noreferrer"
-            >{model.license}</a
-          >
+          <ExternalLink href={model.license_url}>{model.license}</ExternalLink>
           ·
-          <a href={model.homepage} target="_blank" rel="noreferrer">Source</a>
+          <ExternalLink href={model.homepage}>Source</ExternalLink>
         </span>
       </div>
       <div class="state" data-testid="model-state" data-state={model.state}>
