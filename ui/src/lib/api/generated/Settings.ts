@@ -2,6 +2,7 @@
 import type { AiSettings } from "./AiSettings";
 import type { AutoPickSettings } from "./AutoPickSettings";
 import type { ImportSettings } from "./ImportSettings";
+import type { OnboardingSettings } from "./OnboardingSettings";
 import type { RankingSettings } from "./RankingSettings";
 import type { SeriesSettings } from "./SeriesSettings";
 import type { SidecarNaming } from "./SidecarNaming";
@@ -42,4 +43,8 @@ import: ImportSettings,
 /**
  * Which photos the app marks as keepers.
  */
-auto_pick: AutoPickSettings, };
+auto_pick: AutoPickSettings, 
+/**
+ * What the user has already been shown.
+ */
+onboarding: OnboardingSettings, };

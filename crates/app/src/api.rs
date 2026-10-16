@@ -936,7 +936,8 @@ mod tests {
                 "ranking": { "sharpness": 0.6, "exposure": 0.3, "noise": 0.1, "aesthetic": 0.4 },
                 "ai": { "provider": "auto" },
                 "import": { "rescan_minutes": 5 },
-                "auto_pick": { "enabled": true, "min_quality": 0.5 }
+                "auto_pick": { "enabled": true, "min_quality": 0.5 },
+                "onboarding": { "tour_done": false }
             })
         );
     }

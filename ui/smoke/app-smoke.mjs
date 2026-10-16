@@ -76,6 +76,15 @@ try {
   if (jpegsInLibrary() !== 3)
     throw new Error(`expected 3 imported files, found ${jpegsInLibrary()}`);
 
+  step("the culling tour starts once photos are there; skip it");
+  await window.find("[data-testid=tour]");
+  await window.screenshot("2a-tour");
+  await window.click("//button[normalize-space()='Skip tour']");
+  await until(
+    "the tour closed",
+    async () => (await window.count("[data-testid=tour]")) === 0,
+  );
+
   step("each photo's steps are shown");
   await window.click(nav("Activity"));
   await until(

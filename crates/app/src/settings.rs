@@ -42,6 +42,17 @@ pub struct Settings {
     pub import: ImportSettings,
     /// Which photos the app marks as keepers.
     pub auto_pick: AutoPickSettings,
+    /// What the user has already been shown.
+    pub onboarding: OnboardingSettings,
+}
+
+/// First-run guidance the user has seen (`docs/getting-started`).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(default)]
+#[ts(export)]
+pub struct OnboardingSettings {
+    /// The culling tour was finished or skipped.
+    pub tour_done: bool,
 }
 
 /// Auto-pick (`docs/features/library.rst`): the best photo of each series,
@@ -180,6 +191,7 @@ impl Default for Settings {
             ai: AiSettings::default(),
             import: ImportSettings::default(),
             auto_pick: AutoPickSettings::default(),
+            onboarding: OnboardingSettings::default(),
         }
     }
 }
@@ -205,6 +217,8 @@ pub struct SettingsUpdate {
     pub import: Option<ImportSettings>,
     #[ts(optional)]
     pub auto_pick: Option<AutoPickSettings>,
+    #[ts(optional)]
+    pub onboarding: Option<OnboardingSettings>,
 }
 
 /// Why settings could not be read or changed.
@@ -342,6 +356,9 @@ impl SettingsService {
                 )));
             }
             settings.auto_pick = auto_pick;
+        }
+        if let Some(onboarding) = update.onboarding {
+            settings.onboarding = onboarding;
         }
         self.store.save_settings(&settings)?;
         Ok(settings)
@@ -669,5 +686,20 @@ pub(crate) mod tests {
             assert_eq!(result.is_ok(), ok, "{minutes}");
         }
         assert_eq!(service.get().unwrap().import.rescan_minutes, 1440);
+    }
+
+    #[test]
+    fn remembers_that_the_culling_tour_was_seen() {
+        let (service, _) = service(&[]);
+        assert!(!service.get().unwrap().onboarding.tour_done);
+
+        let saved = service
+            .update(SettingsUpdate {
+                onboarding: Some(OnboardingSettings { tour_done: true }),
+                ..Default::default()
+            })
+            .unwrap();
+        assert!(saved.onboarding.tour_done);
+        assert!(service.get().unwrap().onboarding.tour_done);
     }
 }

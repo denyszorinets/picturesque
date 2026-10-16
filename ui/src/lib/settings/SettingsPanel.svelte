@@ -24,9 +24,11 @@
     onchange?: (settings: Settings) => void;
     /** Opens the setup wizard. */
     onsetup?: () => void;
+    /** Shows the culling tour again. */
+    ontour?: () => void;
   }
 
-  let { onchange, onsetup }: Props = $props();
+  let { onchange, onsetup, ontour }: Props = $props();
 
   let saved = $state<Settings | null>(null);
   let presets = $state<TemplatePresetView[]>([]);
@@ -184,11 +186,18 @@
 <section class="card settings" aria-labelledby="settings-title">
   <div class="title">
     <h2 id="settings-title">Settings</h2>
-    {#if onsetup}
-      <button class="small" onclick={onsetup} data-testid="open-setup"
-        >Run setup again</button
-      >
-    {/if}
+    <span class="title-actions">
+      {#if ontour}
+        <button class="small" onclick={ontour} data-testid="open-tour"
+          >Show the culling tour</button
+        >
+      {/if}
+      {#if onsetup}
+        <button class="small" onclick={onsetup} data-testid="open-setup"
+          >Run setup again</button
+        >
+      {/if}
+    </span>
   </div>
 
   <div class="field">
@@ -424,6 +433,11 @@
     align-items: center;
     justify-content: space-between;
     gap: 1rem;
+  }
+
+  .title-actions {
+    display: flex;
+    gap: 0.5rem;
   }
 
   .title .small {

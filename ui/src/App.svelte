@@ -9,6 +9,7 @@
   import SetupWizard from "./lib/setup/SetupWizard.svelte";
   import StatsView from "./lib/stats/StatsView.svelte";
   import HelpDialog from "./lib/help/HelpDialog.svelte";
+  import { tourWanted } from "./lib/tour/policy";
 
   type Tab = "library" | "activity" | "statistics" | "settings";
   const TABS: { id: Tab; label: string }[] = [
@@ -27,6 +28,29 @@
   let setup = $state(false);
   /** Bumped after the wizard so Settings shows what it saved. */
   let settingsRevision = $state(0);
+  /** The culling tour, asked for again from Settings. */
+  let replayTour = $state(false);
+  const tour = $derived(
+    tourWanted({
+      tourDone: settings ? settings.onboarding.tour_done : null,
+      replay: replayTour,
+      hasLibrary: !!settings?.library_root,
+      setupOpen: setup,
+      helpOpen: help,
+      onLibraryTab: tab === "library",
+    }),
+  );
+
+  async function endTour() {
+    replayTour = false;
+    if (settings) settings = { ...settings, onboarding: { tour_done: true } };
+    try {
+      settings = await api.updateSettings({ onboarding: { tour_done: true } });
+    } catch {
+      // Not saved: the tour shows again next time.
+    }
+  }
+
   const pipeline = new Pipeline(api);
 
   const versionLabel = (i: AppInfo) => `v${i.version}`;
@@ -136,6 +160,8 @@
           onsetup={() => (setup = true)}
           hasLibrary={settings === null || !!settings.library_root}
           importing={pipeline.busy}
+          {tour}
+          ontourend={() => void endTour()}
         />
       </div>
       <div class="view page" hidden={tab !== "activity"}>
@@ -162,6 +188,10 @@
           <SettingsPanel
             onchange={(s) => (settings = s)}
             onsetup={() => (setup = true)}
+            ontour={() => {
+              replayTour = true;
+              tab = "library";
+            }}
           />
         {/key}
       </div>
