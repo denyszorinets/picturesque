@@ -40,17 +40,21 @@ Crates
    file system, metadata reader, image decoder, inference engine, geocoder,
    sidecar writer, clock. Owns the command and event types exposed to the
    UI, so both transports share one definition. Depends on ``core``.
+   ``sessions::Host`` runs the library or one folder culled in place at a
+   time, each as its own ``Api`` over its own catalog, and swaps them
+   (:doc:`ADR-0013 </architecture/decisions/0013-folder-sessions>`).
 
 ``picturesque-infra``
    Implementations of the ports: SQLite catalog (``rusqlite``), image
    decoding (:doc:`ADR-0005 </architecture/decisions/0005-image-decoding-stack>`),
    ONNX inference (``ort``), offline geocoder, XMP reader and writer, file
    system and hashing. Native libraries and their types stay inside this
-   crate.
+   crate. ``sessions::StandardSessions`` builds each session's context, shared by
+   both entry points.
 
 ``picturesque-desktop``
-   The Tauri 2 application. Builds the infrastructure, wires it into the use
-   cases, and exposes app commands as Tauri commands and events. Serves
+   The Tauri 2 application. Builds the infrastructure, starts a ``Host``
+   over it, and exposes app commands as Tauri commands and events. Serves
    images through a custom protocol. Contains no business logic.
 
 ``picturesque-devserver``

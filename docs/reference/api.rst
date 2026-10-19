@@ -21,6 +21,18 @@ Commands
 ``get_settings``, ``update_settings``
    See :doc:`settings`.
 
+``open_folder``
+   ``{ "path": "/home/me/Pictures/2026-10-18 Hike" }``. Closes the library
+   or the folder open now (writing pending sidecars first) and culls this
+   folder in place (:doc:`/features/folders`). Returns the settings as the
+   folder sees them: ``open_folder`` and ``library_root`` are the folder.
+   A relative path, a folder that cannot be read, a whole disk, and a
+   folder inside or holding the library are ``invalid_arguments``.
+
+``open_library``
+   No arguments. Goes back to the library from a folder; returns the
+   settings.
+
 ``template_presets``
    No arguments. The built-in templates: ``[{ "id", "label", "template" }]``.
 

@@ -6,6 +6,7 @@
   import { Pipeline } from "./lib/activity/pipeline.svelte";
   import { ringState } from "./lib/activity/ring";
   import { AnalysisProgress } from "./lib/library/analysis.svelte";
+  import FolderSwitcher from "./lib/session/FolderSwitcher.svelte";
   import LibraryView from "./lib/library/LibraryView.svelte";
   import SettingsPanel from "./lib/settings/SettingsPanel.svelte";
   import SetupWizard from "./lib/setup/SetupWizard.svelte";
@@ -30,6 +31,10 @@
   let setup = $state(false);
   /** Bumped after the wizard so Settings shows what it saved. */
   let settingsRevision = $state(0);
+  /** Bumped when another folder (or the library) is opened, so every
+   * view starts over with that session's photos. */
+  let sessionRevision = $state(0);
+  const inFolder = $derived(!!settings?.open_folder);
   /** The culling tour, asked for again from Settings. */
   let replayTour = $state(false);
   const tour = $derived(
@@ -89,6 +94,16 @@
     help = true;
   }
 
+  /** Another folder or the library was opened. */
+  function switched(next: Settings) {
+    settings = next;
+    setup = false;
+    tab = "library";
+    sessionRevision += 1;
+    void pipeline.loadStatus();
+    void analysis.load();
+  }
+
   async function closeSetup() {
     setup = false;
     tab = "library";
@@ -126,6 +141,9 @@
 <div class="app">
   <header>
     <h1>Picturesque</h1>
+    {#if info && settings}
+      <FolderSwitcher {settings} onswitch={switched} />
+    {/if}
     {#if info}
       <nav aria-label="Main">
         {#each TABS as t (t.id)}
@@ -161,56 +179,60 @@
 
   {#if info}
     <main class:full={tab === "library"}>
-      <!-- Views stay mounted so they keep their state while switching. -->
-      <div class="view" hidden={tab !== "library"}>
-        <LibraryView
-          onimport={() => (tab = "activity")}
-          onsettings={() => (tab = "settings")}
-          onsetup={() => (setup = true)}
-          hasLibrary={settings === null || !!settings.library_root}
-          importing={pipeline.busy}
-          {analysis}
-          {tour}
-          ontourend={() => void endTour()}
-        />
-      </div>
-      <div class="view page" hidden={tab !== "activity"}>
-        <ActivityView
-          {pipeline}
-          visible={tab === "activity"}
-          hasLibrary={settings === null || !!settings.library_root}
-          onsettings={() => (tab = "settings")}
-          onsetup={() => (setup = true)}
-        />
-      </div>
-      <div class="view page" hidden={tab !== "statistics"}>
-        <StatsView
-          load={api.libraryStats}
-          visible={tab === "statistics"}
-          onimport={() =>
-            settings && !settings.library_root
-              ? (setup = true)
-              : (tab = "activity")}
-        />
-      </div>
-      <div class="view page settings" hidden={tab !== "settings"}>
-        {#key settingsRevision}
-          <SettingsPanel
-            onchange={(s) => (settings = s)}
+      {#key sessionRevision}
+        <!-- Views stay mounted so they keep their state while switching. -->
+        <div class="view" hidden={tab !== "library"}>
+          <LibraryView
+            onimport={() => (tab = "activity")}
+            onsettings={() => (tab = "settings")}
             onsetup={() => (setup = true)}
-            ontour={() => {
-              replayTour = true;
-              tab = "library";
-            }}
+            hasLibrary={settings === null || !!settings.library_root}
+            importing={pipeline.busy}
+            {analysis}
+            {tour}
+            ontourend={() => void endTour()}
           />
-        {/key}
-      </div>
+        </div>
+        <div class="view page" hidden={tab !== "activity"}>
+          <ActivityView
+            {pipeline}
+            visible={tab === "activity"}
+            hasLibrary={settings === null || !!settings.library_root}
+            {inFolder}
+            onsettings={() => (tab = "settings")}
+            onsetup={() => (setup = true)}
+          />
+        </div>
+        <div class="view page" hidden={tab !== "statistics"}>
+          <StatsView
+            load={api.libraryStats}
+            visible={tab === "statistics"}
+            onimport={() =>
+              settings && !settings.library_root
+                ? (setup = true)
+                : (tab = "activity")}
+          />
+        </div>
+        <div class="view page settings" hidden={tab !== "settings"}>
+          {#key settingsRevision}
+            <SettingsPanel
+              {inFolder}
+              onchange={(s) => (settings = s)}
+              onsetup={() => (setup = true)}
+              ontour={() => {
+                replayTour = true;
+                tab = "library";
+              }}
+            />
+          {/key}
+        </div>
+      {/key}
     </main>
     {#if help}
       <HelpDialog onclose={() => (help = false)} />
     {/if}
     {#if setup}
-      <SetupWizard onclose={() => void closeSetup()} />
+      <SetupWizard onclose={() => void closeSetup()} onopened={switched} />
     {/if}
   {/if}
 </div>

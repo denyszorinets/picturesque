@@ -362,6 +362,11 @@ impl SeriesService {
         }
     }
 
+    /// Stops the background worker (it exits once it has no sender).
+    pub fn stop(&self) {
+        *self.notify.lock().expect("notify lock") = None;
+    }
+
     /// Recomputes once now and then whenever notified.
     pub fn start(self: &Arc<Self>) {
         let (tx, rx) = channel();

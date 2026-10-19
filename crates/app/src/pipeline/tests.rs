@@ -688,3 +688,139 @@ fn a_job_without_files_fails_instead_of_stopping_the_queue() {
     scan_all(&p);
     assert_eq!(p.run_until_idle(), 2);
 }
+
+/// A folder culled in place (ADR-0013): a darktable-style sidecar for the
+/// pair, and a JPEG in a subfolder.
+fn in_place_world() -> TestWorld {
+    let fs = MemFs::new()
+        .file("/shoot/IMG_1.CR3", b"raw one")
+        .file("/shoot/IMG_1.JPG", b"jpg one")
+        .file("/shoot/IMG_1.CR3.xmp", b"<xmp/>")
+        .file("/shoot/sub/IMG_2.JPG", b"jpg two");
+    let metadata = FakeMetadata {
+        by_path: [
+            ("/shoot/IMG_1.CR3", taken("2026-10-12 09:00:00")),
+            ("/shoot/IMG_1.JPG", taken("2026-10-12 09:00:00")),
+            ("/shoot/sub/IMG_2.JPG", taken("2026-10-13 10:00:00")),
+        ]
+        .into_iter()
+        .map(|(p, m)| (PathBuf::from(p), m))
+        .collect(),
+        failing: Vec::new(),
+    };
+    let world = TestWorld::new(fs, metadata);
+    world.sidecars.0.lock().unwrap().insert(
+        "/shoot/IMG_1.CR3.xmp".into(),
+        picturesque_core::decision::Decision {
+            flag: picturesque_core::decision::Flag::Reject,
+            rating: picturesque_core::decision::Rating::new(2).unwrap(),
+        },
+    );
+    world
+        .settings
+        .save_settings(&Settings {
+            library_root: Some("/shoot".into()),
+            open_folder: Some("/shoot".into()),
+            ..Default::default()
+        })
+        .unwrap();
+    world
+}
+
+fn asset_paths(world: &TestWorld) -> Vec<String> {
+    let mut paths: Vec<String> = world
+        .catalog
+        .all_photos()
+        .unwrap()
+        .iter()
+        // Library paths read the same on every platform.
+        .flat_map(|p| {
+            p.assets.iter().map(|a| {
+                a.path
+                    .iter()
+                    .map(|c| c.to_string_lossy())
+                    .collect::<Vec<_>>()
+                    .join("/")
+            })
+        })
+        .collect();
+    paths.sort();
+    paths
+}
+
+#[test]
+fn in_place_catalogs_photos_where_they_are() {
+    let world = in_place_world();
+    let p = world.pipeline();
+    p.add_source(Path::new("/shoot"), true).unwrap();
+    scan_all(&p);
+
+    assert_eq!(p.run_until_idle(), 2);
+
+    assert_eq!(
+        asset_paths(&world),
+        ["IMG_1.CR3", "IMG_1.CR3.xmp", "IMG_1.JPG", "sub/IMG_2.JPG"]
+    );
+    // Nothing was copied.
+    assert!(!world.fs.exists(Path::new("/shoot/2026")));
+    // The decision in the existing sidecar was read.
+    let id = world.catalog.all_photos().unwrap()[0].id;
+    assert_eq!(
+        world.catalog.decision(id).unwrap().flag,
+        picturesque_core::decision::Flag::Reject
+    );
+    assert!(
+        world
+            .pipeline
+            .messages()
+            .iter()
+            .any(|m| m == "IMG_1.CR3: catalogued in place")
+    );
+}
+
+#[test]
+fn in_place_writing_a_sidecar_does_not_import_the_photo_again() {
+    let world = in_place_world();
+    let p = world.pipeline();
+    p.add_source(Path::new("/shoot"), true).unwrap();
+    scan_all(&p);
+    p.run_until_idle();
+
+    world
+        .fs
+        .write(Path::new("/shoot/sub/IMG_2.JPG.xmp"), b"<xmp/>");
+    scan_all(&p);
+
+    assert_eq!(p.status().queued, 0);
+}
+
+#[test]
+fn in_place_only_the_open_folder_is_a_source() {
+    let world = in_place_world();
+    let p = world.pipeline();
+
+    assert!(p.add_source(Path::new("/elsewhere"), true).is_err());
+    assert!(p.add_source(Path::new("/shoot"), true).is_ok());
+}
+
+#[test]
+fn in_place_works_in_a_read_only_folder() {
+    let fs = MemFs::new()
+        .file("/card/IMG_1.JPG", b"jpg one")
+        .read_only("/card");
+    let world = TestWorld::new(fs, FakeMetadata::default());
+    world
+        .settings
+        .save_settings(&Settings {
+            library_root: Some("/card".into()),
+            open_folder: Some("/card".into()),
+            ..Default::default()
+        })
+        .unwrap();
+    let p = world.pipeline();
+    p.add_source(Path::new("/card"), false).unwrap();
+    scan_all(&p);
+
+    assert_eq!(p.run_until_idle(), 1);
+    assert!(p.status().paused.is_none());
+}

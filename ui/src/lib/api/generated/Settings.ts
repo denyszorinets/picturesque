@@ -4,6 +4,7 @@ import type { AutoPickSettings } from "./AutoPickSettings";
 import type { ImportSettings } from "./ImportSettings";
 import type { OnboardingSettings } from "./OnboardingSettings";
 import type { RankingSettings } from "./RankingSettings";
+import type { RecentFolder } from "./RecentFolder";
 import type { SeriesSettings } from "./SeriesSettings";
 import type { SidecarNaming } from "./SidecarNaming";
 
@@ -47,4 +48,14 @@ auto_pick: AutoPickSettings,
 /**
  * What the user has already been shown.
  */
-onboarding: OnboardingSettings, };
+onboarding: OnboardingSettings, 
+/**
+ * The folder being culled in place, reopened at startup; `None` while
+ * working in the library (ADR-0013). In a folder session,
+ * `library_root` is this folder.
+ */
+open_folder: string | null, 
+/**
+ * Folders culled in place, most recently opened first.
+ */
+recent_folders: Array<RecentFolder>, };

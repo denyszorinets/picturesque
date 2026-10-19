@@ -19,8 +19,11 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use futures_util::Stream;
 use futures_util::stream::unfold;
+use std::path::PathBuf;
+
 use picturesque_app::api::{Api, ApiError, ApiErrorCode};
 use picturesque_app::ports::events::{AppEvent, EventSink};
+use picturesque_app::sessions::Host;
 use serde_json::Value;
 use tokio::sync::broadcast;
 
@@ -53,9 +56,36 @@ impl EventSink for EventBus {
     }
 }
 
+/// What the server runs commands on: an [`Api`], or a [`Host`] that
+/// switches between folder sessions.
+pub trait Backend: Send + Sync + 'static {
+    fn call(&self, command: &str, args: Value) -> Result<Value, ApiError>;
+    fn image_request(&self, path: &str) -> Result<PathBuf, ApiError>;
+}
+
+impl Backend for Api {
+    fn call(&self, command: &str, args: Value) -> Result<Value, ApiError> {
+        Api::call(self, command, args)
+    }
+
+    fn image_request(&self, path: &str) -> Result<PathBuf, ApiError> {
+        Api::image_request(self, path)
+    }
+}
+
+impl Backend for Host {
+    fn call(&self, command: &str, args: Value) -> Result<Value, ApiError> {
+        Host::call(self, command, args)
+    }
+
+    fn image_request(&self, path: &str) -> Result<PathBuf, ApiError> {
+        self.api().image_request(path)
+    }
+}
+
 #[derive(Clone)]
 struct AppState {
-    api: Arc<Api>,
+    api: Arc<dyn Backend>,
     events: EventBus,
 }
 
@@ -69,7 +99,7 @@ struct AppState {
 ///   JSON [`AppEvent`] per `data:` line.
 /// - `GET /api/images/{size}/{photo_id}` returns a photo's cached JPEG
 ///   (`size` is `grid` or `preview`), with an `ETag` for revalidation.
-pub fn router(api: Arc<Api>, events: EventBus) -> Router {
+pub fn router(api: Arc<dyn Backend>, events: EventBus) -> Router {
     Router::new()
         .route("/api/health", get(|| async { "ok" }))
         .route("/api/commands/{name}", post(command))

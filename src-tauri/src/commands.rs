@@ -2,18 +2,19 @@
 
 use std::sync::Arc;
 
-use picturesque_app::api::{Api, ApiError};
+use picturesque_app::api::ApiError;
+use picturesque_app::sessions::Host;
 use serde_json::Value;
 
-/// Forwards a UI command to [`Api::call`] on a blocking thread.
+/// Forwards a UI command to [`Host::call`] on a blocking thread.
 #[tauri::command]
 pub async fn api(
-    api: tauri::State<'_, Arc<Api>>,
+    host: tauri::State<'_, Arc<Host>>,
     command: String,
     args: Option<Value>,
 ) -> Result<Value, ApiError> {
-    let api = Arc::clone(&api);
-    tauri::async_runtime::spawn_blocking(move || api.call(&command, args.unwrap_or(Value::Null)))
+    let host = Arc::clone(&host);
+    tauri::async_runtime::spawn_blocking(move || host.call(&command, args.unwrap_or(Value::Null)))
         .await
         .map_err(|e| ApiError::internal(format!("command task failed: {e}")))?
 }

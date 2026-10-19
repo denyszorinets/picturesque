@@ -13,6 +13,8 @@ const SETTINGS: Settings = {
   import: { rescan_minutes: 5 },
   auto_pick: { enabled: true, min_quality: 0.5 },
   onboarding: { tour_done: false },
+  open_folder: null,
+  recent_folders: [],
 };
 
 const getSettings = vi.fn<() => Promise<Settings>>();
