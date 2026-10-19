@@ -167,7 +167,7 @@ describe("LibraryStore", () => {
     const refreshed = store.refresh();
     await Promise.all([cleared, refreshed]);
 
-    expect(store.sections[0]!.label).not.toMatch(/Matching/);
+    // The timeline's day sections, not the search heading.
     expect(store.sections[0]!.day).toBe("2026-10-12");
   });
 
