@@ -68,6 +68,7 @@ export type { CameraKey } from "./generated/CameraKey";
 export type { SeriesEditView } from "./generated/SeriesEditView";
 export type { SeriesView } from "./generated/SeriesView";
 export type { Settings } from "./generated/Settings";
+export type { RecentFolder } from "./generated/RecentFolder";
 export type { SidecarStatus } from "./generated/SidecarStatus";
 export type { SettingsUpdate } from "./generated/SettingsUpdate";
 export type { TemplatePresetView } from "./generated/TemplatePresetView";
@@ -98,6 +99,19 @@ export function getSettings(): Promise<Settings> {
  */
 export function updateSettings(update: SettingsUpdate): Promise<Settings> {
   return transport.call<Settings>("update_settings", update);
+}
+
+/**
+ * Culls `path` in place instead of the library or the folder open now
+ * (ADR-0013). Returns the settings as the folder sees them.
+ */
+export function openFolder(path: string): Promise<Settings> {
+  return transport.call<Settings>("open_folder", { path });
+}
+
+/** Goes back to the library from a folder culled in place. */
+export function openLibrary(): Promise<Settings> {
+  return transport.call<Settings>("open_library");
 }
 
 /** Built-in path templates. */

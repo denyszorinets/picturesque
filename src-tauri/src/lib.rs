@@ -6,13 +6,10 @@
 
 use std::sync::Arc;
 
-use picturesque_app::api::{Api, AppContext};
 use picturesque_app::ports::events::{AppEvent, EventSink};
+use picturesque_app::sessions::Host;
 use picturesque_infra::catalog::SqliteCatalog;
-use picturesque_infra::fs::StdFileSystem;
-use picturesque_infra::geocode::GeoNamesGeocoder;
-use picturesque_infra::images::VipsDecoder;
-use picturesque_infra::metadata::ExifMetadataReader;
+use picturesque_infra::sessions::StandardSessions;
 use tauri::{AppHandle, Emitter, Manager, RunEvent};
 
 mod commands;
@@ -35,7 +32,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .register_asynchronous_uri_scheme_protocol("picturesque", |ctx, request, responder| {
-            let api = ctx.app_handle().state::<Arc<Api>>().inner().clone();
+            let api = ctx.app_handle().state::<Arc<Host>>().inner().api();
             let path = request.uri().path().to_owned();
             let etag = request
                 .headers()
@@ -51,28 +48,15 @@ pub fn run() {
             let data_dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&data_dir)?;
             let catalog = Arc::new(SqliteCatalog::open(&data_dir.join("catalog.sqlite"))?);
-            let api = Api::new(AppContext {
-                pipeline_store: catalog.clone(),
-                watcher: Arc::new(picturesque_infra::watcher::NotifyWatcher::new()),
-                settings_store: catalog.clone(),
-                catalog,
-                fs: Arc::new(StdFileSystem),
-                metadata: Arc::new(ExifMetadataReader),
-                geocoder: Arc::new(GeoNamesGeocoder::default()),
-                events: Arc::new(TauriEvents(app.handle().clone())),
-                decoder: Arc::new(VipsDecoder),
-                sidecars: Arc::new(picturesque_infra::xmp::XmpSidecars),
-                pixels: Arc::new(picturesque_infra::images::VipsPixels),
-                analyzers: picturesque_app::analysis::default_analyzers(),
-                inference: Arc::new(picturesque_infra::inference::OrtEngine::for_background()),
-                models: picturesque_app::models::catalog(),
-                model_store: Arc::new(picturesque_infra::models::HttpModelStore::new(
-                    data_dir.join("models"),
-                )),
-                cache_dir: app.path().app_cache_dir()?,
-            })?;
-            api.start_background_work();
-            app.manage(Arc::new(api));
+            let sessions = StandardSessions::new(
+                data_dir,
+                app.path().app_cache_dir()?,
+                catalog.clone(),
+                Arc::new(TauriEvents(app.handle().clone())),
+                picturesque_app::models::catalog(),
+            );
+            let host = Host::start(Arc::new(sessions), catalog)?;
+            app.manage(Arc::new(host));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![commands::api])
@@ -81,9 +65,9 @@ pub fn run() {
         .run(|app, event| {
             // Decisions made in the last moments still reach their sidecars.
             if let RunEvent::Exit = event
-                && let Some(api) = app.try_state::<Arc<Api>>()
+                && let Some(host) = app.try_state::<Arc<Host>>()
             {
-                api.flush_sidecars();
+                host.shutdown();
             }
         });
 }

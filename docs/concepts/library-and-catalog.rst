@@ -33,6 +33,13 @@ dumps, backups) into the library, verifying every copy, and leaves the
 originals untouched (:doc:`/features/import`). Once you have checked the
 library, you can format the card or delete the old copies yourself.
 
+Folders culled in place
+-----------------------
+
+A folder can also be culled where it is, without importing it
+(:doc:`/features/folders`). It gets a catalog of its own, so the library's
+catalog is never mixed with it; sidecars are written next to its photos.
+
 One library per catalog
 -----------------------
 

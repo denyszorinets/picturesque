@@ -46,10 +46,9 @@ test("sets up the library, an import folder and models in the wizard", async ({
 
   // The folder is imported, and the library shows its photo.
   await waitForFolder(request, card);
-  await expect(page.getByRole("button", { name: "Library" })).toHaveAttribute(
-    "aria-current",
-    "page",
-  );
+  await expect(
+    page.getByRole("button", { name: "Library", exact: true }),
+  ).toHaveAttribute("aria-current", "page");
   await expect(page.getByTestId("library-empty")).toHaveCount(0);
 
   // Leave the shared import folders as they were.

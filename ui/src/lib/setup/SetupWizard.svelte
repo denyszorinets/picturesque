@@ -7,9 +7,32 @@
   interface Props {
     /** Called when the wizard is finished or closed. */
     onclose: () => void;
+    /** Called after a folder was opened to cull in place instead. */
+    onopened?: (settings: Settings) => void;
   }
 
-  let { onclose }: Props = $props();
+  let { onclose, onopened }: Props = $props();
+
+  /** Instead of a library: cull a folder where it is (ADR-0013). */
+  let inPlace = $state(false);
+  let folderDraft = $state("");
+
+  async function openInPlace(path: string) {
+    if (!path.trim()) return;
+    await run(async () => {
+      const settings = await api.openFolder(path.trim());
+      onopened?.(settings);
+    });
+  }
+
+  async function chooseInPlace() {
+    const picked = await api.pickFolders({
+      multiple: false,
+      title: "Folder to cull in place",
+    });
+    if (picked === null) inPlace = true;
+    else if (picked[0]) await openInPlace(picked[0]);
+  }
 
   const STEPS = ["Output folder", "Your photos", "AI models"] as const;
   let step = $state(0);
@@ -148,6 +171,33 @@
           testid="setup-library-root"
           onsubmit={() => canGoOn && void next()}
         />
+        <div class="in-place" data-testid="setup-in-place">
+          {#if inPlace}
+            <PathInput
+              label="Folder to cull in place"
+              bind:value={folderDraft}
+              onsubmit={(p) => void openInPlace(p)}
+              testid="setup-in-place-path"
+            />
+            <button
+              class="small"
+              disabled={busy || !folderDraft.trim()}
+              onclick={() => void openInPlace(folderDraft)}>Open</button
+            >
+          {:else}
+            <button
+              class="link"
+              disabled={busy}
+              onclick={() => void chooseInPlace()}
+              data-testid="setup-open-folder"
+              >Or cull a folder where it is, without a library…</button
+            >
+            <span class="muted small-note"
+              >Nothing is copied; ratings go to XMP sidecars next to the photos
+              (for example a darktable folder or a memory card).</span
+            >
+          {/if}
+        </div>
         <fieldset>
           <legend>Sort photos into</legend>
           {#each presets as preset (preset.id)}
@@ -394,5 +444,17 @@
 
   .spacer {
     flex: 1;
+  }
+
+  .in-place {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.3rem 0.6rem;
+    margin: 0.8rem 0;
+  }
+
+  .small-note {
+    font-size: 0.82rem;
   }
 </style>

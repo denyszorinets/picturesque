@@ -44,6 +44,24 @@ pub struct Settings {
     pub auto_pick: AutoPickSettings,
     /// What the user has already been shown.
     pub onboarding: OnboardingSettings,
+    /// The folder being culled in place, reopened at startup; `None` while
+    /// working in the library (ADR-0013). In a folder session,
+    /// `library_root` is this folder.
+    #[ts(type = "string | null")]
+    pub open_folder: Option<PathBuf>,
+    /// Folders culled in place, most recently opened first.
+    pub recent_folders: Vec<RecentFolder>,
+}
+
+/// A folder culled in place, for the list of recent folders.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct RecentFolder {
+    #[ts(type = "string")]
+    pub path: PathBuf,
+    /// When it was last opened, in seconds since the Unix epoch.
+    #[ts(type = "number")]
+    pub opened_at: i64,
 }
 
 /// First-run guidance the user has seen (`docs/getting-started`).
@@ -192,6 +210,8 @@ impl Default for Settings {
             import: ImportSettings::default(),
             auto_pick: AutoPickSettings::default(),
             onboarding: OnboardingSettings::default(),
+            open_folder: None,
+            recent_folders: Vec::new(),
         }
     }
 }

@@ -9,12 +9,21 @@
     visible: boolean;
     /** Whether a library folder is set; importing waits for one. */
     hasLibrary: boolean;
+    /** Whether a folder is culled in place: it is the only folder. */
+    inFolder?: boolean;
     onsettings?: () => void;
     /** Opens the setup wizard. */
     onsetup?: () => void;
   }
 
-  let { pipeline, visible, hasLibrary, onsettings, onsetup }: Props = $props();
+  let {
+    pipeline,
+    visible,
+    hasLibrary,
+    inFolder = false,
+    onsettings,
+    onsetup,
+  }: Props = $props();
   let draft = $state("");
 
   /** How often the view reloads while visible. */
@@ -83,7 +92,7 @@
 <div class="activity">
   <section class="card sources" aria-labelledby="sources-title">
     <div class="heading">
-      <h2 id="sources-title">Import folders</h2>
+      <h2 id="sources-title">{inFolder ? "Folder" : "Import folders"}</h2>
       {#if pipeline.sources.length > 0}
         <button
           class="small"
@@ -93,11 +102,20 @@
         >
       {/if}
     </div>
-    <p class="muted hint">
-      Photos in these folders and their subfolders are copied into the library.
-      Watched folders are imported automatically when new photos arrive. The
-      folders themselves are never changed.
-    </p>
+    {#if inFolder}
+      <p class="muted hint" data-testid="in-place-hint">
+        Photos in this folder and its subfolders are culled where they are:
+        nothing is copied, and only XMP sidecars are written next to them. New
+        photos show up when the folder is watched. To cull another folder, use
+        the folder menu at the top left.
+      </p>
+    {:else}
+      <p class="muted hint">
+        Photos in these folders and their subfolders are copied into the
+        library. Watched folders are imported automatically when new photos
+        arrive. The folders themselves are never changed.
+      </p>
+    {/if}
 
     {#if !hasLibrary}
       <div class="notice" data-testid="needs-library">
@@ -149,34 +167,34 @@
               onclick={() => pipeline.scan(source.id)}
               aria-label={`Check ${source.path} now`}>Check</button
             >
-            <button
-              class="remove"
-              onclick={() => pipeline.removeSource(source.id)}
-              aria-label={`Remove ${source.path}`}
-              title="Stop importing from this folder (imported photos stay)"
-              >✕</button
-            >
+            {#if !inFolder}<button
+                class="remove"
+                onclick={() => pipeline.removeSource(source.id)}
+                aria-label={`Remove ${source.path}`}
+                title="Stop importing from this folder (imported photos stay)"
+                >✕</button
+              >{/if}
           </li>
         {/each}
       </ul>
     {/if}
 
-    <div class="add">
-      <PathInput
-        label="Folder to import from"
-        bind:value={draft}
-        multiple
-        onpick={(paths) => paths.forEach((p) => void add(p))}
-        onsubmit={(p) => void add(p)}
-        testid="source-path"
-      />
-      <button
-        class="primary"
-        onclick={() => add(draft)}
-        disabled={!draft.trim()}
-        data-testid="add-source">Add folder</button
-      >
-    </div>
+    {#if !inFolder}<div class="add">
+        <PathInput
+          label="Folder to import from"
+          bind:value={draft}
+          multiple
+          onpick={(paths) => paths.forEach((p) => void add(p))}
+          onsubmit={(p) => void add(p)}
+          testid="source-path"
+        />
+        <button
+          class="primary"
+          onclick={() => add(draft)}
+          disabled={!draft.trim()}
+          data-testid="add-source">Add folder</button
+        >
+      </div>{/if}
     {#if pipeline.error}
       <p class="error-text" role="alert" data-testid="activity-error">
         {pipeline.error}

@@ -111,6 +111,13 @@ impl MemFs {
         let _ = self.remove_file(path);
     }
 
+    /// Removes a folder and everything in it (a card taken out).
+    pub fn delete_dir(&self, path: &Path) {
+        let mut s = self.state.lock().unwrap();
+        s.dirs.retain(|d| !d.starts_with(path));
+        s.files.retain(|f, _| !f.starts_with(path));
+    }
+
     pub fn write(&self, path: &Path, bytes: &[u8]) {
         let mut s = self.state.lock().unwrap();
         s.clock += 1;

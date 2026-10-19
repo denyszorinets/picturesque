@@ -21,6 +21,7 @@ pub mod rejects;
 pub mod scan;
 pub mod search;
 pub mod series;
+pub mod sessions;
 pub mod settings;
 pub mod sidecars;
 pub mod stats;

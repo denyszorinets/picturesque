@@ -327,6 +327,17 @@ impl Api {
         self.pipeline.start();
     }
 
+    /// Writes pending sidecars and stops all background work, before the
+    /// `Api` is replaced by another session's (ADR-0013). Work in progress
+    /// finishes its current step; the catalog stays consistent.
+    pub fn shutdown(&self) {
+        self.sidecars.stop();
+        self.pipeline.stop();
+        self.analysis.stop();
+        self.series.stop();
+        self.thumbnails.stop();
+    }
+
     /// Scans every import source and imports what it finds, on the calling
     /// thread (tests and tools). Returns the number of photos processed.
     pub fn run_imports(&self) -> usize {
@@ -943,7 +954,9 @@ mod tests {
                 "ai": { "provider": "auto" },
                 "import": { "rescan_minutes": 5 },
                 "auto_pick": { "enabled": true, "min_quality": 0.5 },
-                "onboarding": { "tour_done": false }
+                "onboarding": { "tour_done": false },
+                "open_folder": null,
+                "recent_folders": []
             })
         );
     }

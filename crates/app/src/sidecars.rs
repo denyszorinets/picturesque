@@ -179,6 +179,12 @@ impl SidecarService {
         }
     }
 
+    /// Writes what is pending, then stops the background worker.
+    pub fn stop(&self) {
+        self.flush();
+        *self.notify.lock().expect("notify lock") = None;
+    }
+
     /// Starts the background worker; it flushes once immediately (to catch
     /// up after a restart), then after each burst of changes.
     pub fn start(self: &Arc<Self>) {

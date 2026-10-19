@@ -122,6 +122,23 @@ Watched import folders (:ref:`features-import-watching`).
    0–1440 minutes. ``0`` scans only when a folder reports a change and when
    the app starts.
 
+.. _reference-settings-folders:
+
+``open_folder``, ``recent_folders``
+-----------------------------------
+
+The folder culled in place, and the folders opened recently
+(:doc:`/features/folders`). They are changed with the ``open_folder`` and
+``open_library`` commands (:doc:`api`), not with ``update_settings``.
+
+:Type: ``open_folder``: absolute path, or ``null`` in the library.
+   ``recent_folders``: list of ``{ "path", "opened_at" }``, most recent
+   first, ``opened_at`` in seconds since 1970.
+:Default: ``null`` and ``[]``
+:Behaviour: while a folder is open, ``library_root`` reads as that folder;
+   the library folder and ``path_template`` are kept for the library.
+   Folders not opened for 30 days are removed from the list at startup.
+
 Where settings are stored
 -------------------------
 
@@ -142,7 +159,9 @@ API
                      "aesthetic": 0.4 },
         "ai": { "provider": "auto" },
         "import": { "rescan_minutes": 5 },
-        "auto_pick": { "enabled": true, "min_quality": 0.5 } }
+        "auto_pick": { "enabled": true, "min_quality": 0.5 },
+        "onboarding": { "tour_done": false },
+        "open_folder": null, "recent_folders": [] }
 
 ``update_settings``
    Arguments: any subset of the settings. Unknown fields are rejected.

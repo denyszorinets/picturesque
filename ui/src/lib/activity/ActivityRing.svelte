@@ -22,7 +22,8 @@
   );
 
   function onwindowclick(e: MouseEvent) {
-    if (open && root && !root.contains(e.target as Node)) open = false;
+    // The path at dispatch: a clicked item may be gone from the page by now.
+    if (open && root && !e.composedPath().includes(root)) open = false;
   }
 
   function onkeydown(e: KeyboardEvent) {

@@ -26,9 +26,11 @@
     onsetup?: () => void;
     /** Shows the culling tour again. */
     ontour?: () => void;
+    /** Whether a folder is culled in place (library settings do not apply). */
+    inFolder?: boolean;
   }
 
-  let { onchange, onsetup, ontour }: Props = $props();
+  let { onchange, onsetup, ontour, inFolder = false }: Props = $props();
 
   let saved = $state<Settings | null>(null);
   let presets = $state<TemplatePresetView[]>([]);
@@ -200,56 +202,64 @@
     </span>
   </div>
 
-  <div class="field">
-    <span class="label">Library folder (output)</span>
-    <PathInput
-      label="Library folder"
-      bind:value={libraryRoot}
-      testid="library-root"
-    />
-    <p class="hint muted">
-      Imported photos are <strong>copied</strong> here. Your originals are only read:
-      never moved, renamed, edited or deleted.
+  {#if inFolder}
+    <p class="notice" data-testid="settings-in-folder">
+      You are culling <code>{saved?.open_folder}</code> in place. The library folder
+      and its folder structure apply when you go back to the library; every other
+      setting applies everywhere.
     </p>
-  </div>
-
-  <div class="field">
-    <label class="label" for="preset">Folder structure</label>
-    <select
-      id="preset"
-      value={presetId}
-      onchange={(e) => choosePreset(e.currentTarget.value)}
-    >
-      {#each presets as preset (preset.id)}
-        <option value={preset.id}>{preset.label}</option>
-      {/each}
-      <option value="custom" disabled={presetId !== "custom"}>Custom</option>
-    </select>
-    <input
-      type="text"
-      aria-label="Path template"
-      bind:value={template}
-      spellcheck="false"
-      data-testid="path-template"
-    />
-
-    {#if preview?.error}
-      <p class="error-text" role="alert" data-testid="template-error">
-        {preview.error}
+  {:else}
+    <div class="field">
+      <span class="label">Library folder (output)</span>
+      <PathInput
+        label="Library folder"
+        bind:value={libraryRoot}
+        testid="library-root"
+      />
+      <p class="hint muted">
+        Imported photos are <strong>copied</strong> here. Your originals are only
+        read: never moved, renamed, edited or deleted.
       </p>
-    {:else if preview}
-      <ul class="examples" data-testid="template-preview">
-        {#each preview.examples as example (example.description)}
-          <li>
-            <span class="muted">{example.description}</span>
-            {#each example.paths as path (path)}
-              <code>{path}</code>
-            {/each}
-          </li>
+    </div>
+
+    <div class="field">
+      <label class="label" for="preset">Folder structure</label>
+      <select
+        id="preset"
+        value={presetId}
+        onchange={(e) => choosePreset(e.currentTarget.value)}
+      >
+        {#each presets as preset (preset.id)}
+          <option value={preset.id}>{preset.label}</option>
         {/each}
-      </ul>
-    {/if}
-  </div>
+        <option value="custom" disabled={presetId !== "custom"}>Custom</option>
+      </select>
+      <input
+        type="text"
+        aria-label="Path template"
+        bind:value={template}
+        spellcheck="false"
+        data-testid="path-template"
+      />
+
+      {#if preview?.error}
+        <p class="error-text" role="alert" data-testid="template-error">
+          {preview.error}
+        </p>
+      {:else if preview}
+        <ul class="examples" data-testid="template-preview">
+          {#each preview.examples as example (example.description)}
+            <li>
+              <span class="muted">{example.description}</span>
+              {#each example.paths as path (path)}
+                <code>{path}</code>
+              {/each}
+            </li>
+          {/each}
+        </ul>
+      {/if}
+    </div>
+  {/if}
 
   <div class="field">
     <label class="inline">
@@ -519,5 +529,11 @@
     display: flex;
     align-items: center;
     gap: 0.8rem;
+  }
+
+  .notice {
+    padding: 0.7rem 0.9rem;
+    border-radius: var(--radius);
+    background: var(--surface-2);
   }
 </style>

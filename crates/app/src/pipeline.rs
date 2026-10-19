@@ -284,6 +284,8 @@ pub struct ImportPipeline {
     signal: Condvar,
     scanning: AtomicBool,
     started: AtomicBool,
+    /// Set by [`ImportPipeline::stop`]: the background threads exit.
+    stopped: AtomicBool,
     log_writes: AtomicUsize,
     last_progress: Mutex<Option<Instant>>,
     /// Sizes of catalogued media files: only files of these sizes can be
@@ -353,6 +355,7 @@ impl ImportPipeline {
             signal: Condvar::new(),
             scanning: AtomicBool::new(false),
             started: AtomicBool::new(false),
+            stopped: AtomicBool::new(false),
             log_writes: AtomicUsize::new(0),
             last_progress: Mutex::new(None),
             media_sizes: Mutex::new(None),
@@ -375,6 +378,16 @@ impl ImportPipeline {
 
     // ---- sources ----
 
+    /// The folder being culled in place, if any (ADR-0013): photos are
+    /// catalogued where they are instead of being copied into a library.
+    fn in_place(&self) -> Option<PathBuf> {
+        self.deps
+            .settings
+            .load_settings()
+            .ok()
+            .and_then(|s| s.open_folder)
+    }
+
     pub fn sources(&self) -> Result<Vec<ImportSource>, PipelineError> {
         Ok(self.deps.store.sources()?)
     }
@@ -390,7 +403,13 @@ impl ImportPipeline {
         self.deps.fs.list_dir(path).map_err(|reason| {
             PipelineError::Invalid(format!("Cannot read `{}`: {reason}.", path.display()))
         })?;
-        if let Ok(Some(root)) = self.deps.settings.load_settings().map(|s| s.library_root)
+        if let Some(folder) = self.in_place() {
+            if path != folder {
+                return Err(PipelineError::Invalid(
+                    "Only the open folder is culled; open another folder instead.".into(),
+                ));
+            }
+        } else if let Ok(Some(root)) = self.deps.settings.load_settings().map(|s| s.library_root)
             && (root.starts_with(path) || path.starts_with(&root))
         {
             return Err(PipelineError::Invalid(
@@ -560,6 +579,15 @@ impl ImportPipeline {
 
     // ---- background threads ----
 
+    /// Stops watching folders, and the scanner and worker after their
+    /// current step; an interrupted photo resumes next time.
+    pub fn stop(&self) {
+        self.stopped.store(true, Ordering::Release);
+        self.deps.watcher.watch(&[], Arc::new(|_: &Path| {}));
+        let _guard = self.shared.lock().expect("pipeline lock");
+        self.signal.notify_all();
+    }
+
     /// Resumes unfinished jobs, scans watched sources, and starts the
     /// scanner and worker threads (once).
     pub fn start(self: &Arc<Self>) {
@@ -671,6 +699,9 @@ impl ImportPipeline {
         // Settings changes take effect within this long.
         const MAX_WAIT: Duration = Duration::from_secs(60);
         loop {
+            if self.stopped.load(Ordering::Acquire) {
+                return;
+            }
             let rescan = self.rescan_interval();
             let requests = {
                 let mut shared = self.shared.lock().expect("pipeline lock");
@@ -685,7 +716,7 @@ impl ImportPipeline {
                     if due.rescan {
                         requests.extend(shared.watched.iter().map(|&(_, id)| Some(id)));
                     }
-                    if !requests.is_empty() {
+                    if !requests.is_empty() || self.stopped.load(Ordering::Acquire) {
                         break requests;
                     }
                     let wait = due.wait.unwrap_or(MAX_WAIT).min(MAX_WAIT);
@@ -739,14 +770,20 @@ impl ImportPipeline {
             let _ = self.deps.store.record_scan(source.id, Some(&message));
             return;
         }
-        let skip: Vec<PathBuf> = self
-            .deps
-            .settings
-            .load_settings()
-            .ok()
-            .and_then(|s| s.library_root)
-            .into_iter()
-            .collect();
+        let in_place = self.in_place().is_some();
+        // In place, the folder is the library; sidecars are found when a
+        // photo is read, so writing one does not import the photo again.
+        let skip: Vec<PathBuf> = if in_place {
+            Vec::new()
+        } else {
+            self.deps
+                .settings
+                .load_settings()
+                .ok()
+                .and_then(|s| s.library_root)
+                .into_iter()
+                .collect()
+        };
         let report = scan_sources(fs, std::slice::from_ref(&source.path), &skip);
         for (path, reason) in &report.unreadable {
             self.log(
@@ -760,6 +797,7 @@ impl ImportPipeline {
         for photo in &report.photos {
             let files: Vec<JobFile> = photo
                 .files()
+                .filter(|f| !(in_place && f.format.role() == AssetRole::Sidecar))
                 .map(|f| JobFile {
                     path: f.path.clone(),
                     format: f.format,
@@ -800,6 +838,9 @@ impl ImportPipeline {
 
     fn worker(&self) {
         loop {
+            if self.stopped.load(Ordering::Acquire) {
+                return;
+            }
             if !self.run_next() {
                 let mut shared = self.shared.lock().expect("pipeline lock");
                 let wait = if shared.paused.is_some() {
@@ -807,7 +848,7 @@ impl ImportPipeline {
                 } else {
                     Duration::from_secs(60)
                 };
-                if !shared.work {
+                if !shared.work && !self.stopped.load(Ordering::Acquire) {
                     shared = self
                         .signal
                         .wait_timeout(shared, wait)
@@ -866,7 +907,8 @@ impl ImportPipeline {
             }
         };
         let needed = space_needed(&job);
-        if let Ok(free) = self.deps.fs.available_space(&root)
+        if self.in_place().is_none()
+            && let Ok(free) = self.deps.fs.available_space(&root)
             && free < needed
         {
             self.pause(
@@ -922,6 +964,13 @@ impl ImportPipeline {
         let root = settings
             .library_root
             .ok_or("choose a library folder in Settings")?;
+        if settings.open_folder.is_some() {
+            // Nothing is written there but sidecars, which may fail alone.
+            self.deps.fs.list_dir(&root).map_err(|reason| {
+                format!("the folder {} is not available ({reason})", root.display())
+            })?;
+            return Ok(root);
+        }
         self.deps.fs.probe_writable_dir(&root).map_err(|reason| {
             format!(
                 "the library folder {} is not available ({reason})",
@@ -986,12 +1035,15 @@ impl ImportPipeline {
                 .iter()
                 .find(|f| f.format != MediaFormat::Raw && f.format.role() != AssetRole::Sidecar)
                 .map(to_source),
-            sidecars: job
-                .files
-                .iter()
-                .filter(|f| f.format.role() == AssetRole::Sidecar)
-                .map(to_source)
-                .collect(),
+            sidecars: if self.in_place().is_some() {
+                sidecars_next_to(fs, &job.files)
+            } else {
+                job.files
+                    .iter()
+                    .filter(|f| f.format.role() == AssetRole::Sidecar)
+                    .map(to_source)
+                    .collect()
+            },
         };
         if source.raw.is_none() && source.image.is_none() {
             return fail("no RAW or image file".into());
@@ -1050,7 +1102,28 @@ impl ImportPipeline {
             }
         }
 
-        // 3. Copy and verify.
+        // 3. Copy and verify, or in place, take the files as they are.
+        if self.in_place().is_some() {
+            let mut found = Vec::new();
+            for file in &photo.files {
+                let Ok(target) = file.source.strip_prefix(root) else {
+                    return fail(format!("{} is outside the folder", file_name(&file.source)));
+                };
+                let hash = match file.hash {
+                    Some(hash) => hash,
+                    None => match self.deps.fs.hash_file(&file.source) {
+                        Ok((hash, _)) => hash,
+                        Err(e) => {
+                            return fail(format!("cannot read {}: {e}", file_name(&file.source)));
+                        }
+                    },
+                };
+                let mut file = file.clone();
+                file.target = target.to_path_buf();
+                found.push((file, hash));
+            }
+            return self.catalogue(job, &name, &photo, found);
+        }
         self.set_stage(job, JobStage::Copying, None, None);
         let template = match self
             .deps
@@ -1092,7 +1165,27 @@ impl ImportPipeline {
             }
         }
 
-        // 4. Catalogue.
+        self.catalogue(job, &name, &photo, copied)
+    }
+
+    /// Step 4: adds the photo with its files (copied, or found in place).
+    fn catalogue(
+        &self,
+        job: &Job,
+        name: &str,
+        photo: &read::ReadPhoto,
+        copied: Vec<(PlannedFile, ContentHash)>,
+    ) -> Option<&'static str> {
+        let fail = |message: String| {
+            self.set_stage(job, JobStage::Failed, None, Some(&message));
+            self.log(
+                LogLevel::Error,
+                Some(job.id),
+                None,
+                &format!("{name}: {message}"),
+            );
+            None
+        };
         let assets = copied
             .iter()
             .map(|(file, hash)| Asset {
@@ -1143,17 +1236,49 @@ impl ImportPipeline {
             .map(|c| c.to_string_lossy())
             .collect::<Vec<_>>()
             .join("/");
-        self.log(
-            LogLevel::Info,
-            Some(job.id),
-            Some(photo_id),
-            &format!("{name}: imported to {target}"),
-        );
+        let message = if self.in_place().is_some() {
+            format!("{name}: catalogued in place")
+        } else {
+            format!("{name}: imported to {target}")
+        };
+        self.log(LogLevel::Info, Some(job.id), Some(photo_id), &message);
         if let Some(hook) = self.on_imported.lock().expect("hook lock").as_ref() {
             hook();
         }
         None
     }
+}
+
+/// Sidecars next to a photo's files, named the darktable way
+/// (`IMG_1.CR3.xmp`) or the Lightroom way (`IMG_1.xmp`).
+fn sidecars_next_to(fs: &dyn FileSystem, files: &[JobFile]) -> Vec<crate::scan::SourceFile> {
+    let mut found: Vec<crate::scan::SourceFile> = Vec::new();
+    for file in files {
+        let (Some(dir), Some(name)) = (file.path.parent(), file.path.file_name()) else {
+            continue;
+        };
+        let name = name.to_string_lossy();
+        let base = base_name(&name).unwrap_or(&name).to_owned();
+        for candidate in [
+            format!("{name}.xmp"),
+            format!("{name}.XMP"),
+            format!("{base}.xmp"),
+            format!("{base}.XMP"),
+        ] {
+            let path = dir.join(candidate);
+            if found.iter().any(|f| f.path == path) {
+                continue;
+            }
+            if let Ok(stamp) = fs.stamp(&path) {
+                found.push(crate::scan::SourceFile {
+                    path,
+                    format: MediaFormat::Xmp,
+                    size: stamp.size,
+                });
+            }
+        }
+    }
+    found
 }
 
 fn to_source(f: &JobFile) -> crate::scan::SourceFile {
