@@ -283,8 +283,15 @@ Photo files themselves are never modified.
   digiKam) or ``IMG_0042.xmp`` (Lightroom, Bridge); see
   :ref:`reference-settings-sidecar-naming`.
 - Sidecars are written in the background about a second after you stop
-  changing decisions, so rapid culling writes each file once. Anything not
-  yet written when the app closes is written the next time it starts.
+  changing decisions, so rapid culling writes each file once, and again
+  when the app closes. Anything that could not be written is retried after
+  the next change and when the app starts.
+- Sidecars live next to the photos **in the library**, not in the folders
+  you imported from. The toolbar says **Saved to XMP ✓** once every
+  decision is written (*Saving to XMP…* meanwhile, or how many could not
+  be written and why); in the desktop app, clicking it opens the library
+  folder. In the photo view, **Show in folder** next to each file opens
+  its folder with the file selected.
 - A sidecar that cannot be read as XMP is left untouched.
 
 On import, decisions found in existing sidecars (ratings, darktable or

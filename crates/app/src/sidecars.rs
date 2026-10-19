@@ -11,8 +11,11 @@ use std::time::Duration;
 
 use picturesque_core::grouping::base_name;
 use picturesque_core::photo::Photo;
+use serde::Serialize;
+use ts_rs::TS;
 
 use crate::ports::catalog::PhotoCatalog;
+use crate::ports::events::{AppEvent, EventSink};
 use crate::ports::settings::SettingsStore;
 use crate::ports::sidecars::SidecarStore;
 use crate::settings::SidecarNaming;
@@ -28,11 +31,29 @@ pub struct FlushReport {
     pub failed: Vec<(i64, String)>,
 }
 
+/// Whether decisions have reached their sidecars (`sidecar_status`, and
+/// `sidecar_progress` events).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, TS)]
+#[ts(export)]
+pub struct SidecarStatus {
+    /// Photos whose sidecar does not yet hold their latest decision.
+    pub pending: usize,
+    /// Photos whose sidecar could not be written by the latest attempt.
+    pub failed: usize,
+    /// Why the first of those failed.
+    pub error: Option<String>,
+    /// The folder the sidecars are written in (the library), if set.
+    pub folder: Option<String>,
+}
+
 pub struct SidecarService {
     catalog: Arc<dyn PhotoCatalog>,
     settings: Arc<dyn SettingsStore>,
     store: Arc<dyn SidecarStore>,
+    events: Arc<dyn EventSink>,
     notify: Mutex<Option<Sender<()>>>,
+    /// Failures of the latest flush.
+    failed: Mutex<Vec<(i64, String)>>,
 }
 
 impl std::fmt::Debug for SidecarService {
@@ -64,17 +85,49 @@ impl SidecarService {
         catalog: Arc<dyn PhotoCatalog>,
         settings: Arc<dyn SettingsStore>,
         store: Arc<dyn SidecarStore>,
+        events: Arc<dyn EventSink>,
     ) -> Self {
         Self {
             catalog,
             settings,
             store,
+            events,
             notify: Mutex::new(None),
+            failed: Mutex::new(Vec::new()),
         }
+    }
+
+    /// How many decisions still wait for their sidecar, and what failed.
+    pub fn status(&self) -> SidecarStatus {
+        let pending = self.catalog.dirty_decisions().map_or(0, |d| d.len());
+        let folder = self
+            .settings
+            .load_settings()
+            .ok()
+            .and_then(|s| s.library_root)
+            .map(|root| root.to_string_lossy().into_owned());
+        let failed = self.failed.lock().expect("failed lock");
+        SidecarStatus {
+            pending,
+            failed: failed.len(),
+            error: failed.first().map(|(_, reason)| reason.clone()),
+            folder,
+        }
+    }
+
+    fn report(&self) {
+        self.events.emit(&AppEvent::SidecarProgress(self.status()));
     }
 
     /// Writes every dirty decision now.
     pub fn flush(&self) -> FlushReport {
+        let report = self.write_dirty();
+        *self.failed.lock().expect("failed lock") = report.failed.clone();
+        self.report();
+        report
+    }
+
+    fn write_dirty(&self) -> FlushReport {
         let mut report = FlushReport::default();
         let (Ok(dirty), Ok(settings)) = (
             self.catalog.dirty_decisions(),
@@ -116,9 +169,11 @@ impl SidecarService {
             .map_err(|e| e.to_string())
     }
 
-    /// Asks the background worker to write soon. Does nothing until
+    /// Reports the new pending count and asks the background worker to
+    /// write soon. The worker only writes once
     /// [`SidecarService::start`] has been called.
     pub fn notify(&self) {
+        self.report();
         if let Some(tx) = self.notify.lock().expect("notify lock").as_ref() {
             let _ = tx.send(());
         }

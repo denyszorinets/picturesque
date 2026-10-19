@@ -8,6 +8,7 @@ use crate::export::ExportStatus;
 use crate::models::ModelView;
 use crate::pipeline::PipelineStatus;
 use crate::series::SeriesStatus;
+use crate::sidecars::SidecarStatus;
 
 /// An event for the UI. Serialized with a `type` field, for example
 /// `{ "type": "pipeline_progress", "queued": 3, ... }`.
@@ -20,6 +21,7 @@ pub enum AppEvent {
     ModelProgress(ModelView),
     ExportProgress(ExportStatus),
     PipelineProgress(PipelineStatus),
+    SidecarProgress(SidecarStatus),
 }
 
 /// Delivers events to the UI: Tauri events in the desktop app,

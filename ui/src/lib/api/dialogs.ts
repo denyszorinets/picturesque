@@ -24,3 +24,15 @@ export async function pickFolders(options: {
 export function canPickFolders(): boolean {
   return isTauri();
 }
+
+/** Whether files can be shown in the system file manager. */
+export function canReveal(): boolean {
+  return isTauri();
+}
+
+/** Opens the folder holding `path` in the system file manager, selecting it. */
+export async function revealInFolder(path: string): Promise<void> {
+  if (!isTauri()) return;
+  const { revealItemInDir } = await import("@tauri-apps/plugin-opener");
+  await revealItemInDir(path);
+}

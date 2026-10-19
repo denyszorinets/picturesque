@@ -13,7 +13,7 @@ use picturesque_infra::fs::StdFileSystem;
 use picturesque_infra::geocode::GeoNamesGeocoder;
 use picturesque_infra::images::VipsDecoder;
 use picturesque_infra::metadata::ExifMetadataReader;
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Emitter, Manager, RunEvent};
 
 mod commands;
 mod images;
@@ -76,6 +76,14 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![commands::api])
-        .run(tauri::generate_context!())
-        .expect("failed to start Picturesque");
+        .build(tauri::generate_context!())
+        .expect("failed to start Picturesque")
+        .run(|app, event| {
+            // Decisions made in the last moments still reach their sidecars.
+            if let RunEvent::Exit = event
+                && let Some(api) = app.try_state::<Arc<Api>>()
+            {
+                api.flush_sidecars();
+            }
+        });
 }

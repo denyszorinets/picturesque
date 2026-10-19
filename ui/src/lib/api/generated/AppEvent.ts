@@ -4,9 +4,10 @@ import type { ExportStatus } from "./ExportStatus";
 import type { ModelView } from "./ModelView";
 import type { PipelineStatus } from "./PipelineStatus";
 import type { SeriesStatus } from "./SeriesStatus";
+import type { SidecarStatus } from "./SidecarStatus";
 
 /**
  * An event for the UI. Serialized with a `type` field, for example
  * `{ "type": "pipeline_progress", "queued": 3, ... }`.
  */
-export type AppEvent = { "type": "analysis_progress" } & AnalysisStatus | { "type": "series_changed" } & SeriesStatus | { "type": "model_progress" } & ModelView | { "type": "export_progress" } & ExportStatus | { "type": "pipeline_progress" } & PipelineStatus;
+export type AppEvent = { "type": "analysis_progress" } & AnalysisStatus | { "type": "series_changed" } & SeriesStatus | { "type": "model_progress" } & ModelView | { "type": "export_progress" } & ExportStatus | { "type": "pipeline_progress" } & PipelineStatus | { "type": "sidecar_progress" } & SidecarStatus;
