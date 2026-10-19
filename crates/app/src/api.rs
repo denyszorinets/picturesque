@@ -168,6 +168,7 @@ pub struct Api {
     export: Arc<ExportService>,
     pipeline: Arc<ImportPipeline>,
     finish: crate::finish::FinishService,
+    clear: crate::clear::ClearService,
 }
 
 impl fmt::Debug for Api {
@@ -274,6 +275,11 @@ impl Api {
             Arc::clone(&ctx.settings_store),
         );
         Ok(Self {
+            clear: crate::clear::ClearService::new(
+                Arc::clone(&catalog),
+                Arc::clone(&ctx.fs),
+                Arc::clone(&ctx.settings_store),
+            ),
             finish: crate::finish::FinishService::new(Arc::clone(&catalog), Arc::clone(&sidecars)),
             pipeline,
             export,
@@ -742,6 +748,18 @@ impl Api {
                 no_args(command, &args)?;
                 respond(self.ai.status().map_err(catalog_error)?)
             }
+            "clear_plan" => {
+                no_args(command, &args)?;
+                respond(self.clear.plan().map_err(clear_error)?)
+            }
+            "clear_folder" => {
+                no_args(command, &args)?;
+                let result = self.clear.clear().map_err(clear_error)?;
+                // Deleted photos leave their series and the search index.
+                self.series.notify();
+                self.embeddings.invalidate();
+                respond(result)
+            }
             "finish_status" => {
                 no_args(command, &args)?;
                 respond(self.finish.status().map_err(catalog_error)?)
@@ -861,6 +879,15 @@ fn catalog_error(e: crate::ports::catalog::CatalogError) -> ApiError {
     ApiError::internal(e.to_string())
 }
 
+fn clear_error(e: crate::clear::ClearError) -> ApiError {
+    match e {
+        crate::clear::ClearError::Invalid(msg) => {
+            ApiError::new(ApiErrorCode::InvalidArguments, msg)
+        }
+        crate::clear::ClearError::Failed(msg) => ApiError::internal(msg),
+    }
+}
+
 fn settings_error(e: SettingsError) -> ApiError {
     match e {
         SettingsError::Invalid(msg) => ApiError::new(ApiErrorCode::InvalidArguments, msg),
@@ -968,7 +995,8 @@ mod tests {
                 "onboarding": { "tour_done": false },
                 "open_folder": null,
                 "recent_folders": [],
-                "labels": { "pick": "green", "auto_pick": "yellow" }
+                "labels": { "pick": "green", "auto_pick": "yellow" },
+                "delete_after_copy": "verified"
             })
         );
     }

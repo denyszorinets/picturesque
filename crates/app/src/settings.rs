@@ -54,6 +54,23 @@ pub struct Settings {
     pub recent_folders: Vec<RecentFolder>,
     /// Colour labels written to sidecars.
     pub labels: LabelSettings,
+    /// What clearing a folder after copying may delete (ADR-0014).
+    pub delete_after_copy: DeleteAfterCopy,
+}
+
+/// What **Clear folder…** may delete after keepers were copied out of a
+/// folder culled in place (ADR-0014).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export)]
+pub enum DeleteAfterCopy {
+    /// Nothing: clearing is not offered.
+    Never,
+    /// Photos whose copy was verified (and is verified again first).
+    #[default]
+    Verified,
+    /// Those, and photos you rejected.
+    VerifiedAndRejects,
 }
 
 /// Colour labels written to XMP sidecars, so tools without a pick flag
@@ -237,6 +254,7 @@ impl Default for Settings {
             open_folder: None,
             recent_folders: Vec::new(),
             labels: LabelSettings::default(),
+            delete_after_copy: DeleteAfterCopy::default(),
         }
     }
 }
@@ -266,6 +284,8 @@ pub struct SettingsUpdate {
     pub onboarding: Option<OnboardingSettings>,
     #[ts(optional)]
     pub labels: Option<LabelSettings>,
+    #[ts(optional)]
+    pub delete_after_copy: Option<DeleteAfterCopy>,
 }
 
 /// Why settings could not be read or changed.
@@ -409,6 +429,9 @@ impl SettingsService {
         }
         if let Some(labels) = update.labels {
             settings.labels = labels;
+        }
+        if let Some(mode) = update.delete_after_copy {
+            settings.delete_after_copy = mode;
         }
         self.store.save_settings(&settings)?;
         Ok(settings)

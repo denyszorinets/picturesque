@@ -101,8 +101,32 @@ after **Finish folder…**). It is :doc:`export` with these defaults:
   remembered for next time.
 
 Picturesque remembers which photos were copied where, so the folder can
-later be cleared of exactly those (:doc:`ADR-0014
-</architecture/decisions/0014-optional-source-deletion>`).
+then be cleared of exactly those.
+
+.. _features-folders-clear:
+
+Clearing the folder
+-------------------
+
+Once the keepers are copied, **Clear folder…** deletes their originals,
+for example to empty a memory card
+(:doc:`ADR-0014 </architecture/decisions/0014-optional-source-deletion>`).
+What it may delete is set in **Settings → After copying keepers**
+(:ref:`reference-settings-delete-after-copy`):
+
+- **Verified copies only** (default): photos whose files were all copied
+  out. Each copy is hashed again right before its original is deleted; a
+  copy that is missing or changed keeps its original.
+- **Verified copies and rejects**: also rejected photos, which have no
+  copy. The confirmation lists them apart and asks for its own yes.
+- **Never**: the action is not offered.
+
+Photos copied only in part (a RAW+JPEG pair exported without the RAW) and
+unflagged photos that were not copied always stay. A photo's files (RAW,
+JPEG and sidecars) are deleted together; if one cannot be deleted (a
+locked card), the photo is reported. Deleting is **permanent**: deleted
+files do not go to a trash folder, which would keep the card full. The
+library itself is never cleared.
 
 Switching folders and back to the library
 -----------------------------------------

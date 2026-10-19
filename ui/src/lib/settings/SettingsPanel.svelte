@@ -18,7 +18,7 @@
   import ModelList from "../ai/ModelList.svelte";
   import Reanalyze from "../analysis/Reanalyze.svelte";
   import PathInput from "../components/PathInput.svelte";
-  import type { ColorLabel } from "../api";
+  import type { ColorLabel, DeleteAfterCopy } from "../api";
 
   const LABELS: { value: ColorLabel | ""; label: string }[] = [
     { value: "", label: "No label" },
@@ -49,6 +49,7 @@
   let sidecarNaming = $state<Settings["sidecar_naming"]>("file_extension");
   let pickLabel = $state<ColorLabel | null>("green");
   let autoLabel = $state<ColorLabel | null>("yellow");
+  let deleteAfterCopy = $state<DeleteAfterCopy>("verified");
   let maxGap = $state(30);
   let maxDistance = $state(16);
   let rescanMinutes = $state(5);
@@ -108,6 +109,7 @@
         sidecarNaming !== saved.sidecar_naming ||
         pickLabel !== saved.labels.pick ||
         autoLabel !== saved.labels.auto_pick ||
+        deleteAfterCopy !== saved.delete_after_copy ||
         seriesChanged ||
         rankingChanged ||
         rescanMinutes !== saved.import.rescan_minutes ||
@@ -151,6 +153,7 @@
     sidecarNaming = settings.sidecar_naming;
     pickLabel = settings.labels.pick;
     autoLabel = settings.labels.auto_pick;
+    deleteAfterCopy = settings.delete_after_copy;
     maxGap = settings.series.max_gap_seconds;
     maxDistance = settings.series.max_distance;
     rescanMinutes = settings.import.rescan_minutes;
@@ -192,6 +195,8 @@
         autoLabel !== saved.labels.auto_pick
       )
         update.labels = { pick: pickLabel, auto_pick: autoLabel };
+      if (deleteAfterCopy !== saved.delete_after_copy)
+        update.delete_after_copy = deleteAfterCopy;
       if (libraryRoot.trim() !== (saved.library_root ?? ""))
         update.library_root = libraryRoot.trim();
       if (template.trim() !== saved.path_template)
@@ -353,6 +358,29 @@
       and digiKam show it too). Auto-picked photos get theirs when you finish a
       folder. Labels you set in another tool are kept; changes apply to sidecars
       written from now on.
+    </p>
+  </div>
+
+  <div class="field">
+    <label class="label" for="delete-after-copy">After copying keepers</label>
+    <select
+      id="delete-after-copy"
+      bind:value={deleteAfterCopy}
+      data-testid="delete-after-copy"
+    >
+      <option value="verified">Clear folder deletes verified copies only</option
+      >
+      <option value="verified_and_rejects"
+        >Clear folder deletes verified copies and rejects</option
+      >
+      <option value="never">Never delete originals</option>
+    </select>
+    <p class="hint muted">
+      In a folder culled in place (a memory card), <strong>Clear folder…</strong
+      >
+      deletes the originals you copied, after checking each copy again. With rejects,
+      rejected photos are deleted too, without a copy. Deleting is permanent and only
+      happens when you click it.
     </p>
   </div>
 

@@ -7,6 +7,7 @@
   import ExportDialog from "./ExportDialog.svelte";
   import FinishDialog from "../session/FinishDialog.svelte";
   import DarktableNote from "../session/DarktableNote.svelte";
+  import ClearDialog from "../session/ClearDialog.svelte";
   import Reanalyze from "../analysis/Reanalyze.svelte";
   import { waitingNote } from "../analysis/models";
   import Tour from "../tour/Tour.svelte";
@@ -46,6 +47,9 @@
     autoLabel?: api.ColorLabel | null;
     /** Opens the folder menu, to go on with the next folder. */
     onnextfolder?: () => void;
+    /** The open folder, and whether clearing it is allowed (ADR-0014). */
+    folder?: string | null;
+    canClear?: boolean;
   }
 
   let {
@@ -62,9 +66,12 @@
     inFolder = false,
     autoLabel = null,
     onnextfolder,
+    folder = null,
+    canClear = false,
   }: Props = $props();
 
   let finishing = $state(false);
+  let clearing = $state(false);
 
   const filters = new Filters();
   const sidecars = new SidecarProgress(api);
@@ -382,7 +389,8 @@
       return;
     // The library is hidden while the Import tab is shown; the compare
     // view handles its own keys.
-    if (!section?.offsetParent || compare || exporting || finishing) return;
+    if (!section?.offsetParent || compare || exporting || finishing || clearing)
+      return;
     if (e.key === "/" && loupe === null) {
       e.preventDefault();
       searchInput?.focus();
@@ -598,6 +606,14 @@
           data-testid="open-finish">Finish folder…</button
         >
       {/if}
+      {#if inFolder && canClear && folder}
+        <button
+          class="small"
+          onclick={() => (clearing = true)}
+          title="Delete the originals you copied (each copy is checked again first)"
+          data-testid="open-clear">Clear folder…</button
+        >
+      {/if}
       <RejectsMove
         rejected={store.facets.flags.find((f) => f.flag === "reject")?.count ??
           0}
@@ -690,6 +706,13 @@
     </div>
     {#if tour && store.total > 0 && loupe === null && !compare && !exporting}
       <Tour steps={CULLING_TOUR} onend={() => ontourend?.()} />
+    {/if}
+    {#if clearing && folder}
+      <ClearDialog
+        {folder}
+        onclose={() => (clearing = false)}
+        oncleared={() => void store.refresh()}
+      />
     {/if}
     {#if finishing}
       <FinishDialog

@@ -73,6 +73,15 @@ test("culls a folder in place and goes back to the library", async ({
   expect(existsSync(join(out, `${picked}.xmp`))).toBe(true);
   await page.getByTestId("export-done").click();
 
+  // Clear the folder: the copied original goes, its copy stays.
+  await page.getByTestId("open-clear").click();
+  await expect(page.getByTestId("clear-summary")).toContainText("Deletes");
+  await page.getByTestId("clear-go").click();
+  await expect(page.getByTestId("clear-result")).toContainText("Deleted");
+  expect(existsSync(join(dir, picked))).toBe(false);
+  expect(existsSync(join(out, picked))).toBe(true);
+  await page.getByRole("button", { name: "Done" }).click();
+
   // Back to the library; the folder is in the recent list.
   await switcher.click();
   await page.getByTestId("open-library").click();

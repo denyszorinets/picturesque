@@ -194,6 +194,8 @@
             {inFolder}
             autoLabel={settings?.labels.auto_pick ?? null}
             onnextfolder={() => (switcherOpen = true)}
+            folder={settings?.open_folder ?? null}
+            canClear={settings?.delete_after_copy !== "never"}
             {tour}
             ontourend={() => void endTour()}
           />

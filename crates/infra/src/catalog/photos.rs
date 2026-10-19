@@ -238,6 +238,13 @@ impl PhotoCatalog for SqliteCatalog {
         self.load_dirty()
     }
 
+    fn remove_photo(&self, id: PhotoId) -> Result<(), CatalogError> {
+        self.conn()
+            .execute("DELETE FROM photo WHERE id = ?1", [id.0])
+            .map_err(storage)?;
+        Ok(())
+    }
+
     fn record_copies(
         &self,
         copies: &[picturesque_app::ports::catalog::CopyRecord],
