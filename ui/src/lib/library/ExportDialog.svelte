@@ -10,10 +10,25 @@
     /** Ids of the selected photos. */
     selected: number[];
     picks: number;
+    /** Photos auto-pick suggests keeping (without a flag). */
+    autoPicked?: number;
+    /** Photos not rejected. */
+    notRejected?: number;
+    /** Copying keepers out of a folder culled in place. */
+    inFolder?: boolean;
     onclose: () => void;
   }
 
-  let { view, viewCount, selected, picks, onclose }: Props = $props();
+  let {
+    view,
+    viewCount,
+    selected,
+    picks,
+    autoPicked = 0,
+    notRejected = 0,
+    inFolder = false,
+    onclose,
+  }: Props = $props();
 
   const STORAGE_KEY = "picturesque.export";
   const NAMING = [
@@ -23,7 +38,7 @@
   ];
   const SIZES = [0, 4096, 2048, 1024];
 
-  type Which = "picks" | "view" | "selected";
+  type Which = "picks" | "keepers" | "kept" | "view" | "selected";
   interface Saved {
     destination: string;
     format: "original" | "jpeg";
@@ -44,7 +59,9 @@
   const saved = load();
 
   // svelte-ignore state_referenced_locally
-  let which = $state<Which>(selected.length > 0 ? "selected" : "picks");
+  let which = $state<Which>(
+    selected.length > 0 ? "selected" : inFolder ? "keepers" : "picks",
+  );
   let destination = $state(saved.destination ?? "");
   let format = $state<"original" | "jpeg">(saved.format ?? "original");
   let naming = $state(saved.naming ?? "{name}.{ext}");
@@ -56,7 +73,13 @@
   let error = $state<string | null>(null);
 
   const count = $derived(
-    which === "picks" ? picks : which === "view" ? viewCount : selected.length,
+    {
+      picks,
+      keepers: picks + autoPicked,
+      kept: notRejected,
+      view: viewCount,
+      selected: selected.length,
+    }[which],
   );
   const running = $derived(status?.state === "running");
 
@@ -74,6 +97,9 @@
 
   function query(): PhotoQuery | undefined {
     if (which === "picks") return undefined;
+    // Flags and auto-picked photos match either.
+    if (which === "keepers") return { flags: ["pick"], auto_picked: true };
+    if (which === "kept") return { flags: ["pick", "unflagged"] };
     if (which === "view")
       return { ...view, cursor: undefined, limit: undefined };
     return { photo_ids: selected };
@@ -134,7 +160,13 @@
     aria-label="Export photos"
     data-testid="export-dialog"
   >
-    <h2>Export</h2>
+    <h2>{inFolder ? "Copy keepers" : "Export"}</h2>
+    {#if inFolder && !status}
+      <p class="muted hint">
+        Copies the photos you keep to another folder, each copy verified, with
+        XMP sidecars holding your decisions. The originals stay here.
+      </p>
+    {/if}
     {#if status && status.state !== "idle"}
       <div class="progress" data-testid="export-status">
         <progress max={status.total || 1} value={status.done}></progress>
@@ -170,7 +202,25 @@
       <fieldset>
         <legend class="label">Photos</legend>
         <label class="radio"
+          ><input
+            type="radio"
+            bind:group={which}
+            value="keepers"
+            data-testid="export-keepers"
+          />
+          Keepers: picks and auto-picked ({picks + autoPicked})</label
+        >
+        <label class="radio"
           ><input type="radio" bind:group={which} value="picks" /> Picks ({picks})</label
+        >
+        <label class="radio"
+          ><input
+            type="radio"
+            bind:group={which}
+            value="kept"
+            data-testid="export-not-rejected"
+          />
+          Everything except rejects ({notRejected})</label
         >
         <label class="radio"
           ><input type="radio" bind:group={which} value="view" /> Photos in view

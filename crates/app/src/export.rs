@@ -5,6 +5,12 @@
 //! hashed while read and compared with the catalog and with a re-read of
 //! the written file; JPEGs are decoded again. Existing files are never
 //! overwritten: names get " (2)", " (3)", … like imports.
+//!
+//! With sidecars, each copied file gets one holding the photo's current
+//! decision and colour label (as for a folder culled in place), so the
+//! copies are complete even when the originals' sidecars could not be
+//! written. Copies out of a folder session are recorded, so the folder can
+//! be cleared of exactly what was copied (ADR-0014).
 
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -19,12 +25,14 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use crate::library::PhotoQuery;
-use crate::ports::catalog::PhotoCatalog;
+use crate::ports::catalog::{CopyRecord, PhotoCatalog};
 use crate::ports::events::{AppEvent, EventSink};
 use crate::ports::fs::FileSystem;
 use crate::ports::images::ImageDecoder;
 use crate::ports::pixels::PixelLoader;
 use crate::ports::settings::SettingsStore;
+use crate::ports::sidecars::{SidecarStore, SidecarValues};
+use crate::settings::{Settings, SidecarNaming};
 
 /// File names when no template is given: the original names.
 pub const DEFAULT_NAMING: &str = "{name}.{ext}";
@@ -157,8 +165,16 @@ pub struct ExportService {
     pixels: Arc<dyn PixelLoader>,
     settings: Arc<dyn SettingsStore>,
     events: Arc<dyn EventSink>,
+    sidecars: Arc<dyn SidecarStore>,
     status: Mutex<ExportStatus>,
     cancel: AtomicBool,
+}
+
+/// A photo to export, and whether auto-pick suggests keeping it.
+#[derive(Debug, Clone, Copy)]
+struct Item {
+    id: PhotoId,
+    keeper: bool,
 }
 
 impl fmt::Debug for ExportService {
@@ -175,6 +191,7 @@ impl ExportService {
         pixels: Arc<dyn PixelLoader>,
         settings: Arc<dyn SettingsStore>,
         events: Arc<dyn EventSink>,
+        sidecars: Arc<dyn SidecarStore>,
     ) -> Self {
         Self {
             catalog,
@@ -183,6 +200,7 @@ impl ExportService {
             pixels,
             settings,
             events,
+            sidecars,
             status: Mutex::new(ExportStatus::idle()),
             cancel: AtomicBool::new(false),
         }
@@ -243,7 +261,7 @@ impl ExportService {
 
     /// The photos of `query` (default: picks), oldest first unless the
     /// query sorts otherwise.
-    fn photos(&self, query: Option<&PhotoQuery>) -> Result<Vec<PhotoId>, ExportError> {
+    fn photos(&self, query: Option<&PhotoQuery>) -> Result<Vec<Item>, ExportError> {
         let mut query = query.cloned().unwrap_or_else(|| PhotoQuery {
             flags: Some(vec![Flag::Pick]),
             ..Default::default()
@@ -261,7 +279,10 @@ impl ExportService {
                 .catalog
                 .query(&query)
                 .map_err(|e| ExportError::Failed(e.to_string()))?;
-            ids.extend(page.photos.iter().map(|p| PhotoId(p.id)));
+            ids.extend(page.photos.iter().map(|p| Item {
+                id: PhotoId(p.id),
+                keeper: p.keeper,
+            }));
             match page.next_cursor {
                 Some(next) => query.cursor = Some(next),
                 None => return Ok(ids),
@@ -308,15 +329,16 @@ impl ExportService {
         Ok(self.status())
     }
 
-    fn run(&self, job: &Job, ids: &[PhotoId]) {
+    fn run(&self, job: &Job, items: &[Item]) {
         let mut last_sent = Instant::now();
-        for (i, id) in ids.iter().enumerate() {
+        for (i, item) in items.iter().enumerate() {
+            let id = &item.id;
             if self.cancel.load(Ordering::Acquire) {
                 self.status.lock().expect("export lock").state = ExportState::Cancelled;
                 break;
             }
             let outcome = match self.catalog.photo(*id) {
-                Ok(Some(photo)) => self.export_photo(job, &photo, i as u32 + 1),
+                Ok(Some(photo)) => self.export_photo(job, &photo, item.keeper, i as u32 + 1),
                 Ok(None) => Err("the photo was removed".into()),
                 Err(e) => Err(e.to_string()),
             };
@@ -346,8 +368,18 @@ impl ExportService {
     }
 
     /// Exports one photo; returns the number of files written.
-    fn export_photo(&self, job: &Job, photo: &Photo, seq: u32) -> Result<usize, String> {
-        let root = self.library_root().ok_or("no library folder is set")?;
+    fn export_photo(
+        &self,
+        job: &Job,
+        photo: &Photo,
+        keeper: bool,
+        seq: u32,
+    ) -> Result<usize, String> {
+        let settings = self.settings.load_settings().map_err(|e| e.to_string())?;
+        let root = settings
+            .library_root
+            .clone()
+            .ok_or("no library folder is set")?;
         let primary = photo
             .assets
             .image()
@@ -417,14 +449,42 @@ impl ExportService {
         });
 
         let mut written: Vec<PathBuf> = Vec::new();
+        let mut copies: Vec<CopyRecord> = Vec::new();
         let result = (|| {
             for (asset, rest) in &outputs {
                 let dest = dir.join(format!("{stem}{rest}"));
                 match asset {
-                    Some(asset) => self.copy_verified(&root.join(&asset.path), &dest, asset)?,
+                    Some(asset) => {
+                        self.copy_verified(&root.join(&asset.path), &dest, asset)?;
+                        if asset.format != picturesque_core::media::MediaFormat::Xmp {
+                            copies.push(CopyRecord {
+                                photo_id: photo.id,
+                                source: asset.path.clone(),
+                                destination: dest.clone(),
+                                hash: asset.hash,
+                                size: asset.size,
+                            });
+                        }
+                    }
                     None => self.render_verified(&root, photo, job, &dest)?,
                 }
                 written.push(dest);
+            }
+            if job.format == ExportFormat::Original && job.include_sidecars {
+                let media: Vec<&String> = outputs
+                    .iter()
+                    .filter(|(a, _)| {
+                        a.is_some_and(|a| a.format != picturesque_core::media::MediaFormat::Xmp)
+                    })
+                    .map(|(_, rest)| rest)
+                    .collect();
+                for dest in
+                    self.write_sidecars(photo, keeper, &settings, &dir, &stem, &media, &written)?
+                {
+                    if !written.contains(&dest) {
+                        written.push(dest);
+                    }
+                }
             }
             Ok::<_, String>(())
         })();
@@ -434,7 +494,69 @@ impl ExportService {
             }
             return Err(e);
         }
+        // Out of a folder session, remember what was copied (ADR-0014).
+        if settings.open_folder.is_some() && !copies.is_empty() {
+            self.catalog
+                .record_copies(&copies)
+                .map_err(|e| format!("the copies were made but not recorded: {e}"))?;
+        }
         Ok(written.len())
+    }
+
+    /// Writes the photo's current decision and label into a sidecar for
+    /// each exported file (merging into sidecars copied with it). A photo
+    /// without a decision or label gets no new sidecar. Returns the
+    /// sidecars written.
+    #[expect(clippy::too_many_arguments, reason = "one photo's export state")]
+    fn write_sidecars(
+        &self,
+        photo: &Photo,
+        keeper: bool,
+        settings: &Settings,
+        dir: &Path,
+        stem: &str,
+        media: &[&String],
+        written: &[PathBuf],
+    ) -> Result<Vec<PathBuf>, String> {
+        let decision = self.catalog.decision(photo.id).map_err(|e| e.to_string())?;
+        let label = match decision.flag {
+            Flag::Pick => settings.labels.pick,
+            Flag::Unflagged if keeper => settings.labels.auto_pick,
+            Flag::Unflagged | Flag::Reject => None,
+        };
+        let mut targets: Vec<PathBuf> = written
+            .iter()
+            .filter(|p| p.extension().is_some_and(|e| e.eq_ignore_ascii_case("xmp")))
+            .cloned()
+            .collect();
+        let copied_any = !targets.is_empty();
+        if decision != Default::default() || label.is_some() {
+            for rest in media {
+                let name = match settings.sidecar_naming {
+                    SidecarNaming::FileExtension => format!("{stem}{rest}.xmp"),
+                    SidecarNaming::BaseName => format!("{stem}.xmp"),
+                };
+                let target = dir.join(name);
+                let taken = targets.iter().any(|t| {
+                    t.file_name().map(|n| n.to_string_lossy().to_lowercase())
+                        == target
+                            .file_name()
+                            .map(|n| n.to_string_lossy().to_lowercase())
+                });
+                if !taken {
+                    targets.push(target);
+                }
+            }
+        } else if !copied_any {
+            return Ok(Vec::new());
+        }
+        let values = SidecarValues { decision, label };
+        for target in &targets {
+            self.sidecars
+                .write(target, values)
+                .map_err(|e| format!("cannot write {}: {e}", target.display()))?;
+        }
+        Ok(targets)
     }
 
     fn copy_verified(&self, src: &Path, dest: &Path, asset: &Asset) -> Result<(), String> {

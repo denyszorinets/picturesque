@@ -61,7 +61,17 @@ test("culls a folder in place and goes back to the library", async ({
   await expect(page.getByTestId("finish-result")).toContainText(
     "every decision is in the XMP sidecars",
   );
-  await page.getByRole("button", { name: "Done" }).click();
+  // Copy the keepers out, each with a sidecar holding its decision.
+  await page.getByTestId("finish-export").click();
+  const out = folder({});
+  await page.getByTestId("export-keepers").check();
+  await page.getByTestId("export-destination").fill(out);
+  await page.getByTestId("export-start").click();
+  await expect(page.getByTestId("export-status")).toContainText("all verified");
+  const picked = existsSync(join(out, "a.JPG")) ? "a.JPG" : "b.JPG";
+  expect(existsSync(join(out, picked))).toBe(true);
+  expect(existsSync(join(out, `${picked}.xmp`))).toBe(true);
+  await page.getByTestId("export-done").click();
 
   // Back to the library; the folder is in the recent list.
   await switcher.click();

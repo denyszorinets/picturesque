@@ -80,6 +80,20 @@ pub struct DirtyDecision {
     pub auto_labeled: bool,
 }
 
+/// A verified copy of one of a photo's files, made out of a folder
+/// session (ADR-0014).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CopyRecord {
+    pub photo_id: PhotoId,
+    /// The original, relative to the folder.
+    pub source: PathBuf,
+    /// Where the copy is (absolute).
+    pub destination: PathBuf,
+    /// The copy's content when it was verified.
+    pub hash: ContentHash,
+    pub size: u64,
+}
+
 /// Stores and retrieves photos.
 pub trait PhotoCatalog: Send + Sync {
     /// Stores a new photo with its assets in one transaction.
@@ -123,6 +137,12 @@ pub trait PhotoCatalog: Send + Sync {
     /// Decisions changed since their sidecar was last written, with a token
     /// identifying the change.
     fn dirty_decisions(&self) -> Result<Vec<DirtyDecision>, CatalogError>;
+
+    /// Records verified copies, replacing earlier ones of the same files.
+    fn record_copies(&self, copies: &[CopyRecord]) -> Result<(), CatalogError>;
+
+    /// Every recorded copy.
+    fn copies(&self) -> Result<Vec<CopyRecord>, CatalogError>;
 
     /// Photos marked to carry the auto-pick label.
     fn auto_labeled(&self) -> Result<HashSet<PhotoId>, CatalogError>;
