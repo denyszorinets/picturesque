@@ -156,6 +156,21 @@ describe("LibraryStore", () => {
     expect(store.sections[0]!.day).toBe("2026-10-12");
   });
 
+  it("drops the search heading when a refresh overtakes clearing the search", async () => {
+    const api = backend(10);
+    const store = new LibraryStore(api);
+    await store.setFilter({}, { ids: [2, 5], label: "Matching “red”" });
+
+    // Clearing the search reloads; a refresh (series changed) starts
+    // meanwhile and wins.
+    const cleared = store.setFilter({});
+    const refreshed = store.refresh();
+    await Promise.all([cleared, refreshed]);
+
+    expect(store.sections[0]!.label).not.toMatch(/Matching/);
+    expect(store.sections[0]!.day).toBe("2026-10-12");
+  });
+
   it("refreshes only the counts", async () => {
     const api = backend(1000);
     const store = new LibraryStore(api);
