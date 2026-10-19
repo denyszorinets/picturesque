@@ -35,6 +35,7 @@ signals, and **Best quality first** sorts the whole library by score.
 ------------------
 
 - **P** picks, **X** rejects, **U** unflags; **1** to **5** give stars.
+  In the loupe, **↑** picks and **↓** rejects, next to **← →**.
 - In the loupe, the keys apply to the photo shown; in the timeline, to
   every selected photo (select with **Shift+click**, **Ctrl+click** or
   **Shift+arrows**).

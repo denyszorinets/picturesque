@@ -105,6 +105,8 @@ pick, reject and unflag, 1–5 for stars and 0 to clear. In the timeline the
 keys apply to every selected photo; in the loupe, to the photo shown. Hold
 **Shift** (Shift+P, Shift+X, Shift+U) to move on to the next photo
 afterwards, in the loupe or with one photo selected in the timeline.
+In the loupe and in compare, **↑** picks and **↓** rejects too (with
+**Shift** to move on), so a whole cull fits on the arrow keys.
 
 **Picks** counts only photos you marked. The app's suggestions are
 separate: see :ref:`features-library-auto-pick`.

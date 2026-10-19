@@ -31,9 +31,14 @@ to every selected photo.
      - Rate one to five stars
    * - 0
      - Remove the rating
+   * - ↑, ↓
+     - Pick, reject (in the loupe and in compare, where up and down do not
+       move), so one hand on the arrow keys is enough to cull
    * - Shift+P, Shift+X, Shift+U
      - Pick, reject or unflag, then move to the next photo (in the loupe,
        or with one photo selected in the timeline)
+   * - Shift+↑, Shift+↓
+     - Pick or reject, then move to the next photo (in the loupe)
    * - B
      - Make the photo the best of its series; again to withdraw the choice
        (:ref:`features-series`)
@@ -76,7 +81,7 @@ Timeline
 Loupe
 -----
 
-← → move between photos, Z zooms, I toggles the information panel, Esc
+← → move between photos, ↑ picks and ↓ rejects, Z zooms, I toggles the information panel, Esc
 closes; the culling keys above apply to the photo shown, and with
 **Auto-advance** on every decision moves to the next photo. See
 :ref:`features-library-loupe`.

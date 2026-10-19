@@ -419,8 +419,8 @@
         </ul>
       {/if}
       <p class="keys muted">
-        ← → move · P pick · X reject · U unflag · 0–5 stars · Shift+P/X/U decide
-        and move on · Z zoom · I info · Esc close
+        ← → move · P or ↑ pick · X or ↓ reject · U unflag · 0–5 stars ·
+        Shift+key decides and moves on · Z zoom · I info · Esc close
       </p>
     </aside>
   {/if}

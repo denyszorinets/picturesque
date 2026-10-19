@@ -2,6 +2,7 @@
   import * as api from "../api";
   import type { PhotoSummary } from "../api";
   import { CompareState } from "./compare-state.svelte";
+  import { flagForKey } from "./keys";
   import ComparePane from "./ComparePane.svelte";
   import type { Culling } from "./culling.svelte";
 
@@ -26,11 +27,6 @@
   let error = $state<string | null>(null);
 
   const PAN = 0.1;
-  const FLAGS: Record<string, PhotoSummary["flag"]> = {
-    p: "pick",
-    x: "reject",
-    u: "unflagged",
-  };
 
   async function load() {
     try {
@@ -71,6 +67,7 @@
   function onkeydown(e: KeyboardEvent) {
     const key = e.key.toLowerCase();
     const mod = e.ctrlKey || e.metaKey;
+    const flag = flagForKey(e.key, "compare");
     let action: (() => unknown) | undefined;
     if (mod && key === "z")
       action = () => (e.shiftKey ? culling.redo() : culling.undo());
@@ -94,8 +91,7 @@
     else if (key === "l") action = () => compare.togglePanes();
     else if (key === "z") action = () => compare.toggleZoom();
     else if (key === "b") action = chooseBest;
-    else if (FLAGS[key] && active)
-      action = () => culling.flagPhotos([active], FLAGS[key]!);
+    else if (flag && active) action = () => culling.flagPhotos([active], flag);
     else if (/^[0-5]$/.test(e.key) && active)
       action = () => culling.ratePhotos([active], Number(e.key));
     if (!action) return;
@@ -160,8 +156,8 @@
       <span class="error" role="alert">{error ?? culling.error}</span>
     {/if}
     <span class="keys"
-      >← → photo · P X U pick/reject · 0–5 stars · B best · L layout · Z zoom ·
-      Shift+arrows pan · Esc close</span
+      >← → photo · P X U or ↑ ↓ pick/reject · 0–5 stars · B best · L layout · Z
+      zoom · Shift+arrows pan · Esc close</span
     >
     <button onclick={() => onclose(compare.activeId)} aria-label="Close compare"
       >✕</button

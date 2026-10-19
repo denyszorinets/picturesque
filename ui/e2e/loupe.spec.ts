@@ -81,6 +81,17 @@ test("culls in the loupe with buttons, keys and auto-advance", async ({
   await page.keyboard.press("ArrowLeft");
   await expect(pick).toHaveAttribute("aria-pressed", "true");
 
+  // ↑ picks and ↓ rejects; Shift moves on.
+  await page.keyboard.press("ArrowDown");
+  await expect(reject).toHaveAttribute("aria-pressed", "true");
+  await page.keyboard.press("ArrowUp");
+  await expect(pick).toHaveAttribute("aria-pressed", "true");
+  await page.keyboard.press("Shift+ArrowDown");
+  await expect(position).toHaveText(/^2 \/ \d+$/);
+  await page.keyboard.press("ArrowLeft");
+  await expect(reject).toHaveAttribute("aria-pressed", "true");
+  await page.keyboard.press("p");
+
   // Auto-advance: every decision moves on.
   await page.getByTestId("loupe-auto-advance").check();
   await page.keyboard.press("x");
