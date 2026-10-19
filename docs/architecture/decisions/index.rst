@@ -20,3 +20,4 @@ reused; superseded decisions stay in place and link to their replacement.
    0011-resumable-background-analysis
    0012-continuous-import-pipeline
    0013-folder-sessions
+   0014-optional-source-deletion
