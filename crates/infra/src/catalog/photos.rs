@@ -215,6 +215,23 @@ impl PhotoCatalog for SqliteCatalog {
         self.store_decision(id, decision)
     }
 
+    fn set_decision_saved(
+        &self,
+        id: PhotoId,
+        decision: picturesque_core::decision::Decision,
+    ) -> Result<(), CatalogError> {
+        self.store_decision(id, decision)?;
+        self.conn()
+            .execute(
+                "UPDATE decision SET sidecar_revision = revision,
+                     sidecar_written_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+                 WHERE photo_id = ?1",
+                [id.0],
+            )
+            .map_err(storage)?;
+        Ok(())
+    }
+
     fn dirty_decisions(
         &self,
     ) -> Result<Vec<picturesque_app::ports::catalog::DirtyDecision>, CatalogError> {

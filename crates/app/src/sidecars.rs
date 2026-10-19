@@ -80,6 +80,49 @@ pub fn sidecar_path(photo: &Photo, naming: SidecarNaming) -> PathBuf {
     primary.with_file_name(file)
 }
 
+/// Every sidecar a photo's decision is written to. In the library, one
+/// ([`sidecar_path`]). In a folder culled in place (`every_file`), also
+/// one per RAW and image file, since darktable imports each file of a
+/// RAW+JPEG pair as its own image with its own sidecar; sidecars that
+/// already exist are kept up to date as well.
+pub fn sidecar_paths(photo: &Photo, naming: SidecarNaming, every_file: bool) -> Vec<PathBuf> {
+    if !every_file {
+        return vec![sidecar_path(photo, naming)];
+    }
+    let mut paths: Vec<PathBuf> = photo
+        .assets
+        .sidecars()
+        .iter()
+        .map(|s| s.path.clone())
+        .collect();
+    let media = [photo.assets.primary(), photo.assets.display()];
+    for file in media {
+        let name = file
+            .path
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        let own = format!("{name}.xmp");
+        let has_own = paths.iter().any(|p| {
+            p.file_name()
+                .is_some_and(|n| n.to_string_lossy().eq_ignore_ascii_case(&own))
+        });
+        if has_own {
+            continue;
+        }
+        let new = match naming {
+            SidecarNaming::FileExtension => file.path.with_file_name(own),
+            SidecarNaming::BaseName => file
+                .path
+                .with_file_name(format!("{}.xmp", base_name(&name).unwrap_or(&name))),
+        };
+        if !paths.contains(&new) {
+            paths.push(new);
+        }
+    }
+    paths
+}
+
 impl SidecarService {
     pub fn new(
         catalog: Arc<dyn PhotoCatalog>,
@@ -138,8 +181,15 @@ impl SidecarService {
         let Some(root) = settings.library_root else {
             return report;
         };
+        let every_file = settings.open_folder.is_some();
         for item in dirty {
-            match self.write_one(&root, item.id, item.decision, settings.sidecar_naming) {
+            match self.write_one(
+                &root,
+                item.id,
+                item.decision,
+                settings.sidecar_naming,
+                every_file,
+            ) {
                 Ok(()) => {
                     let _ = self.catalog.mark_sidecar_written(item.id, &item.token);
                     report.written += 1;
@@ -156,17 +206,20 @@ impl SidecarService {
         id: picturesque_core::photo::PhotoId,
         decision: picturesque_core::decision::Decision,
         naming: SidecarNaming,
+        every_file: bool,
     ) -> Result<(), String> {
         let photo = self
             .catalog
             .photo(id)
             .map_err(|e| e.to_string())?
             .ok_or("photo no longer exists")?;
-        let relative = sidecar_path(&photo, naming);
-        let (hash, size) = self.store.write(&root.join(&relative), decision)?;
-        self.catalog
-            .upsert_sidecar(id, &relative, size, &hash)
-            .map_err(|e| e.to_string())
+        for relative in sidecar_paths(&photo, naming, every_file) {
+            let (hash, size) = self.store.write(&root.join(&relative), decision)?;
+            self.catalog
+                .upsert_sidecar(id, &relative, size, &hash)
+                .map_err(|e| e.to_string())?;
+        }
+        Ok(())
     }
 
     /// Reports the new pending count and asks the background worker to

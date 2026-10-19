@@ -1221,7 +1221,13 @@ impl ImportPipeline {
             Err(e) => return fail(e.to_string()),
         };
         if let Some(decision) = photo.decision {
-            let _ = self.deps.catalog.set_decision(photo_id, decision);
+            // In place, the sidecar the decision came from is the user's
+            // other tool's file: leave it as it is until the user decides.
+            let _ = if self.in_place().is_some() {
+                self.deps.catalog.set_decision_saved(photo_id, decision)
+            } else {
+                self.deps.catalog.set_decision(photo_id, decision)
+            };
         }
         if let Some(sizes) = self.media_sizes.lock().expect("sizes lock").as_mut() {
             sizes.extend(copied.iter().map(|(f, _)| f.size));

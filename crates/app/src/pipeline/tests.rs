@@ -769,6 +769,8 @@ fn in_place_catalogs_photos_where_they_are() {
         world.catalog.decision(id).unwrap().flag,
         picturesque_core::decision::Flag::Reject
     );
+    // That sidecar is darktable's: it is not rewritten until the user decides.
+    assert!(world.catalog.dirty_decisions().unwrap().is_empty());
     assert!(
         world
             .pipeline
