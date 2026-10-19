@@ -2,6 +2,7 @@
   import * as api from "../api";
   import { AnalysisProgress } from "./analysis.svelte";
   import { SidecarProgress } from "./sidecars.svelte";
+  import { flagForKey } from "./keys";
   import Compare from "./Compare.svelte";
   import ExportDialog from "./ExportDialog.svelte";
   import Reanalyze from "../analysis/Reanalyze.svelte";
@@ -122,11 +123,6 @@
     }),
   );
 
-  const FLAGS: Record<string, "pick" | "reject" | "unflagged"> = {
-    p: "pick",
-    x: "reject",
-    u: "unflagged",
-  };
   const ARROWS: Record<string, Direction> = {
     ArrowLeft: "left",
     ArrowRight: "right",
@@ -221,7 +217,7 @@
     // Shift moves on after the decision; in the loupe, so does
     // Auto-advance.
     const next = e.shiftKey || (loupe !== null && autoAdvance);
-    const flag = FLAGS[key];
+    const flag = flagForKey(e.key, loupe === null ? "grid" : "loupe");
     if (flag) {
       const photos = targets();
       decide(() => culling.flag(photos, flag), next);
