@@ -137,6 +137,21 @@ so tools without a pick flag, like darktable, show picks.
    photos when a folder is finished. A change applies to sidecars written
    from then on.
 
+.. _reference-settings-delete-after-copy:
+
+``delete_after_copy``
+---------------------
+
+What **Clear folder…** may delete after keepers were copied out of a
+folder culled in place (:ref:`features-folders-clear`).
+
+:Type: ``never``, ``verified`` or ``verified_and_rejects``
+:Default: ``verified``
+:Behaviour: ``verified`` deletes photos whose copies are verified again
+   first; ``verified_and_rejects`` also deletes rejected photos, which
+   have no copy; ``never`` turns the action off. Deleting is permanent and
+   only happens when asked.
+
 .. _reference-settings-folders:
 
 ``open_folder``, ``recent_folders``
@@ -177,7 +192,8 @@ API
         "auto_pick": { "enabled": true, "min_quality": 0.5 },
         "onboarding": { "tour_done": false },
         "open_folder": null, "recent_folders": [],
-        "labels": { "pick": "green", "auto_pick": "yellow" } }
+        "labels": { "pick": "green", "auto_pick": "yellow" },
+        "delete_after_copy": "verified" }
 
 ``update_settings``
    Arguments: any subset of the settings. Unknown fields are rejected.

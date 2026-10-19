@@ -30,6 +30,7 @@ vi.mock("./lib/api", async (importOriginal) => {
         open_folder: null,
         recent_folders: [],
         labels: { pick: "green", auto_pick: "yellow" },
+        delete_after_copy: "verified",
       }),
     listModels: () => Promise.resolve([]),
     aiStatus: () =>

@@ -97,6 +97,15 @@ impl MemFs {
         self
     }
 
+    /// Makes a folder read-only from now on (a locked card).
+    pub fn lock_folder(&self, path: &str) {
+        self.state
+            .lock()
+            .unwrap()
+            .read_only
+            .insert(PathBuf::from(path));
+    }
+
     pub fn read_only(self, path: &str) -> Self {
         self.state
             .lock()
@@ -323,6 +332,9 @@ impl FileSystem for MemFs {
 
     fn remove_file(&self, path: &Path) -> Result<(), String> {
         let mut s = self.state.lock().unwrap();
+        if s.read_only.iter().any(|d| path.starts_with(d)) {
+            return Err("read-only file system".into());
+        }
         if let Some((bytes, _)) = s.files.remove(path)
             && let Some(space) = s.space.as_mut()
         {
@@ -649,6 +661,14 @@ impl PhotoCatalog for MemoryCatalog {
             .collect();
         dirty.sort_by_key(|d| d.id);
         Ok(dirty)
+    }
+
+    fn remove_photo(&self, id: PhotoId) -> Result<(), CatalogError> {
+        self.photos.lock().unwrap().retain(|p| p.id != id);
+        self.decisions.lock().unwrap().remove(&id);
+        self.revisions.lock().unwrap().remove(&id);
+        self.copies.lock().unwrap().retain(|c| c.photo_id != id);
+        Ok(())
     }
 
     fn record_copies(

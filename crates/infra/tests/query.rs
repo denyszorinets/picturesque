@@ -398,6 +398,33 @@ fn auto_labels_mark_exactly_the_given_photos_and_dirty_the_changes() {
 }
 
 #[test]
+fn copies_are_recorded_and_go_with_their_photo() {
+    use picturesque_app::ports::catalog::CopyRecord;
+    use picturesque_core::hash::ContentHash;
+    let c = sample();
+    let copy = |id: i64, source: &str, n: u8| CopyRecord {
+        photo_id: PhotoId(id),
+        source: source.into(),
+        destination: std::env::temp_dir().join("out").join(source),
+        hash: ContentHash::from_bytes([n; 32]),
+        size: u64::from(n),
+    };
+
+    c.record_copies(&[copy(1, "2026/a.CR3", 1), copy(2, "2026/b.JPG", 2)])
+        .unwrap();
+    // A second copy of the same file replaces the first record.
+    c.record_copies(&[copy(1, "2026/a.CR3", 3)]).unwrap();
+
+    assert_eq!(
+        c.copies().unwrap(),
+        [copy(1, "2026/a.CR3", 3), copy(2, "2026/b.JPG", 2)]
+    );
+    c.remove_photo(PhotoId(1)).unwrap();
+    assert!(c.photo(PhotoId(1)).unwrap().is_none());
+    assert_eq!(c.copies().unwrap(), [copy(2, "2026/b.JPG", 2)]);
+}
+
+#[test]
 fn summaries_carry_what_the_grid_needs() {
     let c = sample();
     c.set_dimensions(PhotoId(2), 6000, 4000).unwrap();

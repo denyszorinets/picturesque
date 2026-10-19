@@ -33,6 +33,18 @@ Commands
    No arguments. Goes back to the library from a folder; returns the
    settings.
 
+``clear_plan``
+   No arguments. What **Clear folder…** would delete: ``{ "mode":
+   "verified", "photos": 40, "files": 80, "bytes": 2000000000,
+   "rejects": 0, "partly_copied": 1 }``. Only in a folder session
+   (``invalid_arguments`` in the library).
+
+``clear_folder``
+   No arguments. Deletes what the plan says, re-verifying every copy
+   first (:ref:`features-folders-clear`). Returns ``{ "deleted": 39,
+   "files": 78, "bytes": 1950000000, "kept": [{ "photo_id": 7, "reason":
+   "its copy … changed since it was copied" }] }``. Permanent.
+
 ``finish_status``
    No arguments. ``{ "auto_picked": 12, "labels_to_write": 12, "picks": 30,
    "rejects": 41 }``: auto-picked photos, how many of them still need the

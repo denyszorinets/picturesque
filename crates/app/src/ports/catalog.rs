@@ -138,6 +138,10 @@ pub trait PhotoCatalog: Send + Sync {
     /// identifying the change.
     fn dirty_decisions(&self) -> Result<Vec<DirtyDecision>, CatalogError>;
 
+    /// Removes a photo and everything known about it (its files are
+    /// already gone).
+    fn remove_photo(&self, id: PhotoId) -> Result<(), CatalogError>;
+
     /// Records verified copies, replacing earlier ones of the same files.
     fn record_copies(&self, copies: &[CopyRecord]) -> Result<(), CatalogError>;
 

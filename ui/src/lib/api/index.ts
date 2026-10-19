@@ -2,6 +2,8 @@ import type { AiStatus } from "./generated/AiStatus";
 import type { AnalysisStatus } from "./generated/AnalysisStatus";
 import type { SidecarStatus } from "./generated/SidecarStatus";
 import type { FinishResult } from "./generated/FinishResult";
+import type { ClearPlan } from "./generated/ClearPlan";
+import type { ClearResult } from "./generated/ClearResult";
 import type { FinishStatus } from "./generated/FinishStatus";
 import type { ModelView } from "./generated/ModelView";
 import type { ExportArgs } from "./generated/ExportArgs";
@@ -73,6 +75,9 @@ export type { Settings } from "./generated/Settings";
 export type { RecentFolder } from "./generated/RecentFolder";
 export type { ColorLabel } from "./generated/ColorLabel";
 export type { FinishResult } from "./generated/FinishResult";
+export type { ClearPlan } from "./generated/ClearPlan";
+export type { ClearResult } from "./generated/ClearResult";
+export type { DeleteAfterCopy } from "./generated/DeleteAfterCopy";
 export type { FinishStatus } from "./generated/FinishStatus";
 export type { LabelSettings } from "./generated/LabelSettings";
 export type { SidecarStatus } from "./generated/SidecarStatus";
@@ -113,6 +118,19 @@ export function updateSettings(update: SettingsUpdate): Promise<Settings> {
  */
 export function openFolder(path: string): Promise<Settings> {
   return transport.call<Settings>("open_folder", { path });
+}
+
+/** What clearing the folder after copying would delete (ADR-0014). */
+export function clearPlan(): Promise<ClearPlan> {
+  return transport.call<ClearPlan>("clear_plan");
+}
+
+/**
+ * Deletes originals whose copy is verified again, and rejects when the
+ * settings allow it. Permanent.
+ */
+export function clearFolder(): Promise<ClearResult> {
+  return transport.call<ClearResult>("clear_folder");
 }
 
 /** What finishing the folder would do. */
