@@ -132,14 +132,16 @@ describe("App", () => {
 
     render(App);
 
-    const indicator = await screen.findByTestId("pipeline-indicator");
-    expect(indicator).toHaveTextContent("Importing 12 photos");
-    expect(indicator).toHaveTextContent("2 failed");
-    expect(indicator).toHaveAttribute("title", "Copying IMG_0003.CR3");
+    const ring = await screen.findByTestId("activity-ring");
+    expect(ring).toHaveTextContent("Importing · 12 left");
+    expect(ring).toHaveTextContent("2 failed");
     // The empty library says photos are on their way.
     expect(await screen.findByText("Importing…")).toBeInTheDocument();
 
-    indicator.click();
+    ring.click();
+    const details = await screen.findByTestId("activity-popover");
+    expect(details).toHaveTextContent("copying IMG_0003.CR3");
+    screen.getByRole("button", { name: "Open Activity" }).click();
     expect(
       await screen.findByRole("heading", { name: "Import folders" }),
     ).toBeVisible();

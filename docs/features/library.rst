@@ -220,8 +220,8 @@ score its sharpness, exposure and noise
 (:doc:`/reference/quality-scores`) and to hash its visual layout for
 finding similar photos (:doc:`/reference/similarity`), which groups photos
 into :doc:`series </features/series>`. The loupe shows the scores under
-**Quality**. While it works, the toolbar shows
-**Analyzing 120 / 300**. Photos on screen are analyzed first, so scrolling
+**Quality**. While it works, the progress ring at the top right shows
+**Analyzing 120 / 300** (:ref:`features-library-progress`). Photos on screen are analyzed first, so scrolling
 to a day gets its results within seconds. Analysis continues where it left
 off after the app restarts. With the CLIP model downloaded, analysis also
 computes image embeddings (:ref:`features-ai-embeddings`).
@@ -232,6 +232,34 @@ needs its models, which are not bundled with the app
 the other analyses, and the toolbar shows **AI analysis needs models**:
 click it to open Settings, where **AI models** downloads them. Photos are
 then analyzed with the new models automatically.
+
+.. _features-library-progress:
+
+Progress ring
+~~~~~~~~~~~~~
+
+The ring at the top right of the window shows background work on every
+tab, one thing at a time:
+
+.. list-table::
+   :header-rows: 1
+
+   * - Shows
+     - Meaning
+   * - **Importing · 12 left**
+     - Photos are being read and copied into the library; the ring spins.
+   * - **Looking for photos**
+     - An import folder is being scanned.
+   * - **Analyzing 120 / 300**
+     - Photos are being analyzed; the ring fills as they finish.
+   * - **Import paused**, **Analysis paused**
+     - Work waits, for example for disk space (amber).
+   * - **Up to date**
+     - Nothing is waiting.
+
+Photos that could not be imported are counted in red next to it. Click
+the ring for details (what is being copied, why work is paused) and
+**Open Activity**.
 
 .. _features-library-reanalyze:
 
@@ -245,7 +273,7 @@ an analysis failed or after downloading a new model:
 - click **Re-analyze all photos** in **Settings → Analysis** (and confirm).
 
 The photos go back into the queue, the selected ones first, and the
-toolbar shows **Analyzing …** again. Until a photo's new results are
+progress ring shows **Analyzing …** again. Until a photo's new results are
 ready, its earlier ones stay in use, so scores, series, auto-picks and
 quality filters keep working meanwhile; when the new results are stored,
 series and auto-picks are updated. Your decisions (picks, rejects,

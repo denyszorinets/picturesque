@@ -2,8 +2,10 @@
   import * as api from "./lib/api";
   import type { AppInfo, Settings } from "./lib/api";
   import ActivityView from "./lib/activity/ActivityView.svelte";
-  import PipelineIndicator from "./lib/activity/PipelineIndicator.svelte";
+  import ActivityRing from "./lib/activity/ActivityRing.svelte";
   import { Pipeline } from "./lib/activity/pipeline.svelte";
+  import { ringState } from "./lib/activity/ring";
+  import { AnalysisProgress } from "./lib/library/analysis.svelte";
   import LibraryView from "./lib/library/LibraryView.svelte";
   import SettingsPanel from "./lib/settings/SettingsPanel.svelte";
   import SetupWizard from "./lib/setup/SetupWizard.svelte";
@@ -52,6 +54,8 @@
   }
 
   const pipeline = new Pipeline(api);
+  const analysis = new AnalysisProgress(api);
+  const ring = $derived(ringState(pipeline.status, analysis.status));
 
   const versionLabel = (i: AppInfo) => `v${i.version}`;
 
@@ -97,10 +101,14 @@
     }
   }
 
-  // The header indicator follows the pipeline everywhere.
+  // The header ring follows importing and analysis everywhere.
   $effect(() => {
     void pipeline.loadStatus();
-    const stop = api.onAppEvent((event) => pipeline.handle(event));
+    void analysis.load();
+    const stop = api.onAppEvent((event) => {
+      pipeline.handle(event);
+      analysis.handle(event);
+    });
     // Events may be missed (for example while reconnecting).
     const timer = setInterval(() => {
       if (pipeline.busy) void pipeline.loadStatus();
@@ -108,6 +116,7 @@
     return () => {
       stop();
       clearInterval(timer);
+      analysis.dispose();
     };
   });
 </script>
@@ -130,7 +139,7 @@
         {/each}
       </nav>
       <div class="status">
-        <PipelineIndicator {pipeline} onclick={() => (tab = "activity")} />
+        <ActivityRing {ring} onactivity={() => (tab = "activity")} />
         <button
           class="help"
           onclick={() => (help = true)}
@@ -160,6 +169,7 @@
           onsetup={() => (setup = true)}
           hasLibrary={settings === null || !!settings.library_root}
           importing={pipeline.busy}
+          {analysis}
           {tour}
           ontourend={() => void endTour()}
         />

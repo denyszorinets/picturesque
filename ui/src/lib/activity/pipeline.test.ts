@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { ApiError, type JobView, type PipelineStatus } from "../api";
 import {
-  indicatorLabel,
   isBusy,
   PAGE,
   Pipeline,
@@ -128,19 +127,12 @@ describe("steps", () => {
   });
 });
 
-describe("indicator", () => {
-  it("says what the pipeline is doing", () => {
-    expect(indicatorLabel(null)).toBeNull();
-    expect(indicatorLabel(idle)).toBeNull();
+describe("isBusy", () => {
+  it("is busy while photos wait or a folder is scanned", () => {
+    expect(isBusy(null)).toBe(false);
     expect(isBusy(idle)).toBe(false);
-    expect(indicatorLabel({ ...idle, queued: 1 })).toBe("Importing 1 photo");
-    expect(indicatorLabel({ ...idle, scanning: true })).toBe(
-      "Looking for new photos",
-    );
+    expect(isBusy({ ...idle, queued: 1 })).toBe(true);
     expect(isBusy({ ...idle, scanning: true })).toBe(true);
-    expect(
-      indicatorLabel({ ...idle, queued: 4, paused: "No library folder" }),
-    ).toBe("Import paused");
   });
 });
 

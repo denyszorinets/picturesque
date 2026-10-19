@@ -36,6 +36,8 @@
     importing?: boolean;
     store?: LibraryStore;
     selection?: Selection;
+    /** Background analysis progress, shared with the header. */
+    analysis?: AnalysisProgress;
   }
 
   let {
@@ -48,10 +50,10 @@
     importing = false,
     store = new LibraryStore(api),
     selection = new Selection(),
+    analysis = new AnalysisProgress(api),
   }: Props = $props();
 
   const filters = new Filters();
-  const analysis = new AnalysisProgress(api);
   const sidecars = new SidecarProgress(api);
   let showFilters = $state(true);
 
@@ -406,6 +408,8 @@
   }
 
   $effect(() => {
+    // Loading and following events is idempotent, so a shared progress
+    // can be followed here too.
     void analysis.load();
     void sidecars.load();
     const unsubscribe = api.onAppEvent((event) => {
@@ -419,7 +423,6 @@
     return () => {
       unsubscribe();
       clearTimeout(liveTimer);
-      analysis.dispose();
     };
   });
 </script>
@@ -570,21 +573,6 @@
         onmoved={() => void store.refresh()}
       />
       <span class="spacer"></span>
-      {#if analysis.status?.paused && analysis.remaining > 0}
-        <span
-          class="paused"
-          data-testid="analysis-paused"
-          title={`Analysis paused: ${analysis.status.paused}`}
-          >Analysis paused: {analysis.status.paused.split(";")[0]}</span
-        >
-      {:else if analysis.status && analysis.remaining > 0}
-        <span
-          class="muted"
-          data-testid="analysis-progress"
-          title="Scoring photos in the background; photos on screen go first"
-          >Analyzing {analysis.status.analyzed} / {analysis.status.total}</span
-        >
-      {/if}
       {#if sidecars.label}
         {@const folder = sidecars.status?.folder}
         {#if api.canReveal() && folder}
@@ -797,11 +785,6 @@
     flex-direction: column;
     align-items: center;
     gap: 0.6rem;
-  }
-
-  .paused {
-    color: var(--warn);
-    font-size: 0.9rem;
   }
 
   .sidecars {
