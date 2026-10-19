@@ -56,6 +56,34 @@ hover it); the decisions are kept in Picturesque and written as soon as
 the folder can be written to (after the next change, or when the app
 starts).
 
+.. _features-folders-finish:
+
+Finishing a folder
+------------------
+
+Auto-picked photos (:ref:`features-library-auto-pick`) are only
+suggestions, and they change while analysis runs, so they are not written
+to sidecars as you go. **Finish folder…** in the toolbar does that when
+you are done:
+
+- Every auto-picked photo gets the **auto-pick colour label** (yellow by
+  default, :ref:`reference-settings-labels`) in its sidecars, so darktable
+  and the other tools show the app's suggestions next to your picks
+  (green). A photo no longer auto-picked loses the label.
+- Every decision not yet in its sidecar is written right away.
+
+It then offers what usually comes next: **Export keepers…**, or **Open
+the next folder…**. Rejected photos stay where they are; **Move
+rejects…** moves them aside. You can finish a folder again at any time.
+
+Deciding on an auto-picked photo afterwards replaces the label: a pick
+gets the pick label, a reject none.
+
+If you open another folder or the library while auto-picked photos still
+lack their label, the folder menu asks: **Write labels, then switch**,
+**Switch without**, or **Cancel**. Your decisions are in their sidecars
+either way.
+
 Switching folders and back to the library
 -----------------------------------------
 

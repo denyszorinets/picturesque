@@ -386,6 +386,8 @@ pub struct MemoryCatalog {
     pub decisions: Mutex<HashMap<PhotoId, picturesque_core::decision::Decision>>,
     /// (revision, revision the sidecar reflects) per decision.
     pub revisions: Mutex<HashMap<PhotoId, (u64, Option<u64>)>>,
+    /// Photos marked to carry the auto-pick label.
+    pub auto_labeled: Mutex<StdHashSet<PhotoId>>,
     /// (photo, analyzer) → (version, result).
     pub analysis: Mutex<HashMap<(PhotoId, String), (u32, serde_json::Value)>>,
     /// Results marked for analysis again.
@@ -503,6 +505,8 @@ impl PhotoCatalog for MemoryCatalog {
         query: &crate::library::PhotoQuery,
     ) -> Result<crate::library::PhotoPage, CatalogError> {
         let decisions = self.decisions.lock().unwrap().clone();
+        let scores = self.scores.lock().unwrap().clone();
+        let keeper = |id: &PhotoId| scores.get(id).is_some_and(|s| s.keeper);
         let mut photos: Vec<Photo> = self
             .photos
             .lock()
@@ -510,7 +514,15 @@ impl PhotoCatalog for MemoryCatalog {
             .iter()
             .filter(|p| {
                 let flag = decisions.get(&p.id).map(|d| d.flag).unwrap_or_default();
-                query.flags.as_ref().is_none_or(|f| f.contains(&flag))
+                let auto = keeper(&p.id) && flag == picturesque_core::decision::Flag::Unflagged;
+                // Flags and auto-picked photos match either.
+                let decided = match (&query.flags, query.auto_picked == Some(true)) {
+                    (None, false) => true,
+                    (None, true) => auto,
+                    (Some(f), false) => f.contains(&flag),
+                    (Some(f), true) => f.contains(&flag) || auto,
+                };
+                decided
                     && query
                         .photo_ids
                         .as_ref()
@@ -550,7 +562,7 @@ impl PhotoCatalog for MemoryCatalog {
                     aesthetic: None,
                     eyes_closed: None,
                     faces: 0,
-                    keeper: false,
+                    keeper: keeper(&p.id),
                 }
             })
             .collect();
@@ -619,6 +631,7 @@ impl PhotoCatalog for MemoryCatalog {
 
     fn dirty_decisions(&self) -> Result<Vec<crate::ports::catalog::DirtyDecision>, CatalogError> {
         let decisions = self.decisions.lock().unwrap();
+        let auto = self.auto_labeled.lock().unwrap();
         let mut dirty: Vec<_> = self
             .revisions
             .lock()
@@ -627,12 +640,29 @@ impl PhotoCatalog for MemoryCatalog {
             .filter(|(_, (rev, written))| *written != Some(*rev))
             .map(|(id, (rev, _))| crate::ports::catalog::DirtyDecision {
                 id: *id,
-                decision: decisions[id],
+                decision: decisions.get(id).copied().unwrap_or_default(),
                 token: rev.to_string(),
+                auto_labeled: auto.contains(id),
             })
             .collect();
         dirty.sort_by_key(|d| d.id);
         Ok(dirty)
+    }
+
+    fn auto_labeled(&self) -> Result<StdHashSet<PhotoId>, CatalogError> {
+        Ok(self.auto_labeled.lock().unwrap().clone())
+    }
+
+    fn set_auto_labeled(&self, ids: &[PhotoId]) -> Result<usize, CatalogError> {
+        let wanted: StdHashSet<PhotoId> = ids.iter().copied().collect();
+        let mut auto = self.auto_labeled.lock().unwrap();
+        let changed: Vec<PhotoId> = auto.symmetric_difference(&wanted).copied().collect();
+        let mut revisions = self.revisions.lock().unwrap();
+        for id in &changed {
+            revisions.entry(*id).or_insert((0, None)).0 += 1;
+        }
+        *auto = wanted;
+        Ok(changed.len())
     }
 
     fn mark_sidecar_written(&self, id: PhotoId, token: &str) -> Result<(), CatalogError> {
@@ -1279,7 +1309,11 @@ pub fn fake_sha256(bytes: &[u8]) -> String {
 
 /// Sidecars kept in memory: path → decision.
 #[derive(Default)]
-pub struct MemorySidecars(pub Mutex<HashMap<PathBuf, picturesque_core::decision::Decision>>);
+pub struct MemorySidecars(
+    pub Mutex<HashMap<PathBuf, picturesque_core::decision::Decision>>,
+    /// The colour label last written to each sidecar.
+    pub Mutex<HashMap<PathBuf, Option<crate::ports::sidecars::ColorLabel>>>,
+);
 
 impl crate::ports::sidecars::SidecarStore for MemorySidecars {
     fn read(&self, path: &Path) -> Result<Option<picturesque_core::decision::Decision>, String> {
@@ -1295,6 +1329,10 @@ impl crate::ports::sidecars::SidecarStore for MemorySidecars {
             .lock()
             .unwrap()
             .insert(path.to_path_buf(), values.decision);
+        self.1
+            .lock()
+            .unwrap()
+            .insert(path.to_path_buf(), values.label);
         Ok((fake_hash(path.to_string_lossy().as_bytes()), 1))
     }
 }

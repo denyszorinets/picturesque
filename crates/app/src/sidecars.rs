@@ -14,7 +14,9 @@ use picturesque_core::photo::Photo;
 use serde::Serialize;
 use ts_rs::TS;
 
-use crate::ports::catalog::PhotoCatalog;
+use picturesque_core::decision::Flag;
+
+use crate::ports::catalog::{DirtyDecision, PhotoCatalog};
 use crate::ports::events::{AppEvent, EventSink};
 use crate::ports::settings::SettingsStore;
 use crate::ports::sidecars::{ColorLabel, SidecarStore, SidecarValues};
@@ -123,15 +125,14 @@ pub fn sidecar_paths(photo: &Photo, naming: SidecarNaming, every_file: bool) -> 
     paths
 }
 
-/// The colour label a decision gets in its sidecars: the pick label for
-/// picks (`docs/reference/settings.rst`).
-fn label_for(
-    decision: picturesque_core::decision::Decision,
-    settings: &Settings,
-) -> Option<ColorLabel> {
-    match decision.flag {
-        picturesque_core::decision::Flag::Pick => settings.labels.pick,
-        _ => None,
+/// The colour label a photo gets in its sidecars: the pick label for
+/// picks, the auto-pick label for unflagged photos marked when a folder
+/// was finished (`docs/reference/settings.rst`).
+fn label_for(item: &DirtyDecision, settings: &Settings) -> Option<ColorLabel> {
+    match item.decision.flag {
+        Flag::Pick => settings.labels.pick,
+        Flag::Unflagged if item.auto_labeled => settings.labels.auto_pick,
+        Flag::Unflagged | Flag::Reject => None,
     }
 }
 
@@ -197,7 +198,7 @@ impl SidecarService {
         for item in dirty {
             let values = SidecarValues {
                 decision: item.decision,
-                label: label_for(item.decision, &settings),
+                label: label_for(&item, &settings),
             };
             match self.write_one(&root, item.id, values, settings.sidecar_naming, every_file) {
                 Ok(()) => {

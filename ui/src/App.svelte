@@ -34,6 +34,8 @@
   /** Bumped when another folder (or the library) is opened, so every
    * view starts over with that session's photos. */
   let sessionRevision = $state(0);
+  /** The folder menu, also opened from Finish folder. */
+  let switcherOpen = $state(false);
   const inFolder = $derived(!!settings?.open_folder);
   /** The culling tour, asked for again from Settings. */
   let replayTour = $state(false);
@@ -142,7 +144,7 @@
   <header>
     <h1>Picturesque</h1>
     {#if info && settings}
-      <FolderSwitcher {settings} onswitch={switched} />
+      <FolderSwitcher {settings} onswitch={switched} bind:open={switcherOpen} />
     {/if}
     {#if info}
       <nav aria-label="Main">
@@ -189,6 +191,9 @@
             hasLibrary={settings === null || !!settings.library_root}
             importing={pipeline.busy}
             {analysis}
+            {inFolder}
+            autoLabel={settings?.labels.auto_pick ?? null}
+            onnextfolder={() => (switcherOpen = true)}
             {tour}
             ontourend={() => void endTour()}
           />

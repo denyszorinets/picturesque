@@ -167,6 +167,7 @@ pub struct Api {
     rejects: RejectsService,
     export: Arc<ExportService>,
     pipeline: Arc<ImportPipeline>,
+    finish: crate::finish::FinishService,
 }
 
 impl fmt::Debug for Api {
@@ -272,6 +273,7 @@ impl Api {
             Arc::clone(&ctx.settings_store),
         );
         Ok(Self {
+            finish: crate::finish::FinishService::new(Arc::clone(&catalog), Arc::clone(&sidecars)),
             pipeline,
             export,
             search,
@@ -739,6 +741,14 @@ impl Api {
                 no_args(command, &args)?;
                 respond(self.ai.status().map_err(catalog_error)?)
             }
+            "finish_status" => {
+                no_args(command, &args)?;
+                respond(self.finish.status().map_err(catalog_error)?)
+            }
+            "finish_folder" => {
+                no_args(command, &args)?;
+                respond(self.finish.finish().map_err(catalog_error)?)
+            }
             "sidecar_status" => {
                 no_args(command, &args)?;
                 respond(self.sidecars.status())
@@ -1028,8 +1038,13 @@ mod tests {
         use picturesque_core::photo::{Asset, NewPhoto, PhotoAssets};
         use serde_json::json;
 
+        use std::path::Path;
+
+        use serde_json::Value;
+
         use crate::api::{Api, ApiErrorCode};
         use crate::ports::catalog::PhotoCatalog;
+        use crate::ports::settings::SettingsStore;
         use crate::testing::{FakeMetadata, MemFs, TestWorld};
 
         fn api_with_photos(n: u8) -> (Api, TestWorld) {
@@ -1069,6 +1084,110 @@ mod tests {
                 result,
                 json!([{ "photo_id": 1, "flag": "pick", "rating": 4 }, { "photo_id": 2, "flag": "reject", "rating": 0 }])
             );
+        }
+
+        /// Photos 1 and 2 are suggested keepers; 2 is rejected.
+        fn finishing_world() -> (Api, TestWorld) {
+            let (api, world) = api_with_photos(3);
+            world
+                .settings
+                .save_settings(&crate::settings::Settings {
+                    library_root: Some("/lib".into()),
+                    ..Default::default()
+                })
+                .unwrap();
+            let keeper = |id: i64| crate::ports::catalog::PhotoScore {
+                id: picturesque_core::photo::PhotoId(id),
+                score: 0.9,
+                aesthetic: None,
+                eyes_closed: None,
+                faces: 0,
+                keeper: true,
+            };
+            world
+                .catalog
+                .replace_scores(&[keeper(1), keeper(2)])
+                .unwrap();
+            api.call(
+                "set_decisions",
+                json!({ "changes": [{ "photo_id": 2, "flag": "reject" }] }),
+            )
+            .unwrap();
+            (api, world)
+        }
+
+        fn label(world: &TestWorld, file: &str) -> Option<crate::ports::sidecars::ColorLabel> {
+            world
+                .sidecars
+                .1
+                .lock()
+                .unwrap()
+                .get(Path::new(file))
+                .copied()
+                .flatten()
+        }
+
+        #[test]
+        fn finishing_labels_auto_picked_photos_and_writes_their_sidecars() {
+            let (api, world) = finishing_world();
+            assert_eq!(
+                api.call("finish_status", Value::Null).unwrap(),
+                json!({ "auto_picked": 1, "labels_to_write": 1, "picks": 0, "rejects": 1 })
+            );
+
+            let result = api.call("finish_folder", Value::Null).unwrap();
+
+            assert_eq!(result["auto_labeled"], 1);
+            assert_eq!(result["failed"], 0);
+            assert_eq!(
+                label(&world, "/lib/0.jpg.xmp"),
+                Some(crate::ports::sidecars::ColorLabel::Yellow)
+            );
+            assert_eq!(label(&world, "/lib/1.jpg.xmp"), None, "rejected");
+            assert_eq!(
+                api.call("finish_status", Value::Null).unwrap()["labels_to_write"],
+                0
+            );
+        }
+
+        #[test]
+        fn a_decision_after_finishing_replaces_the_auto_label() {
+            let (api, world) = finishing_world();
+            api.call("finish_folder", Value::Null).unwrap();
+
+            api.call(
+                "set_decisions",
+                json!({ "changes": [{ "photo_id": 1, "flag": "pick" }] }),
+            )
+            .unwrap();
+            api.flush_sidecars();
+            assert_eq!(
+                label(&world, "/lib/0.jpg.xmp"),
+                Some(crate::ports::sidecars::ColorLabel::Green)
+            );
+
+            api.call(
+                "set_decisions",
+                json!({ "changes": [{ "photo_id": 1, "flag": "reject" }] }),
+            )
+            .unwrap();
+            api.flush_sidecars();
+            assert_eq!(label(&world, "/lib/0.jpg.xmp"), None);
+        }
+
+        #[test]
+        fn a_photo_no_longer_auto_picked_loses_its_label_when_finishing_again() {
+            let (api, world) = finishing_world();
+            api.call("finish_folder", Value::Null).unwrap();
+            world.catalog.replace_scores(&[]).unwrap();
+
+            assert_eq!(
+                api.call("finish_status", Value::Null).unwrap()["labels_to_write"],
+                1
+            );
+            api.call("finish_folder", Value::Null).unwrap();
+
+            assert_eq!(label(&world, "/lib/0.jpg.xmp"), None);
         }
 
         #[test]

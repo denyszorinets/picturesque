@@ -58,6 +58,10 @@ const MIGRATIONS: &[(&str, &str)] = &[
         "0015_analysis_stale",
         include_str!("migrations/0015_analysis_stale.sql"),
     ),
+    (
+        "0016_auto_label",
+        include_str!("migrations/0016_auto_label.sql"),
+    ),
 ];
 
 /// Schema version after all migrations have run.

@@ -1,5 +1,7 @@
 //! Browsing queries and decisions on SQLite.
 
+use std::collections::HashSet;
+
 use picturesque_app::analysis::technical::TechnicalAnalyzer;
 use picturesque_app::library::{
     CameraFacet, CameraKey, Counted, FlagCount, PhotoFacets, PhotoPage, PhotoQuery, PhotoSort,
@@ -709,7 +711,7 @@ impl SqliteCatalog {
         let conn = self.conn();
         let mut stmt = conn
             .prepare(
-                "SELECT photo_id, flag, rating, revision FROM decision
+                "SELECT photo_id, flag, rating, revision, auto_label FROM decision
                  WHERE sidecar_revision IS NULL OR sidecar_revision <> revision ORDER BY photo_id",
             )
             .map_err(storage)?;
@@ -722,11 +724,48 @@ impl SqliteCatalog {
                     rating: Rating::new(r.get(2)?).unwrap_or_default(),
                 },
                 token: r.get::<_, i64>(3)?.to_string(),
+                auto_labeled: r.get(4)?,
             })
         })
         .map_err(storage)?
         .collect::<Result<Vec<_>, _>>()
         .map_err(storage)
+    }
+
+    pub(super) fn load_auto_labeled(&self) -> Result<HashSet<PhotoId>, CatalogError> {
+        let conn = self.conn();
+        let mut stmt = conn
+            .prepare("SELECT photo_id FROM decision WHERE auto_label = 1")
+            .map_err(storage)?;
+        stmt.query_map([], |r| Ok(PhotoId(r.get(0)?)))
+            .map_err(storage)?
+            .collect::<Result<HashSet<_>, _>>()
+            .map_err(storage)
+    }
+
+    pub(super) fn store_auto_labeled(&self, ids: &[PhotoId]) -> Result<usize, CatalogError> {
+        let json = serde_json::to_string(&ids.iter().map(|id| id.0).collect::<Vec<_>>())
+            .map_err(storage)?;
+        let mut conn = self.conn();
+        let tx = conn.transaction().map_err(storage)?;
+        tx.execute(
+            "INSERT INTO decision (photo_id)
+             SELECT p.id FROM photo p JOIN json_each(?1) j ON j.value = p.id
+             WHERE true
+             ON CONFLICT (photo_id) DO NOTHING",
+            [&json],
+        )
+        .map_err(storage)?;
+        let changed = tx
+            .execute(
+                "UPDATE decision
+                 SET auto_label = 1 - auto_label, revision = revision + 1
+                 WHERE auto_label <> (photo_id IN (SELECT value FROM json_each(?1)))",
+                [&json],
+            )
+            .map_err(storage)?;
+        tx.commit().map_err(storage)?;
+        Ok(changed)
     }
 
     pub(super) fn mark_written(&self, id: PhotoId, token: &str) -> Result<(), CatalogError> {

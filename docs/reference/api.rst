@@ -33,6 +33,17 @@ Commands
    No arguments. Goes back to the library from a folder; returns the
    settings.
 
+``finish_status``
+   No arguments. ``{ "auto_picked": 12, "labels_to_write": 12, "picks": 30,
+   "rejects": 41 }``: auto-picked photos, how many of them still need the
+   auto-pick label in their sidecars (or have it but are no longer
+   auto-picked), and the picks and rejects (:ref:`features-folders-finish`).
+
+``finish_folder``
+   No arguments. Marks exactly the auto-picked photos for the auto-pick
+   label and writes every pending sidecar now. Returns ``{ "auto_labeled":
+   12, "written": 15, "failed": 0, "error": null }``.
+
 ``template_presets``
    No arguments. The built-in templates: ``[{ "id", "label", "template" }]``.
 

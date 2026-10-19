@@ -238,6 +238,14 @@ impl PhotoCatalog for SqliteCatalog {
         self.load_dirty()
     }
 
+    fn auto_labeled(&self) -> Result<HashSet<PhotoId>, CatalogError> {
+        self.load_auto_labeled()
+    }
+
+    fn set_auto_labeled(&self, ids: &[PhotoId]) -> Result<usize, CatalogError> {
+        self.store_auto_labeled(ids)
+    }
+
     fn mark_sidecar_written(&self, id: PhotoId, token: &str) -> Result<(), CatalogError> {
         self.mark_written(id, token)
     }
