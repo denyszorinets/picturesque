@@ -11,6 +11,7 @@ pub mod api;
 pub mod embeddings;
 pub mod explain;
 pub mod export;
+pub mod finish;
 pub mod hooks;
 pub mod info;
 pub mod library;

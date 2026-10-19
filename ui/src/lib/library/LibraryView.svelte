@@ -5,6 +5,7 @@
   import { flagForKey } from "./keys";
   import Compare from "./Compare.svelte";
   import ExportDialog from "./ExportDialog.svelte";
+  import FinishDialog from "../session/FinishDialog.svelte";
   import Reanalyze from "../analysis/Reanalyze.svelte";
   import { waitingNote } from "../analysis/models";
   import Tour from "../tour/Tour.svelte";
@@ -38,6 +39,12 @@
     selection?: Selection;
     /** Background analysis progress, shared with the header. */
     analysis?: AnalysisProgress;
+    /** Whether a folder is culled in place (offers Finish folder). */
+    inFolder?: boolean;
+    /** The auto-pick colour label from the settings. */
+    autoLabel?: api.ColorLabel | null;
+    /** Opens the folder menu, to go on with the next folder. */
+    onnextfolder?: () => void;
   }
 
   let {
@@ -51,7 +58,12 @@
     store = new LibraryStore(api),
     selection = new Selection(),
     analysis = new AnalysisProgress(api),
+    inFolder = false,
+    autoLabel = null,
+    onnextfolder,
   }: Props = $props();
+
+  let finishing = $state(false);
 
   const filters = new Filters();
   const sidecars = new SidecarProgress(api);
@@ -369,7 +381,7 @@
       return;
     // The library is hidden while the Import tab is shown; the compare
     // view handles its own keys.
-    if (!section?.offsetParent || compare || exporting) return;
+    if (!section?.offsetParent || compare || exporting || finishing) return;
     if (e.key === "/" && loupe === null) {
       e.preventDefault();
       searchInput?.focus();
@@ -567,6 +579,14 @@
         disabled={selectedIds.length === 0}
         title="Analyze the selected photos again (quality, series, faces and AI scores)"
       />
+      {#if inFolder}
+        <button
+          class="small"
+          onclick={() => (finishing = true)}
+          title="Label the auto-picked photos and write every sidecar"
+          data-testid="open-finish">Finish folder…</button
+        >
+      {/if}
       <RejectsMove
         rejected={store.facets.flags.find((f) => f.flag === "reject")?.count ??
           0}
@@ -659,6 +679,14 @@
     </div>
     {#if tour && store.total > 0 && loupe === null && !compare && !exporting}
       <Tour steps={CULLING_TOUR} onend={() => ontourend?.()} />
+    {/if}
+    {#if finishing}
+      <FinishDialog
+        {autoLabel}
+        onclose={() => (finishing = false)}
+        onexport={() => (exporting = true)}
+        {onnextfolder}
+      />
     {/if}
     {#if exporting}
       <ExportDialog

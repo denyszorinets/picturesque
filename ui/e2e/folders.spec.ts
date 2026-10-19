@@ -55,6 +55,14 @@ test("culls a folder in place and goes back to the library", async ({
     )
     .toBe(true);
 
+  // Finishing writes every sidecar and labels the auto-picks.
+  await page.getByTestId("open-finish").click();
+  await page.getByTestId("finish-go").click();
+  await expect(page.getByTestId("finish-result")).toContainText(
+    "every decision is in the XMP sidecars",
+  );
+  await page.getByRole("button", { name: "Done" }).click();
+
   // Back to the library; the folder is in the recent list.
   await switcher.click();
   await page.getByTestId("open-library").click();

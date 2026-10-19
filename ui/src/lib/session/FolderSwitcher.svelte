@@ -8,11 +8,17 @@
     settings: Settings;
     /** Called with the new session's settings after switching. */
     onswitch: (settings: Settings) => void;
+    /** Whether the menu is open. */
+    open?: boolean;
   }
 
-  let { settings, onswitch }: Props = $props();
+  let { settings, onswitch, open = $bindable(false) }: Props = $props();
 
-  let open = $state(false);
+  /** A switch waiting for an answer: auto-pick labels are not written. */
+  let confirming = $state<{
+    labels: number;
+    change: () => Promise<Settings>;
+  } | null>(null);
   let busy = $state(false);
   let error = $state<string | null>(null);
   /** The path field, where no folder dialog is available (a browser). */
@@ -24,11 +30,32 @@
     settings.recent_folders.filter((f) => f.path !== settings.open_folder),
   );
 
-  async function run(change: () => Promise<Settings>) {
+  /**
+   * Leaving a folder whose auto-picked photos lack their label: ask first
+   * (labels are written only when a folder is finished).
+   */
+  async function leave(change: () => Promise<Settings>) {
+    if (settings.open_folder && settings.labels.auto_pick) {
+      try {
+        const status = await api.finishStatus();
+        if (status.labels_to_write > 0) {
+          confirming = { labels: status.labels_to_write, change };
+          return;
+        }
+      } catch {
+        // Unknown: switch anyway; decisions are in their sidecars.
+      }
+    }
+    await run(change);
+  }
+
+  async function run(change: () => Promise<Settings>, finishFirst = false) {
     busy = true;
     error = null;
     try {
+      if (finishFirst) await api.finishFolder();
       const next = await change();
+      confirming = null;
       open = false;
       typing = false;
       draft = "";
@@ -50,7 +77,7 @@
       return;
     }
     const [path] = picked;
-    if (path) await run(() => api.openFolder(path));
+    if (path) await leave(() => api.openFolder(path));
   }
 
   function onwindowclick(e: MouseEvent) {
@@ -97,7 +124,7 @@
         role="menuitemradio"
         aria-checked={!settings.open_folder}
         disabled={busy || !settings.open_folder}
-        onclick={() => void run(api.openLibrary)}
+        onclick={() => void leave(api.openLibrary)}
         data-testid="open-library"
       >
         <span class="check">{settings.open_folder ? "" : "✓"}</span>
@@ -127,7 +154,7 @@
             aria-checked="false"
             disabled={busy}
             title={folder.path}
-            onclick={() => void run(() => api.openFolder(folder.path))}
+            onclick={() => void leave(() => api.openFolder(folder.path))}
             data-testid="recent-folder"
           >
             <span class="check"></span>
@@ -145,13 +172,13 @@
             label="Folder to cull in place"
             bind:value={draft}
             onsubmit={(path) =>
-              path.trim() && void run(() => api.openFolder(path.trim()))}
+              path.trim() && void leave(() => api.openFolder(path.trim()))}
             testid="open-folder-path"
           />
           <button
             class="primary small"
             disabled={busy || !draft.trim()}
-            onclick={() => void run(() => api.openFolder(draft.trim()))}
+            onclick={() => void leave(() => api.openFolder(draft.trim()))}
             data-testid="open-folder-go">Open</button
           >
         </div>
@@ -171,6 +198,36 @@
             >
           </span>
         </button>
+      {/if}
+      {#if confirming}
+        {@const pending = confirming}
+        <div class="confirm" role="alert" data-testid="switch-confirm">
+          <p>
+            {pending.labels}
+            {pending.labels === 1 ? "photo" : "photos"} in this folder
+            {pending.labels === 1 ? "has" : "have"} not got
+            {pending.labels === 1 ? "its" : "their"} auto-pick label yet.
+          </p>
+          <div class="confirm-actions">
+            <button
+              class="primary small"
+              disabled={busy}
+              onclick={() => void run(pending.change, true)}
+              data-testid="switch-finish">Write labels, then switch</button
+            >
+            <button
+              class="small"
+              disabled={busy}
+              onclick={() => void run(pending.change)}
+              data-testid="switch-anyway">Switch without</button
+            >
+            <button
+              class="small"
+              disabled={busy}
+              onclick={() => (confirming = null)}>Cancel</button
+            >
+          </div>
+        </div>
       {/if}
       {#if busy}<p class="muted small status">Opening…</p>{/if}
       {#if error}<p class="error-text small status" role="alert">
@@ -295,5 +352,23 @@
 
   .status {
     margin: 0.3rem 0.5rem;
+  }
+
+  .confirm {
+    margin: 0.4rem;
+    padding: 0.6rem;
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--warn) 14%, transparent);
+    font-size: 0.85rem;
+  }
+
+  .confirm p {
+    margin: 0 0 0.5rem;
+  }
+
+  .confirm-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
   }
 </style>

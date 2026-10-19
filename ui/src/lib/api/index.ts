@@ -1,6 +1,8 @@
 import type { AiStatus } from "./generated/AiStatus";
 import type { AnalysisStatus } from "./generated/AnalysisStatus";
 import type { SidecarStatus } from "./generated/SidecarStatus";
+import type { FinishResult } from "./generated/FinishResult";
+import type { FinishStatus } from "./generated/FinishStatus";
 import type { ModelView } from "./generated/ModelView";
 import type { ExportArgs } from "./generated/ExportArgs";
 import type { ExportStatus } from "./generated/ExportStatus";
@@ -70,6 +72,8 @@ export type { SeriesView } from "./generated/SeriesView";
 export type { Settings } from "./generated/Settings";
 export type { RecentFolder } from "./generated/RecentFolder";
 export type { ColorLabel } from "./generated/ColorLabel";
+export type { FinishResult } from "./generated/FinishResult";
+export type { FinishStatus } from "./generated/FinishStatus";
 export type { LabelSettings } from "./generated/LabelSettings";
 export type { SidecarStatus } from "./generated/SidecarStatus";
 export type { SettingsUpdate } from "./generated/SettingsUpdate";
@@ -109,6 +113,19 @@ export function updateSettings(update: SettingsUpdate): Promise<Settings> {
  */
 export function openFolder(path: string): Promise<Settings> {
   return transport.call<Settings>("open_folder", { path });
+}
+
+/** What finishing the folder would do. */
+export function finishStatus(): Promise<FinishStatus> {
+  return transport.call<FinishStatus>("finish_status");
+}
+
+/**
+ * Gives auto-picked photos the auto-pick colour label and writes every
+ * pending sidecar.
+ */
+export function finishFolder(): Promise<FinishResult> {
+  return transport.call<FinishResult>("finish_folder");
 }
 
 /** Goes back to the library from a folder culled in place. */

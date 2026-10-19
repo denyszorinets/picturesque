@@ -76,6 +76,8 @@ pub struct DirtyDecision {
     pub id: PhotoId,
     pub decision: Decision,
     pub token: String,
+    /// Whether the photo gets the auto-pick label while unflagged.
+    pub auto_labeled: bool,
 }
 
 /// Stores and retrieves photos.
@@ -121,6 +123,14 @@ pub trait PhotoCatalog: Send + Sync {
     /// Decisions changed since their sidecar was last written, with a token
     /// identifying the change.
     fn dirty_decisions(&self) -> Result<Vec<DirtyDecision>, CatalogError>;
+
+    /// Photos marked to carry the auto-pick label.
+    fn auto_labeled(&self) -> Result<HashSet<PhotoId>, CatalogError>;
+
+    /// Marks exactly `ids` (photos without a decision get the default one)
+    /// to carry the auto-pick label; photos whose mark changes get their
+    /// sidecars rewritten. Returns how many changed.
+    fn set_auto_labeled(&self, ids: &[PhotoId]) -> Result<usize, CatalogError>;
 
     /// Records that the sidecar reflects the change identified by `token`.
     /// Does nothing if the decision changed again meanwhile.

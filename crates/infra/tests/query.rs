@@ -366,6 +366,38 @@ fn decisions_read_from_sidecars_are_not_written_back() {
 }
 
 #[test]
+fn auto_labels_mark_exactly_the_given_photos_and_dirty_the_changes() {
+    let c = sample();
+    for d in c.dirty_decisions().unwrap() {
+        c.mark_sidecar_written(d.id, &d.token).unwrap();
+    }
+
+    // Photo 6 has no decision yet: it gets the default one.
+    assert_eq!(c.set_auto_labeled(&[PhotoId(1), PhotoId(6)]).unwrap(), 2);
+    assert_eq!(
+        c.auto_labeled().unwrap(),
+        [PhotoId(1), PhotoId(6)].into_iter().collect()
+    );
+    let dirty = c.dirty_decisions().unwrap();
+    assert_eq!(
+        dirty
+            .iter()
+            .map(|d| (d.id, d.auto_labeled))
+            .collect::<Vec<_>>(),
+        [(PhotoId(1), true), (PhotoId(6), true)]
+    );
+    for d in dirty {
+        c.mark_sidecar_written(d.id, &d.token).unwrap();
+    }
+
+    // Unchanged marks stay clean; a removed one is dirty again.
+    assert_eq!(c.set_auto_labeled(&[PhotoId(6)]).unwrap(), 1);
+    let dirty = c.dirty_decisions().unwrap();
+    assert_eq!(dirty.len(), 1);
+    assert_eq!((dirty[0].id, dirty[0].auto_labeled), (PhotoId(1), false));
+}
+
+#[test]
 fn summaries_carry_what_the_grid_needs() {
     let c = sample();
     c.set_dimensions(PhotoId(2), 6000, 4000).unwrap();
