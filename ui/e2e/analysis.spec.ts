@@ -29,7 +29,9 @@ test("analyzes photos in the background and shows their quality", async ({
     .toBe(true);
 
   await page.goto("/");
-  await expect(page.getByTestId("analysis-progress")).toBeHidden();
+  await expect(page.getByTestId("activity-ring-label")).toHaveText(
+    "Up to date",
+  );
   await page.locator("[data-photo-id]").first().dblclick();
   await expect(page.getByTestId("loupe-quality")).toContainText(
     /Sharpness \d+% · Exposure \d+% · Low noise \d+%/,
