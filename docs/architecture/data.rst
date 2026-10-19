@@ -22,8 +22,8 @@ Picturesque keeps three kinds of data:
        ``catalog.sqlite``
        (:doc:`ADR-0013 </architecture/decisions/0013-folder-sessions>`)
    * - Caches
-     - App cache directory (``sessions/<hash>/`` for a folder session)
-     - Thumbnails and previews (always rebuildable)
+     - App cache directory, shared by the library and folder sessions
+     - Thumbnails and previews, by content hash (always rebuildable)
 
 The catalog is the source of truth for decisions inside Picturesque. XMP
 sidecars are written from it

@@ -42,10 +42,10 @@ time.
 
 - **One catalog per folder.** A session's catalog is
   ``sessions/<hash>.sqlite`` in the app data directory, where ``<hash>`` is
-  derived from the folder's absolute path; its thumbnail cache is
-  ``sessions/<hash>/`` in the cache directory. The library keeps
-  ``catalog.sqlite`` and the existing cache. The schema is the same, so
-  every use case works unchanged on either.
+  derived from the folder's absolute path. The library keeps
+  ``catalog.sqlite``. The schema is the same, so every use case works
+  unchanged on either. Thumbnails and previews are cached by content hash,
+  so all sessions share one cache.
 - **One ``Api`` per session.** Opening a folder builds a new ``Api`` over
   that catalog and starts its background work; the previous ``Api`` is
   shut down first (pending sidecars are written, then every worker stops).
@@ -67,8 +67,8 @@ time.
   :doc:`ADR-0009 <0009-xmp-sidecars-for-culling-decisions>` and the
   "sources are only read" rule of
   :doc:`ADR-0008 <0008-non-destructive-verified-import>` for sessions).
-- **Pruning.** At startup, session catalogs and caches not opened for 30
-  days are deleted. The folders and their sidecars are never touched by
+- **Pruning.** At startup, session catalogs not opened for 30 days are
+  deleted. The folders and their sidecars are never touched by
   pruning.
 
 Alternatives Considered
@@ -152,7 +152,7 @@ Positive
 - Library mode is unchanged.
 - Folder sessions get import, analysis, series, auto-pick, culling,
   sidecars, export and statistics without per-feature work.
-- Deleting a session is deleting two paths.
+- Deleting a session is deleting one file.
 
 Negative
 ~~~~~~~~
