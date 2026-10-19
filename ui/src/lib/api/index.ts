@@ -69,6 +69,8 @@ export type { SeriesEditView } from "./generated/SeriesEditView";
 export type { SeriesView } from "./generated/SeriesView";
 export type { Settings } from "./generated/Settings";
 export type { RecentFolder } from "./generated/RecentFolder";
+export type { ColorLabel } from "./generated/ColorLabel";
+export type { LabelSettings } from "./generated/LabelSettings";
 export type { SidecarStatus } from "./generated/SidecarStatus";
 export type { SettingsUpdate } from "./generated/SettingsUpdate";
 export type { TemplatePresetView } from "./generated/TemplatePresetView";

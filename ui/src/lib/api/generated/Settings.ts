@@ -2,6 +2,7 @@
 import type { AiSettings } from "./AiSettings";
 import type { AutoPickSettings } from "./AutoPickSettings";
 import type { ImportSettings } from "./ImportSettings";
+import type { LabelSettings } from "./LabelSettings";
 import type { OnboardingSettings } from "./OnboardingSettings";
 import type { RankingSettings } from "./RankingSettings";
 import type { RecentFolder } from "./RecentFolder";
@@ -58,4 +59,8 @@ open_folder: string | null,
 /**
  * Folders culled in place, most recently opened first.
  */
-recent_folders: Array<RecentFolder>, };
+recent_folders: Array<RecentFolder>, 
+/**
+ * Colour labels written to sidecars.
+ */
+labels: LabelSettings, };

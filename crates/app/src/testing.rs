@@ -1289,9 +1289,12 @@ impl crate::ports::sidecars::SidecarStore for MemorySidecars {
     fn write(
         &self,
         path: &Path,
-        decision: picturesque_core::decision::Decision,
+        values: crate::ports::sidecars::SidecarValues,
     ) -> Result<(ContentHash, u64), String> {
-        self.0.lock().unwrap().insert(path.to_path_buf(), decision);
+        self.0
+            .lock()
+            .unwrap()
+            .insert(path.to_path_buf(), values.decision);
         Ok((fake_hash(path.to_string_lossy().as_bytes()), 1))
     }
 }
