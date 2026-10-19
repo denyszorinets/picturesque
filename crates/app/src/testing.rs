@@ -388,6 +388,8 @@ pub struct MemoryCatalog {
     pub revisions: Mutex<HashMap<PhotoId, (u64, Option<u64>)>>,
     /// Photos marked to carry the auto-pick label.
     pub auto_labeled: Mutex<StdHashSet<PhotoId>>,
+    /// Verified copies out of a folder session.
+    pub copies: Mutex<Vec<crate::ports::catalog::CopyRecord>>,
     /// (photo, analyzer) → (version, result).
     pub analysis: Mutex<HashMap<(PhotoId, String), (u32, serde_json::Value)>>,
     /// Results marked for analysis again.
@@ -647,6 +649,22 @@ impl PhotoCatalog for MemoryCatalog {
             .collect();
         dirty.sort_by_key(|d| d.id);
         Ok(dirty)
+    }
+
+    fn record_copies(
+        &self,
+        copies: &[crate::ports::catalog::CopyRecord],
+    ) -> Result<(), CatalogError> {
+        let mut stored = self.copies.lock().unwrap();
+        for copy in copies {
+            stored.retain(|c| !(c.photo_id == copy.photo_id && c.source == copy.source));
+            stored.push(copy.clone());
+        }
+        Ok(())
+    }
+
+    fn copies(&self) -> Result<Vec<crate::ports::catalog::CopyRecord>, CatalogError> {
+        Ok(self.copies.lock().unwrap().clone())
     }
 
     fn auto_labeled(&self) -> Result<StdHashSet<PhotoId>, CatalogError> {

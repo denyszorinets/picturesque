@@ -9,7 +9,10 @@ print or edit them elsewhere. The library is not changed.
 What to export
 --------------
 
-- **Picks** (default): every photo flagged as a pick.
+- **Keepers**: picks, and photos auto-pick suggests keeping
+  (:ref:`features-library-auto-pick`). The default when a folder is open.
+- **Picks** (default in the library): every photo flagged as a pick.
+- **Everything except rejects**: picks and unflagged photos.
 - **Photos in view**: the photos the timeline shows with the current
   filters, or the results of a text search.
 - **Selected**: the photos selected in the timeline.
@@ -20,9 +23,14 @@ Files
 -----
 
 - **Originals, unchanged**: the photo's files exactly as imported. With
-  **RAW files too**, both files of a RAW+JPEG pair are copied; with **XMP
-  sidecars**, the sidecars holding your ratings and flags come along, so
-  other tools see them.
+  **RAW files too**, both files of a RAW+JPEG pair are copied. With **XMP
+  sidecars**, every copied file gets a sidecar holding the photo's current
+  rating, flag and colour label (:ref:`features-library-sidecars`), named
+  as set in :ref:`reference-settings-sidecar-naming`; sidecars the photo
+  already has are copied and updated, keeping what other tools stored in
+  them. A photo without a decision or label gets no new sidecar. Copies
+  are complete even when the originals' sidecars could not be written (a
+  read-only card).
 - **JPEG**: one JPEG per photo, rendered from the JPEG or RAW file,
   upright, at **full size** or with its longest edge at most 4096, 2048 or
   1024 pixels (never enlarged), at the chosen quality (default 90). The

@@ -213,6 +213,7 @@ impl Api {
             Arc::clone(&ctx.pixels),
             Arc::clone(&ctx.settings_store),
             Arc::clone(&events) as Arc<dyn EventSink>,
+            Arc::clone(&ctx.sidecars),
         ));
         let analysis = Arc::new(AnalysisService::new(
             Arc::clone(&ctx.catalog),

@@ -84,6 +84,26 @@ lack their label, the folder menu asks: **Write labels, then switch**,
 **Switch without**, or **Cancel**. Your decisions are in their sidecars
 either way.
 
+.. _features-folders-copy:
+
+Copying the keepers
+-------------------
+
+To keep only the photos you want, for example from a memory card into
+the folder darktable imports from, click **Copy keepers…** (also offered
+after **Finish folder…**). It is :doc:`export` with these defaults:
+
+- **Keepers**: picks and auto-picked photos (or **Everything except
+  rejects**);
+- the original files, RAW too, each with an XMP sidecar holding its
+  decision and colour label;
+- every copy verified against the original; the folder and names are
+  remembered for next time.
+
+Picturesque remembers which photos were copied where, so the folder can
+later be cleared of exactly those (:doc:`ADR-0014
+</architecture/decisions/0014-optional-source-deletion>`).
+
 Switching folders and back to the library
 -----------------------------------------
 

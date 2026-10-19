@@ -576,8 +576,11 @@
       <button
         class="small"
         onclick={() => (exporting = true)}
-        title="Copy picks, the photos in view or the selection to a folder"
-        data-testid="open-export">Export…</button
+        title={inFolder
+          ? "Copy the keepers to another folder, verified, with their sidecars"
+          : "Copy picks, the photos in view or the selection to a folder"}
+        data-testid="open-export"
+        >{inFolder ? "Copy keepers…" : "Export…"}</button
       >
       <Reanalyze
         reanalyze={api.reanalyzePhotos}
@@ -704,6 +707,11 @@
         viewCount={store.total}
         selected={selectedIds}
         picks={store.facets.flags.find((f) => f.flag === "pick")?.count ?? 0}
+        autoPicked={store.facets.auto_picked}
+        notRejected={store.facets.flags
+          .filter((f) => f.flag !== "reject")
+          .reduce((n, f) => n + f.count, 0)}
+        {inFolder}
         onclose={() => (exporting = false)}
       />
     {/if}
