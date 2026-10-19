@@ -8,13 +8,14 @@ use picturesque_core::hash::ContentHash;
 use picturesque_core::media::MediaFormat;
 use picturesque_core::photo::{Asset, NewPhoto, PhotoAssets, PhotoId};
 
-use super::{SidecarService, sidecar_path};
+use super::{SidecarService, SidecarStatus, sidecar_path};
 use crate::ports::catalog::PhotoCatalog;
+use crate::ports::events::AppEvent;
 use crate::ports::settings::SettingsStore;
 use crate::ports::sidecars::SidecarStore;
 use crate::settings::tests::MemorySettings;
 use crate::settings::{Settings, SidecarNaming};
-use crate::testing::MemoryCatalog;
+use crate::testing::{MemoryCatalog, RecordedEvents};
 
 #[derive(Default)]
 struct FakeSidecars {
@@ -61,6 +62,7 @@ struct World {
     catalog: Arc<MemoryCatalog>,
     store: Arc<FakeSidecars>,
     service: Arc<SidecarService>,
+    events: Arc<RecordedEvents>,
 }
 
 fn world(store: FakeSidecars, naming: SidecarNaming) -> World {
@@ -74,15 +76,18 @@ fn world(store: FakeSidecars, naming: SidecarNaming) -> World {
         })
         .unwrap();
     let store = Arc::new(store);
+    let events = Arc::new(RecordedEvents::default());
     let service = Arc::new(SidecarService::new(
         catalog.clone(),
         settings,
         store.clone(),
+        events.clone(),
     ));
     World {
         catalog,
         store,
         service,
+        events,
     }
 }
 
@@ -227,4 +232,62 @@ fn the_worker_writes_once_after_a_burst_of_changes() {
         1,
         "debounced into one write"
     );
+}
+
+#[test]
+fn status_counts_pending_and_failed_sidecars() {
+    let w = world(
+        FakeSidecars {
+            broken: vec!["/lib/b.JPG.xmp".into()],
+            ..Default::default()
+        },
+        SidecarNaming::FileExtension,
+    );
+    let ok = add(&w.catalog, vec![asset("a.JPG", 1)]);
+    let bad = add(&w.catalog, vec![asset("b.JPG", 2)]);
+    w.catalog.set_decision(ok, d(Flag::Pick, 0)).unwrap();
+    w.catalog.set_decision(bad, d(Flag::Pick, 0)).unwrap();
+
+    let before = w.service.status();
+    w.service.flush();
+    let after = w.service.status();
+
+    assert_eq!(
+        before,
+        SidecarStatus {
+            pending: 2,
+            failed: 0,
+            error: None,
+            folder: Some("/lib".into()),
+        }
+    );
+    assert_eq!(after.pending, 1, "the failed one is retried later");
+    assert_eq!(after.failed, 1);
+    assert_eq!(
+        after.error.as_deref(),
+        Some("cannot parse existing sidecar")
+    );
+}
+
+#[test]
+fn notify_and_flush_report_progress() {
+    let w = world(FakeSidecars::default(), SidecarNaming::FileExtension);
+    let id = add(&w.catalog, vec![asset("a.JPG", 1)]);
+    w.catalog.set_decision(id, d(Flag::Pick, 0)).unwrap();
+
+    w.service.notify();
+    w.service.flush();
+
+    let pending: Vec<usize> = w
+        .events
+        .0
+        .lock()
+        .unwrap()
+        .iter()
+        .filter_map(|e| match e {
+            AppEvent::SidecarProgress(s) => Some(s.pending),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(pending, [1, 0]);
 }

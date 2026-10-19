@@ -225,6 +225,14 @@ Commands
    Removing a model while it downloads is ``invalid_arguments``; unknown
    models are ``not_found``.
 
+``sidecar_status``
+   No arguments. ``{ "pending": 0, "failed": 0, "error": null, "folder":
+   "/home/me/Pictures/Clean" }``: photos whose XMP sidecar does not yet
+   hold their latest decision, photos whose sidecar could not be written
+   on the latest attempt (with the first reason), and the folder sidecars
+   are written in (``null`` before a library is chosen). See
+   :ref:`features-library-sidecars`.
+
 ``analysis_status``
    No arguments. ``{ "analyzed": 120, "total": 300, "running": true,
    "paused": null, "waiting_for_models": ["AI scores and similar photos"]
@@ -358,6 +366,10 @@ events from ``GET /api/events``.
 
 ``analysis_progress``
    The ``analysis_status``, sent after each analyzed photo.
+
+``sidecar_progress``
+   The ``sidecar_status``, sent when decisions change and after each
+   batch of sidecars is written.
 
 ``series_changed``
    ``{ "series": 12, "photos": 57 }``: series membership changed (after

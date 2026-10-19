@@ -1,5 +1,6 @@
 import type { AiStatus } from "./generated/AiStatus";
 import type { AnalysisStatus } from "./generated/AnalysisStatus";
+import type { SidecarStatus } from "./generated/SidecarStatus";
 import type { ModelView } from "./generated/ModelView";
 import type { ExportArgs } from "./generated/ExportArgs";
 import type { ExportStatus } from "./generated/ExportStatus";
@@ -67,10 +68,16 @@ export type { CameraKey } from "./generated/CameraKey";
 export type { SeriesEditView } from "./generated/SeriesEditView";
 export type { SeriesView } from "./generated/SeriesView";
 export type { Settings } from "./generated/Settings";
+export type { SidecarStatus } from "./generated/SidecarStatus";
 export type { SettingsUpdate } from "./generated/SettingsUpdate";
 export type { TemplatePresetView } from "./generated/TemplatePresetView";
 export type { TemplatePreview } from "./generated/TemplatePreview";
-export { canPickFolders, pickFolders } from "./dialogs";
+export {
+  canPickFolders,
+  canReveal,
+  pickFolders,
+  revealInFolder,
+} from "./dialogs";
 export type { ImageSize } from "./transport";
 
 const transport = selectTransport();
@@ -215,6 +222,11 @@ export function reanalyzePhotos(photoIds?: number[]): Promise<ReanalyzeResult> {
     "reanalyze_photos",
     photoIds ? { photo_ids: photoIds } : undefined,
   );
+}
+
+/** Whether decisions have been written to their XMP sidecars. */
+export function sidecarStatus(): Promise<SidecarStatus> {
+  return transport.call<SidecarStatus>("sidecar_status");
 }
 
 /** How many photos background analysis has finished. */

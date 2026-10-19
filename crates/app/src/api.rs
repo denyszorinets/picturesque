@@ -258,6 +258,7 @@ impl Api {
             Arc::clone(&ctx.catalog),
             Arc::clone(&ctx.settings_store),
             Arc::clone(&ctx.sidecars),
+            Arc::clone(&events) as Arc<dyn EventSink>,
         ));
         let search = TextSearch::new(
             Arc::clone(&models),
@@ -537,6 +538,7 @@ impl Api {
             "set_decisions" => {
                 let SetDecisionsArgs { changes } = parse_args(command, args)?;
                 let decisions = self.set_decisions(&changes)?;
+                self.sidecars.notify();
                 // Rejected photos are never chosen as best.
                 self.series.notify();
                 respond(decisions)
@@ -725,6 +727,10 @@ impl Api {
             "ai_status" => {
                 no_args(command, &args)?;
                 respond(self.ai.status().map_err(catalog_error)?)
+            }
+            "sidecar_status" => {
+                no_args(command, &args)?;
+                respond(self.sidecars.status())
             }
             "analysis_status" => {
                 no_args(command, &args)?;
@@ -1048,6 +1054,26 @@ mod tests {
             assert_eq!(
                 result,
                 json!([{ "photo_id": 1, "flag": "pick", "rating": 4 }, { "photo_id": 2, "flag": "reject", "rating": 0 }])
+            );
+        }
+
+        #[test]
+        fn deciding_wakes_the_sidecar_writer() {
+            let (api, world) = api_with_photos(1);
+
+            api.call(
+                "set_decisions",
+                json!({ "changes": [{ "photo_id": 1, "flag": "pick" }] }),
+            )
+            .unwrap();
+
+            let events = world.events.0.lock().unwrap();
+            assert!(
+                events.iter().any(|e| matches!(
+                    e,
+                    crate::ports::events::AppEvent::SidecarProgress(s) if s.pending == 1
+                )),
+                "a decision reports a pending sidecar"
             );
         }
 

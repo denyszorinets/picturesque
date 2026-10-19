@@ -1,6 +1,7 @@
 <script lang="ts">
   import * as api from "../api";
   import { AnalysisProgress } from "./analysis.svelte";
+  import { SidecarProgress } from "./sidecars.svelte";
   import Compare from "./Compare.svelte";
   import ExportDialog from "./ExportDialog.svelte";
   import Reanalyze from "../analysis/Reanalyze.svelte";
@@ -50,6 +51,7 @@
 
   const filters = new Filters();
   const analysis = new AnalysisProgress(api);
+  const sidecars = new SidecarProgress(api);
   let showFilters = $state(true);
 
   /** The search box's text; searching starts on Enter. */
@@ -409,12 +411,14 @@
 
   $effect(() => {
     void analysis.load();
+    void sidecars.load();
     const unsubscribe = api.onAppEvent((event) => {
       if (event.type === "pipeline_progress") {
         if (event.imported !== lastImported) photosImported();
         lastImported = event.imported;
       } else if (event.type === "series_changed") void store.refresh();
       analysis.handle(event);
+      sidecars.handle(event);
     });
     return () => {
       unsubscribe();
@@ -585,6 +589,23 @@
           >Analyzing {analysis.status.analyzed} / {analysis.status.total}</span
         >
       {/if}
+      {#if sidecars.label}
+        {@const folder = sidecars.status?.folder}
+        {#if api.canReveal() && folder}
+          <button
+            class="link sidecars {sidecars.label.tone}"
+            onclick={() => void api.revealInFolder(folder)}
+            title={`${sidecars.label.title}. Click to open the folder.`}
+            data-testid="sidecar-status">{sidecars.label.text}</button
+          >
+        {:else}
+          <span
+            class="sidecars {sidecars.label.tone}"
+            title={sidecars.label.title}
+            data-testid="sidecar-status">{sidecars.label.text}</span
+          >
+        {/if}
+      {/if}
       {#if analysis.status && analysis.status.waiting_for_models.length > 0}
         <button
           class="link"
@@ -678,6 +699,7 @@
     {#if loupe !== null}
       <Loupe
         {store}
+        libraryFolder={sidecars.status?.folder ?? null}
         index={loupe}
         onnavigate={(i) => {
           loupe = i;
@@ -784,6 +806,24 @@
   .paused {
     color: var(--warn);
     font-size: 0.9rem;
+  }
+
+  .sidecars {
+    font-size: 0.85rem;
+    white-space: nowrap;
+  }
+
+  .sidecars.ok {
+    color: var(--accent);
+  }
+
+  .sidecars.busy {
+    color: var(--muted);
+  }
+
+  .sidecars.error {
+    color: var(--danger);
+    font-weight: 600;
   }
 
   .empty {

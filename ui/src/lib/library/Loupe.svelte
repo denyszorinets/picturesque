@@ -1,5 +1,13 @@
 <script lang="ts">
-  import { ApiError, getPhoto, imageUrl, type PhotoDetail } from "../api";
+  import {
+    ApiError,
+    canReveal,
+    getPhoto,
+    imageUrl,
+    revealInFolder,
+    type PhotoDetail,
+  } from "../api";
+  import { joinPath } from "./sidecars.svelte";
   import type { LibraryStore } from "./store.svelte";
 
   type Flag = "pick" | "reject" | "unflagged";
@@ -15,6 +23,8 @@
     onrate?: (rating: number) => void;
     /** Move to the next photo after every decision. */
     autoAdvance?: boolean;
+    /** The library folder, to show files in the file manager. */
+    libraryFolder?: string | null;
   }
 
   let {
@@ -25,6 +35,7 @@
     onflag,
     onrate,
     autoAdvance = $bindable(false),
+    libraryFolder = null,
   }: Props = $props();
 
   /** Runs a toolbar action and gives the keyboard back to the shortcuts. */
@@ -374,6 +385,16 @@
               <div class="file">
                 <code>{file.path}</code>
                 <span class="muted">{bytes(file.size)}</span>
+                {#if libraryFolder && canReveal()}
+                  {@const folder = libraryFolder}
+                  <button
+                    class="link"
+                    onclick={() =>
+                      void revealInFolder(joinPath(folder, file.path))}
+                    title="Show this file in the file manager"
+                    data-testid="reveal-file">Show in folder</button
+                  >
+                {/if}
               </div>
             {/each}
           </dd>
