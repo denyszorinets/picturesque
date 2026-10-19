@@ -6,6 +6,7 @@
   import Compare from "./Compare.svelte";
   import ExportDialog from "./ExportDialog.svelte";
   import FinishDialog from "../session/FinishDialog.svelte";
+  import DarktableNote from "../session/DarktableNote.svelte";
   import Reanalyze from "../analysis/Reanalyze.svelte";
   import { waitingNote } from "../analysis/models";
   import Tour from "../tour/Tour.svelte";
@@ -459,6 +460,12 @@
         <button class="primary" onclick={() => onsetup?.()}
           >Set up Picturesque</button
         >
+      {:else if inFolder}
+        <h2>No photos in this folder</h2>
+        <p class="muted">
+          Photos in this folder and its subfolders appear here; new ones too, as
+          they arrive. Open another folder from the folder menu at the top left.
+        </p>
       {:else}
         <h2>No photos yet</h2>
         <p class="muted">
@@ -471,6 +478,7 @@
       {/if}
     </div>
   {:else if store.facets}
+    {#if inFolder}<DarktableNote />{/if}
     <div class="bar">
       <button
         class="small"

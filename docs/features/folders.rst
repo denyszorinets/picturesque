@@ -107,6 +107,8 @@ Settings apply everywhere, except the library folder and its folder
 structure, which only apply to the library. While a folder is open,
 **Settings** says so instead of showing them.
 
+Using it with darktable: :doc:`/getting-started/darktable`.
+
 Limitations
 -----------
 
