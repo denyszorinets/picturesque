@@ -80,6 +80,9 @@ export const SHORTCUTS: ShortcutGroup[] = [
 
 const DOCS = "https://denyszorinets.github.io/picturesque/docs";
 
+/** The darktable guide, also linked when a folder is opened. */
+export const DARKTABLE_GUIDE = `${DOCS}/getting-started/darktable.html`;
+
 /** Guides opened in the browser from Help. */
 export const GUIDES: { label: string; url: string }[] = [
   {
@@ -87,6 +90,10 @@ export const GUIDES: { label: string; url: string }[] = [
     url: `${DOCS}/getting-started/first-import.html`,
   },
   { label: "Your first cull", url: `${DOCS}/getting-started/first-cull.html` },
+  {
+    label: "Using Picturesque with darktable",
+    url: DARKTABLE_GUIDE,
+  },
   { label: "Documentation", url: `${DOCS}/` },
   {
     label: "Report a problem",
