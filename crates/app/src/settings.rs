@@ -14,6 +14,7 @@ use crate::ports::catalog::{CatalogError, PhotoCatalog};
 use crate::ports::fs::FileSystem;
 use crate::ports::inference::ProviderChoice;
 use crate::ports::settings::SettingsStore;
+use crate::ports::sidecars::ColorLabel;
 
 /// Folder structure used until the user picks another template (the first
 /// preset): `2026/2026-10-12/IMG_0042.CR3`.
@@ -51,6 +52,29 @@ pub struct Settings {
     pub open_folder: Option<PathBuf>,
     /// Folders culled in place, most recently opened first.
     pub recent_folders: Vec<RecentFolder>,
+    /// Colour labels written to sidecars.
+    pub labels: LabelSettings,
+}
+
+/// Colour labels written to XMP sidecars, so tools without a pick flag
+/// (darktable) show picks (`docs/reference/settings.rst`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(default)]
+#[ts(export)]
+pub struct LabelSettings {
+    /// For picks; `None` writes no label.
+    pub pick: Option<ColorLabel>,
+    /// For auto-picked photos, written when a folder is finished.
+    pub auto_pick: Option<ColorLabel>,
+}
+
+impl Default for LabelSettings {
+    fn default() -> Self {
+        Self {
+            pick: Some(ColorLabel::Green),
+            auto_pick: Some(ColorLabel::Yellow),
+        }
+    }
 }
 
 /// A folder culled in place, for the list of recent folders.
@@ -212,6 +236,7 @@ impl Default for Settings {
             onboarding: OnboardingSettings::default(),
             open_folder: None,
             recent_folders: Vec::new(),
+            labels: LabelSettings::default(),
         }
     }
 }
@@ -239,6 +264,8 @@ pub struct SettingsUpdate {
     pub auto_pick: Option<AutoPickSettings>,
     #[ts(optional)]
     pub onboarding: Option<OnboardingSettings>,
+    #[ts(optional)]
+    pub labels: Option<LabelSettings>,
 }
 
 /// Why settings could not be read or changed.
@@ -379,6 +406,9 @@ impl SettingsService {
         }
         if let Some(onboarding) = update.onboarding {
             settings.onboarding = onboarding;
+        }
+        if let Some(labels) = update.labels {
+            settings.labels = labels;
         }
         self.store.save_settings(&settings)?;
         Ok(settings)

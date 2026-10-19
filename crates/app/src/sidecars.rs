@@ -17,8 +17,8 @@ use ts_rs::TS;
 use crate::ports::catalog::PhotoCatalog;
 use crate::ports::events::{AppEvent, EventSink};
 use crate::ports::settings::SettingsStore;
-use crate::ports::sidecars::SidecarStore;
-use crate::settings::SidecarNaming;
+use crate::ports::sidecars::{ColorLabel, SidecarStore, SidecarValues};
+use crate::settings::{Settings, SidecarNaming};
 
 /// How long to wait after the last change before writing.
 pub const DEBOUNCE: Duration = Duration::from_millis(750);
@@ -123,6 +123,18 @@ pub fn sidecar_paths(photo: &Photo, naming: SidecarNaming, every_file: bool) -> 
     paths
 }
 
+/// The colour label a decision gets in its sidecars: the pick label for
+/// picks (`docs/reference/settings.rst`).
+fn label_for(
+    decision: picturesque_core::decision::Decision,
+    settings: &Settings,
+) -> Option<ColorLabel> {
+    match decision.flag {
+        picturesque_core::decision::Flag::Pick => settings.labels.pick,
+        _ => None,
+    }
+}
+
 impl SidecarService {
     pub fn new(
         catalog: Arc<dyn PhotoCatalog>,
@@ -178,18 +190,16 @@ impl SidecarService {
         ) else {
             return report;
         };
-        let Some(root) = settings.library_root else {
+        let Some(root) = settings.library_root.clone() else {
             return report;
         };
         let every_file = settings.open_folder.is_some();
         for item in dirty {
-            match self.write_one(
-                &root,
-                item.id,
-                item.decision,
-                settings.sidecar_naming,
-                every_file,
-            ) {
+            let values = SidecarValues {
+                decision: item.decision,
+                label: label_for(item.decision, &settings),
+            };
+            match self.write_one(&root, item.id, values, settings.sidecar_naming, every_file) {
                 Ok(()) => {
                     let _ = self.catalog.mark_sidecar_written(item.id, &item.token);
                     report.written += 1;
@@ -204,7 +214,7 @@ impl SidecarService {
         &self,
         root: &Path,
         id: picturesque_core::photo::PhotoId,
-        decision: picturesque_core::decision::Decision,
+        values: SidecarValues,
         naming: SidecarNaming,
         every_file: bool,
     ) -> Result<(), String> {
@@ -214,7 +224,7 @@ impl SidecarService {
             .map_err(|e| e.to_string())?
             .ok_or("photo no longer exists")?;
         for relative in sidecar_paths(&photo, naming, every_file) {
-            let (hash, size) = self.store.write(&root.join(&relative), decision)?;
+            let (hash, size) = self.store.write(&root.join(&relative), values)?;
             self.catalog
                 .upsert_sidecar(id, &relative, size, &hash)
                 .map_err(|e| e.to_string())?;

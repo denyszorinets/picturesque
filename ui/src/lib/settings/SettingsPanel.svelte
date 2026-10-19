@@ -18,6 +18,16 @@
   import ModelList from "../ai/ModelList.svelte";
   import Reanalyze from "../analysis/Reanalyze.svelte";
   import PathInput from "../components/PathInput.svelte";
+  import type { ColorLabel } from "../api";
+
+  const LABELS: { value: ColorLabel | ""; label: string }[] = [
+    { value: "", label: "No label" },
+    { value: "red", label: "Red" },
+    { value: "yellow", label: "Yellow" },
+    { value: "green", label: "Green" },
+    { value: "blue", label: "Blue" },
+    { value: "purple", label: "Purple" },
+  ];
 
   interface Props {
     /** Called whenever settings are loaded or saved. */
@@ -37,6 +47,8 @@
   let libraryRoot = $state("");
   let template = $state("");
   let sidecarNaming = $state<Settings["sidecar_naming"]>("file_extension");
+  let pickLabel = $state<ColorLabel | null>("green");
+  let autoLabel = $state<ColorLabel | null>("yellow");
   let maxGap = $state(30);
   let maxDistance = $state(16);
   let rescanMinutes = $state(5);
@@ -94,6 +106,8 @@
       (libraryRoot.trim() !== (saved.library_root ?? "") ||
         template.trim() !== saved.path_template ||
         sidecarNaming !== saved.sidecar_naming ||
+        pickLabel !== saved.labels.pick ||
+        autoLabel !== saved.labels.auto_pick ||
         seriesChanged ||
         rankingChanged ||
         rescanMinutes !== saved.import.rescan_minutes ||
@@ -135,6 +149,8 @@
     libraryRoot = settings.library_root ?? "";
     template = settings.path_template;
     sidecarNaming = settings.sidecar_naming;
+    pickLabel = settings.labels.pick;
+    autoLabel = settings.labels.auto_pick;
     maxGap = settings.series.max_gap_seconds;
     maxDistance = settings.series.max_distance;
     rescanMinutes = settings.import.rescan_minutes;
@@ -171,6 +187,11 @@
         update.import = { rescan_minutes: rescanMinutes };
       if (sidecarNaming !== saved.sidecar_naming)
         update.sidecar_naming = sidecarNaming;
+      if (
+        pickLabel !== saved.labels.pick ||
+        autoLabel !== saved.labels.auto_pick
+      )
+        update.labels = { pick: pickLabel, auto_pick: autoLabel };
       if (libraryRoot.trim() !== (saved.library_root ?? ""))
         update.library_root = libraryRoot.trim();
       if (template.trim() !== saved.path_template)
@@ -294,6 +315,44 @@
     <p class="hint muted">
       Picks, rejects and ratings are written to sidecars so other photo tools
       see them.
+    </p>
+  </div>
+
+  <div class="field">
+    <span class="label">Colour labels in sidecars</span>
+    <div class="labels">
+      <label>
+        Picks
+        <select
+          value={pickLabel ?? ""}
+          onchange={(e) =>
+            (pickLabel = (e.currentTarget.value || null) as ColorLabel | null)}
+          data-testid="pick-label"
+        >
+          {#each LABELS as option (option.value)}
+            <option value={option.value}>{option.label}</option>
+          {/each}
+        </select>
+      </label>
+      <label>
+        Auto-picked
+        <select
+          value={autoLabel ?? ""}
+          onchange={(e) =>
+            (autoLabel = (e.currentTarget.value || null) as ColorLabel | null)}
+          data-testid="auto-pick-label"
+        >
+          {#each LABELS as option (option.value)}
+            <option value={option.value}>{option.label}</option>
+          {/each}
+        </select>
+      </label>
+    </div>
+    <p class="hint muted">
+      darktable has no pick flag: it shows picks by this colour label (Lightroom
+      and digiKam show it too). Auto-picked photos get theirs when you finish a
+      folder. Labels you set in another tool are kept; changes apply to sidecars
+      written from now on.
     </p>
   </div>
 
@@ -535,5 +594,17 @@
     padding: 0.7rem 0.9rem;
     border-radius: var(--radius);
     background: var(--surface-2);
+  }
+
+  .labels {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem 1.4rem;
+  }
+
+  .labels label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
   }
 </style>

@@ -305,6 +305,21 @@ Photo files themselves are never modified.
    * - ``picturesque:Flag``, ``picturesque:Stars``
      - The exact flag and stars (a rejected photo keeps its stars)
      - Picturesque
+   * - ``darktable:colorlabels``
+     - The colour label for picks, and for auto-picks once a folder is
+       finished (:ref:`reference-settings-labels`)
+     - darktable
+   * - ``xmp:Label``, ``digiKam:ColorLabel``
+     - The same colour label
+     - Lightroom, Bridge, digiKam
+   * - ``picturesque:Label``
+     - Which label Picturesque set, so it only ever changes its own
+     - Picturesque
+
+darktable has no pick flag, so picks show there as a **colour label**:
+green by default. A label you set in another tool is kept: darktable keeps
+both, and Lightroom and digiKam (which allow one label) get ours while the
+photo is a pick and keep theirs otherwise.
 
 - If a photo already has a sidecar (for example from darktable or
   Lightroom), it is **updated in place**: only the properties above are

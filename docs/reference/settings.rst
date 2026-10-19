@@ -122,6 +122,21 @@ Watched import folders (:ref:`features-import-watching`).
    0–1440 minutes. ``0`` scans only when a folder reports a change and when
    the app starts.
 
+.. _reference-settings-labels:
+
+``labels``
+----------
+
+The colour labels written to XMP sidecars (:ref:`features-library-sidecars`),
+so tools without a pick flag, like darktable, show picks.
+
+:Type: object with ``pick`` and ``auto_pick``, each ``red``, ``yellow``,
+   ``green``, ``blue``, ``purple`` or ``null`` (no label)
+:Default: ``{ "pick": "green", "auto_pick": "yellow" }``
+:Behaviour: ``pick`` is written for picks; ``auto_pick`` for auto-picked
+   photos when a folder is finished. A change applies to sidecars written
+   from then on.
+
 .. _reference-settings-folders:
 
 ``open_folder``, ``recent_folders``
@@ -161,7 +176,8 @@ API
         "import": { "rescan_minutes": 5 },
         "auto_pick": { "enabled": true, "min_quality": 0.5 },
         "onboarding": { "tour_done": false },
-        "open_folder": null, "recent_folders": [] }
+        "open_folder": null, "recent_folders": [],
+        "labels": { "pick": "green", "auto_pick": "yellow" } }
 
 ``update_settings``
    Arguments: any subset of the settings. Unknown fields are rejected.

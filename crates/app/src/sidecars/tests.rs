@@ -12,7 +12,7 @@ use super::{SidecarService, SidecarStatus, sidecar_path, sidecar_paths};
 use crate::ports::catalog::PhotoCatalog;
 use crate::ports::events::AppEvent;
 use crate::ports::settings::SettingsStore;
-use crate::ports::sidecars::SidecarStore;
+use crate::ports::sidecars::{ColorLabel, SidecarStore, SidecarValues};
 use crate::settings::tests::MemorySettings;
 use crate::settings::{Settings, SidecarNaming};
 use crate::testing::{MemoryCatalog, RecordedEvents};
@@ -20,6 +20,7 @@ use crate::testing::{MemoryCatalog, RecordedEvents};
 #[derive(Default)]
 struct FakeSidecars {
     files: Mutex<HashMap<PathBuf, Decision>>,
+    labels: Mutex<HashMap<PathBuf, Option<ColorLabel>>>,
     writes: Mutex<usize>,
     broken: Vec<PathBuf>,
 }
@@ -29,7 +30,12 @@ impl SidecarStore for FakeSidecars {
         Ok(self.files.lock().unwrap().get(path).copied())
     }
 
-    fn write(&self, path: &Path, decision: Decision) -> Result<(ContentHash, u64), String> {
+    fn write(&self, path: &Path, values: SidecarValues) -> Result<(ContentHash, u64), String> {
+        let decision = values.decision;
+        self.labels
+            .lock()
+            .unwrap()
+            .insert(path.to_path_buf(), values.label);
         if self.broken.iter().any(|b| b == path) {
             return Err("cannot parse existing sidecar".into());
         }
@@ -383,4 +389,36 @@ fn photos_without_a_decision_get_no_sidecar() {
 
     assert_eq!(w.service.flush().written, 0);
     assert!(w.store.files.lock().unwrap().is_empty());
+}
+
+#[test]
+fn picks_get_the_pick_label_and_others_none() {
+    let w = world(FakeSidecars::default(), SidecarNaming::FileExtension);
+    let pick = add(&w.catalog, vec![asset("a.JPG", 1)]);
+    let reject = add(&w.catalog, vec![asset("b.JPG", 2)]);
+    w.catalog.set_decision(pick, d(Flag::Pick, 0)).unwrap();
+    w.catalog.set_decision(reject, d(Flag::Reject, 0)).unwrap();
+
+    w.service.flush();
+
+    let labels = w.store.labels.lock().unwrap();
+    assert_eq!(labels[Path::new("/lib/a.JPG.xmp")], Some(ColorLabel::Green));
+    assert_eq!(labels[Path::new("/lib/b.JPG.xmp")], None);
+}
+
+#[test]
+fn the_pick_label_follows_the_settings() {
+    let w = world(FakeSidecars::default(), SidecarNaming::FileExtension);
+    let mut settings = w.settings.load_settings().unwrap();
+    settings.labels.pick = Some(ColorLabel::Purple);
+    w.settings.save_settings(&settings).unwrap();
+    let pick = add(&w.catalog, vec![asset("a.JPG", 1)]);
+    w.catalog.set_decision(pick, d(Flag::Pick, 0)).unwrap();
+
+    w.service.flush();
+
+    assert_eq!(
+        w.store.labels.lock().unwrap()[Path::new("/lib/a.JPG.xmp")],
+        Some(ColorLabel::Purple)
+    );
 }

@@ -29,6 +29,7 @@ vi.mock("./lib/api", async (importOriginal) => {
         onboarding: { tour_done: false },
         open_folder: null,
         recent_folders: [],
+        labels: { pick: "green", auto_pick: "yellow" },
       }),
     listModels: () => Promise.resolve([]),
     aiStatus: () =>

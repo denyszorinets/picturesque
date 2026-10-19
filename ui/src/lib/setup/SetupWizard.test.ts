@@ -15,6 +15,7 @@ const SETTINGS: Settings = {
   onboarding: { tour_done: false },
   open_folder: null,
   recent_folders: [],
+  labels: { pick: "green", auto_pick: "yellow" },
 };
 
 const getSettings = vi.fn<() => Promise<Settings>>();
