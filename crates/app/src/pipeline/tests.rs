@@ -733,7 +733,16 @@ fn asset_paths(world: &TestWorld) -> Vec<String> {
         .all_photos()
         .unwrap()
         .iter()
-        .flat_map(|p| p.assets.iter().map(|a| a.path.display().to_string()))
+        // Library paths read the same on every platform.
+        .flat_map(|p| {
+            p.assets.iter().map(|a| {
+                a.path
+                    .iter()
+                    .map(|c| c.to_string_lossy())
+                    .collect::<Vec<_>>()
+                    .join("/")
+            })
+        })
         .collect();
     paths.sort();
     paths
