@@ -19,3 +19,4 @@ reused; superseded decisions stay in place and link to their replacement.
    0010-dual-transport-tauri-ipc-and-dev-http
    0011-resumable-background-analysis
    0012-continuous-import-pipeline
+   0013-folder-sessions
