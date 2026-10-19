@@ -605,6 +605,18 @@ impl PhotoCatalog for MemoryCatalog {
         Ok(())
     }
 
+    fn set_decision_saved(
+        &self,
+        id: PhotoId,
+        decision: picturesque_core::decision::Decision,
+    ) -> Result<(), CatalogError> {
+        self.set_decision(id, decision)?;
+        if let Some((rev, written)) = self.revisions.lock().unwrap().get_mut(&id) {
+            *written = Some(*rev);
+        }
+        Ok(())
+    }
+
     fn dirty_decisions(&self) -> Result<Vec<crate::ports::catalog::DirtyDecision>, CatalogError> {
         let decisions = self.decisions.lock().unwrap();
         let mut dirty: Vec<_> = self

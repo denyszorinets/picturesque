@@ -114,6 +114,10 @@ pub trait PhotoCatalog: Send + Sync {
 
     fn set_decision(&self, id: PhotoId, decision: Decision) -> Result<(), CatalogError>;
 
+    /// Records a decision read from the photo's sidecar: the sidecar
+    /// already holds it, so it is not written back.
+    fn set_decision_saved(&self, id: PhotoId, decision: Decision) -> Result<(), CatalogError>;
+
     /// Decisions changed since their sidecar was last written, with a token
     /// identifying the change.
     fn dirty_decisions(&self) -> Result<Vec<DirtyDecision>, CatalogError>;

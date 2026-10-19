@@ -349,6 +349,23 @@ fn decisions_update_in_place_and_need_an_existing_photo() {
 }
 
 #[test]
+fn decisions_read_from_sidecars_are_not_written_back() {
+    let c = sample();
+    let read = Decision {
+        flag: Flag::Reject,
+        rating: Rating::new(2).unwrap(),
+    };
+
+    c.set_decision_saved(PhotoId(1), read).unwrap();
+
+    assert_eq!(c.decision(PhotoId(1)).unwrap(), read);
+    assert!(c.dirty_decisions().unwrap().is_empty());
+    // A later change by the user is written as usual.
+    c.set_decision(PhotoId(1), Decision::default()).unwrap();
+    assert_eq!(c.dirty_decisions().unwrap().len(), 1);
+}
+
+#[test]
 fn summaries_carry_what_the_grid_needs() {
     let c = sample();
     c.set_dimensions(PhotoId(2), 6000, 4000).unwrap();

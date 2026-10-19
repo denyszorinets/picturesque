@@ -8,7 +8,7 @@ use picturesque_core::hash::ContentHash;
 use picturesque_core::media::MediaFormat;
 use picturesque_core::photo::{Asset, NewPhoto, PhotoAssets, PhotoId};
 
-use super::{SidecarService, SidecarStatus, sidecar_path};
+use super::{SidecarService, SidecarStatus, sidecar_path, sidecar_paths};
 use crate::ports::catalog::PhotoCatalog;
 use crate::ports::events::AppEvent;
 use crate::ports::settings::SettingsStore;
@@ -63,6 +63,7 @@ struct World {
     store: Arc<FakeSidecars>,
     service: Arc<SidecarService>,
     events: Arc<RecordedEvents>,
+    settings: Arc<MemorySettings>,
 }
 
 fn world(store: FakeSidecars, naming: SidecarNaming) -> World {
@@ -79,15 +80,17 @@ fn world(store: FakeSidecars, naming: SidecarNaming) -> World {
     let events = Arc::new(RecordedEvents::default());
     let service = Arc::new(SidecarService::new(
         catalog.clone(),
-        settings,
+        settings.clone(),
         store.clone(),
         events.clone(),
     ));
+    let settings_handle = settings.clone();
     World {
         catalog,
         store,
         service,
         events,
+        settings: settings_handle,
     }
 }
 
@@ -290,4 +293,94 @@ fn notify_and_flush_report_progress() {
         })
         .collect();
     assert_eq!(pending, [1, 0]);
+}
+
+#[test]
+fn in_place_every_file_of_a_pair_gets_a_sidecar() {
+    let w = world(FakeSidecars::default(), SidecarNaming::FileExtension);
+    let pair = add(
+        &w.catalog,
+        vec![asset("2026/IMG_1.CR3", 1), asset("2026/IMG_1.JPG", 2)],
+    );
+    let photo = w.catalog.photo(pair).unwrap().unwrap();
+
+    assert_eq!(
+        sidecar_paths(&photo, SidecarNaming::FileExtension, true),
+        [
+            PathBuf::from("2026/IMG_1.CR3.xmp"),
+            PathBuf::from("2026/IMG_1.JPG.xmp")
+        ]
+    );
+    // Lightroom-style names are shared by the pair.
+    assert_eq!(
+        sidecar_paths(&photo, SidecarNaming::BaseName, true),
+        [PathBuf::from("2026/IMG_1.xmp")]
+    );
+    // In the library, one sidecar as before.
+    assert_eq!(
+        sidecar_paths(&photo, SidecarNaming::FileExtension, false),
+        [PathBuf::from("2026/IMG_1.CR3.xmp")]
+    );
+}
+
+#[test]
+fn in_place_existing_sidecars_are_kept_up_to_date_too() {
+    let w = world(FakeSidecars::default(), SidecarNaming::FileExtension);
+    let id = add(
+        &w.catalog,
+        vec![
+            asset("IMG_1.CR3", 1),
+            asset("IMG_1.JPG", 2),
+            asset("IMG_1.xmp", 3),
+        ],
+    );
+    let photo = w.catalog.photo(id).unwrap().unwrap();
+
+    assert_eq!(
+        sidecar_paths(&photo, SidecarNaming::FileExtension, true),
+        [
+            PathBuf::from("IMG_1.xmp"),
+            PathBuf::from("IMG_1.CR3.xmp"),
+            PathBuf::from("IMG_1.JPG.xmp")
+        ]
+    );
+}
+
+#[test]
+fn in_place_flush_writes_every_sidecar_of_the_photo() {
+    let w = world(FakeSidecars::default(), SidecarNaming::FileExtension);
+    let mut settings = w.settings.load_settings().unwrap();
+    settings.open_folder = Some("/lib".into());
+    w.settings.save_settings(&settings).unwrap();
+    let pair = add(
+        &w.catalog,
+        vec![asset("IMG_1.CR3", 1), asset("IMG_1.JPG", 2)],
+    );
+    w.catalog.set_decision(pair, d(Flag::Pick, 3)).unwrap();
+
+    let report = w.service.flush();
+
+    assert_eq!(report.written, 1);
+    let files = w.store.files.lock().unwrap();
+    assert_eq!(files[Path::new("/lib/IMG_1.CR3.xmp")], d(Flag::Pick, 3));
+    assert_eq!(files[Path::new("/lib/IMG_1.JPG.xmp")], d(Flag::Pick, 3));
+    assert_eq!(
+        w.catalog
+            .photo(pair)
+            .unwrap()
+            .unwrap()
+            .assets
+            .sidecars()
+            .len(),
+        2
+    );
+}
+
+#[test]
+fn photos_without_a_decision_get_no_sidecar() {
+    let w = world(FakeSidecars::default(), SidecarNaming::FileExtension);
+    add(&w.catalog, vec![asset("IMG_1.JPG", 1)]);
+
+    assert_eq!(w.service.flush().written, 0);
+    assert!(w.store.files.lock().unwrap().is_empty());
 }

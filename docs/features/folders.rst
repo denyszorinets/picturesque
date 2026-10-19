@@ -37,15 +37,24 @@ What changes in the folder
 - **Nothing is copied or renamed.** Picturesque reads the photos where
   they are.
 - **Sidecars are written next to the photos** you decide on, as in the
-  library (:ref:`features-library-sidecars`): ``IMG_0042.CR3.xmp`` by
-  default. An existing sidecar is updated in place, keeping everything
-  other tools stored in it. Photos you do not touch get no sidecar.
+  library (:ref:`features-library-sidecars`). Each file of a RAW+JPEG pair
+  gets its own (``IMG_0042.CR3.xmp`` and ``IMG_0042.JPG.xmp``), because
+  darktable imports both files as separate images; with Lightroom-style
+  names (:ref:`reference-settings-sidecar-naming`) the pair shares
+  ``IMG_0042.xmp``. Existing sidecars are updated in place, keeping
+  everything other tools stored in them.
+- **Photos you do not touch are left alone.** A rating or reject read
+  from an existing sidecar is shown, but that sidecar is only rewritten
+  once you change the decision; photos without a decision get no sidecar.
 - **Move rejects…** moves rejected photos into ``_Rejected`` inside the
   folder, if you ask for it (:doc:`rejects`).
 
 A folder that cannot be written to (a read-only card, a network share)
-can still be opened and culled; sidecars that cannot be written are
-reported in the toolbar (*XMP: N not saved*).
+can still be opened and culled. Sidecars that cannot be written are
+reported in the toolbar (*XMP: N not saved*, with the reason when you
+hover it); the decisions are kept in Picturesque and written as soon as
+the folder can be written to (after the next change, or when the app
+starts).
 
 Switching folders and back to the library
 -----------------------------------------
