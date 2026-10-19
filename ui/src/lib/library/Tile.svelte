@@ -38,6 +38,15 @@
   );
   let failed = $state(false);
 
+  /** Picks get a green ring, the app's suggestions a light-green one. */
+  const ring = $derived(
+    photo.flag === "pick"
+      ? "pick"
+      : photo.keeper && photo.flag === "unflagged"
+        ? "auto"
+        : null,
+  );
+
   const title = $derived(
     [
       photo.file_name,
@@ -101,6 +110,14 @@
           data-testid="tile-quality">{quality}</span
         >{/if}
     </span>
+    {#if ring}
+      <span
+        class="ring {ring}"
+        aria-hidden="true"
+        data-ring={ring}
+        data-testid="tile-ring"
+      ></span>
+    {/if}
     {#if photo.best_in_series}
       <span class="best-mark" title="Best of the series" data-testid="best-mark"
         >★</span
@@ -182,6 +199,22 @@
   .tile.focused {
     outline: 2px solid var(--fg);
     outline-offset: 1px;
+  }
+
+  /* Inside the border, so selection and best-of-series stay visible. */
+  .ring {
+    position: absolute;
+    inset: 0;
+    border-radius: 4px;
+    pointer-events: none;
+  }
+
+  .ring.pick {
+    box-shadow: inset 0 0 0 4px var(--pick);
+  }
+
+  .ring.auto {
+    box-shadow: inset 0 0 0 4px var(--auto-pick);
   }
 
   .tile.rejected img {

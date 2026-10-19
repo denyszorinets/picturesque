@@ -102,7 +102,8 @@ Culling
 Mark photos as **picks** or **rejects** and give them **star ratings**
 with the keyboard (:doc:`/reference/keyboard-shortcuts`): P, X and U for
 pick, reject and unflag, 1–5 for stars and 0 to clear. In the timeline the
-keys apply to every selected photo; in the loupe, to the photo shown. Hold
+keys apply to every selected photo; in the loupe, to the photo shown.
+Picked photos have a green ring in the timeline. Hold
 **Shift** (Shift+P, Shift+X, Shift+U) to move on to the next photo
 afterwards, in the loupe or with one photo selected in the timeline.
 In the loupe and in compare, **↑** picks and **↓** rejects too (with
@@ -117,8 +118,8 @@ Auto-pick
 ~~~~~~~~~
 
 Once photos are analyzed, the app marks the ones it thinks are keepers as
-**Auto-picked** (a green *✓ Auto* badge on the tile, *Auto-picked* in the
-loupe). A photo is auto-picked when all of these hold:
+**Auto-picked** (a green *✓ Auto* badge and a light-green ring on the
+tile, *Auto-picked* in the loupe; picks get a solid green ring). A photo is auto-picked when all of these hold:
 
 - it is the best photo of its series (:ref:`features-series`), or in no
   series;

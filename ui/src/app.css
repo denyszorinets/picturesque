@@ -11,6 +11,9 @@
   --info: #2f6db3;
   --danger: #c0392b;
   --warn: #b7791f;
+  /* Tile rings: picks, and photos the app suggests keeping. */
+  --pick: #2f9a52;
+  --auto-pick: #a6dcb5;
   --radius: 10px;
   font-family:
     system-ui,
@@ -35,6 +38,8 @@
     --info: #6aa6ec;
     --danger: #ef6a5b;
     --warn: #e0a443;
+    --pick: #3fb36b;
+    --auto-pick: #2c6a43;
   }
 }
 
