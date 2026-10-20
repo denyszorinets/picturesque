@@ -182,7 +182,8 @@ test("frames series in the grid, marks the best photo and stacks series", async 
   await expect(tiles).toHaveCount(2);
   await expect(timeline.locator(`[data-photo-id="${b}"]`)).toBeVisible();
   const stack = timeline.getByTestId("stack-toggle");
-  await expect(stack).toHaveText("⧉ 3");
+  await expect(stack).toHaveText("3");
+  await expect(stack).toHaveAccessibleName("Show all 3 photos of this series");
   await page.screenshot({ path: test.info().outputPath("series-stacked.png") });
   await stack.click();
   await expect(tiles).toHaveCount(4);

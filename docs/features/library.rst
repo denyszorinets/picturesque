@@ -19,10 +19,10 @@ Each tile shows the whole photo (never cropped), with:
 
 - **RAW** when the photo has a RAW file (the JPEG of a RAW+JPEG pair is
   shown),
-- a green **✓** for picks and a red **✕** for rejects (rejected photos are
-  dimmed and greyed),
+- a green check mark for picks and a red cross for rejects (rejected
+  photos are dimmed and greyed),
 - its star rating,
-- a green border and **★** on the best photo of a series; the photos of a
+- a green border and a star on the best photo of a series; the photos of a
   series are framed together (:ref:`features-series`).
 
 Hover a tile for its file name, capture time, camera and place.
@@ -118,8 +118,8 @@ Auto-pick
 ~~~~~~~~~
 
 Once photos are analyzed, the app marks the ones it thinks are keepers as
-**Auto-picked** (a green *✓ Auto* badge and a thin light-green ring on the
-tile, *Auto-picked* in the loupe; picks get a thicker, solid green
+**Auto-picked** (an *Auto* badge with a check mark and a thin light-green ring
+on the tile, *Auto-picked* in the loupe; picks get a thicker, solid green
 ring). A photo is auto-picked when all of these hold:
 
 - it is the best photo of its series (:ref:`features-series`), or in no
@@ -138,8 +138,8 @@ suggestions, click **Pick all N auto-picked** under **Flag** in the
 filters: every auto-picked photo becomes a pick, in one step that
 **Undo** reverses. Filter by **Auto-picked** to go through them first.
 
-Decisions are saved immediately. **Undo** and **Redo** (above the
-timeline, or Ctrl+Z / Ctrl+Shift+Z) step back and forward through the
+Decisions are saved immediately. **Undo** and **Redo** (the two arrow
+buttons at the right of the toolbar, or Ctrl+Z / Ctrl+Shift+Z) step back and forward through the
 last 200 changes; undoing restores each photo's previous flag and rating,
 even when a change covered photos that had different ones.
 
@@ -189,7 +189,7 @@ The **Filters** panel beside the timeline (toggle it with the
 Filters combine: *Picks* with *3★+* in *Lisbon* shows picked photos of
 three stars or more taken in Lisbon. Every option shows how many photos
 in the library have it. Active filters appear as chips above the
-timeline; remove one with its ✕, or all with **Clear all**. Filters are
+timeline; remove one with its cross, or all with **Clear all**. Filters are
 kept while the app is open.
 
 The timeline, day headers and counts all reflect the filters. A photo you

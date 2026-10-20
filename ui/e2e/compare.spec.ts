@@ -81,11 +81,13 @@ test("compares a series side by side with the keyboard", async ({
   await page.keyboard.press("x");
   await page.keyboard.press("3");
   await expect(active).toContainText("Rejected");
-  await expect(active).toContainText("★★★");
+  await expect(active.getByLabel("3 stars")).toBeVisible();
   // The best photo can be chosen from compare too.
   await page.keyboard.press("Home");
   await page.keyboard.press("b");
-  await expect(view.locator('[data-active="true"]')).toContainText("★ Best");
+  await expect(
+    view.locator('[data-active="true"]').getByTestId("compare-best"),
+  ).toBeVisible();
 
   // Zoom and pan stay in sync across panes.
   await page.keyboard.press("z");

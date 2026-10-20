@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from "../components/Icon.svelte";
   import * as api from "../api";
   import { AnalysisProgress } from "./analysis.svelte";
   import { SidecarProgress } from "./sidecars.svelte";
@@ -492,7 +493,7 @@
         class="small"
         aria-pressed={showFilters}
         onclick={() => (showFilters = !showFilters)}
-        data-testid="toggle-filters">Filters</button
+        data-testid="toggle-filters"><Icon name="funnel" /> Filters</button
       >
       <form
         class="search"
@@ -502,7 +503,7 @@
           filters.search = searchText.trim();
         }}
       >
-        <input
+        <Icon name="magnifying-glass" /><input
           type="search"
           bind:value={searchText}
           bind:this={searchInput}
@@ -537,7 +538,7 @@
           >{chip.label}
           <button
             aria-label={`Remove filter ${chip.label}`}
-            onclick={chip.clear}>✕</button
+            onclick={chip.clear}><Icon name="x-mark" /></button
           ></span
         >
       {/each}
@@ -573,7 +574,8 @@
             filters.expanded.clear();
           }}
           title="Show each series as its best photo"
-          data-testid="toggle-stack">Stack series</button
+          data-testid="toggle-stack"
+          ><Icon name="rectangle-stack" /> Stack series</button
         >
       </div>
       <div class="group" role="group" aria-label="Actions">
@@ -582,7 +584,7 @@
           onclick={() => openCompare()}
           disabled={selection.focus === null && selection.size === 0}
           title="Compare the selected photos, or the selected photo's series (C)"
-          data-testid="open-compare">Compare</button
+          data-testid="open-compare"><Icon name="squares-2x2" /> Compare</button
         >
         <button
           class="small"
@@ -592,7 +594,8 @@
             ? "Copy the keepers to another folder, verified, with their sidecars"
             : "Copy picks, the photos in view or the selection to a folder"}
           data-testid="open-export"
-          >{inFolder ? "Copy keepers…" : "Export…"}</button
+          ><Icon name={inFolder ? "document-duplicate" : "arrow-up-tray"} />
+          {inFolder ? "Copy keepers…" : "Export…"}</button
         >
         <Reanalyze
           reanalyze={api.reanalyzePhotos}
@@ -607,7 +610,8 @@
             class="small"
             onclick={() => (finishing = true)}
             title="Label the auto-picked photos and write every sidecar"
-            data-testid="open-finish">Finish folder…</button
+            data-testid="open-finish"
+            ><Icon name="check-circle" /> Finish folder…</button
           >
         {/if}
         {#if inFolder && canClear && folder}
@@ -615,7 +619,7 @@
             class="small danger"
             onclick={() => (clearing = true)}
             title="Delete the originals you copied (each copy is checked again first)"
-            data-testid="open-clear">Clear folder…</button
+            data-testid="open-clear"><Icon name="trash" /> Clear folder…</button
           >
         {/if}
         <RejectsMove
@@ -624,51 +628,56 @@
           onmoved={() => void store.refresh()}
         />
       </div>
-      <span class="spacer"></span>
-      {#if sidecars.label}
-        {@const folder = sidecars.status?.folder}
-        {#if api.canReveal() && folder}
+      <!-- Status and history stay together at the right, even when the bar wraps. -->
+      <div class="trailing">
+        {#if sidecars.label}
+          {@const folder = sidecars.status?.folder}
+          {#if api.canReveal() && folder}
+            <button
+              class="link sidecars {sidecars.label.tone}"
+              onclick={() => void api.revealInFolder(folder)}
+              title={`${sidecars.label.title}. Click to open the folder.`}
+              data-testid="sidecar-status">{sidecars.label.text}</button
+            >
+          {:else}
+            <span
+              class="sidecars {sidecars.label.tone}"
+              title={sidecars.label.title}
+              data-testid="sidecar-status">{sidecars.label.text}</span
+            >
+          {/if}
+        {/if}
+        {#if analysis.status && analysis.status.waiting_for_models.length > 0}
           <button
-            class="link sidecars {sidecars.label.tone}"
-            onclick={() => void api.revealInFolder(folder)}
-            title={`${sidecars.label.title}. Click to open the folder.`}
-            data-testid="sidecar-status">{sidecars.label.text}</button
-          >
-        {:else}
-          <span
-            class="sidecars {sidecars.label.tone}"
-            title={sidecars.label.title}
-            data-testid="sidecar-status">{sidecars.label.text}</span
+            class="link warn"
+            onclick={() => onsettings?.()}
+            title={waitingNote(analysis.status.waiting_for_models)}
+            data-testid="analysis-needs-models"
+            ><Icon name="exclamation-triangle" /> AI analysis needs models</button
           >
         {/if}
-      {/if}
-      {#if analysis.status && analysis.status.waiting_for_models.length > 0}
-        <button
-          class="link warn"
-          onclick={() => onsettings?.()}
-          title={waitingNote(analysis.status.waiting_for_models)}
-          data-testid="analysis-needs-models">AI analysis needs models</button
-        >
-      {/if}
-      {#if seriesError}
-        <span class="error-text" role="alert">{seriesError}</span>
-      {/if}
-      {#if culling.error}
-        <span class="error-text" role="alert">{culling.error}</span>
-      {/if}
-      <div class="group history" role="group" aria-label="History">
-        <button
-          class="small"
-          onclick={() => culling.undo()}
-          disabled={!culling.canUndo}
-          title="Undo (Ctrl+Z)">Undo</button
-        >
-        <button
-          class="small"
-          onclick={() => culling.redo()}
-          disabled={!culling.canRedo}
-          title="Redo (Ctrl+Shift+Z)">Redo</button
-        >
+        {#if seriesError}
+          <span class="error-text" role="alert">{seriesError}</span>
+        {/if}
+        {#if culling.error}
+          <span class="error-text" role="alert">{culling.error}</span>
+        {/if}
+        <div class="group history" role="group" aria-label="History">
+          <button
+            class="small"
+            onclick={() => culling.undo()}
+            disabled={!culling.canUndo}
+            title="Undo (Ctrl+Z)"
+            aria-label="Undo"><Icon name="arrow-uturn-left" /></button
+          >
+          <button
+            class="small"
+            onclick={() => culling.redo()}
+            disabled={!culling.canRedo}
+            title="Redo (Ctrl+Shift+Z)"
+            aria-label="Redo"><Icon name="arrow-uturn-right" /></button
+          >
+        </div>
       </div>
     </div>
     <div class="body">
@@ -790,7 +799,7 @@
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 0.5rem 0.9rem;
+    gap: 0.5rem 0.75rem;
     padding-bottom: 0.6rem;
     font-size: 0.9rem;
   }
@@ -817,14 +826,34 @@
     border-bottom-left-radius: 0;
   }
 
-  .spacer {
-    flex: 1;
+  .trailing {
+    margin-left: auto;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 0.5rem 0.75rem;
+  }
+
+  /* The magnifier sits inside the box, on the left. */
+  .search {
+    position: relative;
+    display: flex;
+    align-items: center;
+    color: var(--muted);
+    --icon-size: 1rem;
+  }
+
+  .search :global(.icon) {
+    position: absolute;
+    left: 0.55rem;
+    pointer-events: none;
   }
 
   .search input {
     width: 14rem;
     height: 2rem;
-    padding: 0.25rem 0.6rem;
+    padding: 0.25rem 0.6rem 0.25rem 1.9rem;
     font-size: 0.88rem;
   }
 
@@ -884,7 +913,10 @@
   }
 
   .chip button {
+    display: inline-flex;
+    padding: 0.2rem;
     border-radius: 999px;
+    --icon-size: 0.9rem;
   }
 
   .chip button:hover,
@@ -896,6 +928,10 @@
   .link {
     text-decoration: underline;
     text-underline-offset: 2px;
+  }
+
+  .history .small {
+    padding: 0.2rem 0.55rem;
   }
 
   .link.warn {

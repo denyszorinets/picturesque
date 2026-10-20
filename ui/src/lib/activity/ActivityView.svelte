@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from "../components/Icon.svelte";
   import type { JobFilter, LogLevel } from "../api";
   import PathInput from "../components/PathInput.svelte";
   import { STEP_LABELS, steps, type Pipeline } from "./pipeline.svelte";
@@ -172,7 +173,7 @@
                 onclick={() => pipeline.removeSource(source.id)}
                 aria-label={`Remove ${source.path}`}
                 title="Stop importing from this folder (imported photos stay)"
-                >✕</button
+                ><Icon name="x-mark" /></button
               >{/if}
           </li>
         {/each}

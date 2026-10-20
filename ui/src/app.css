@@ -119,6 +119,14 @@ button:where(:active:not(:disabled)) {
   color: var(--fg);
 }
 
+/* A button with an icon lines it up with its text. */
+button:has(> .icon) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4em;
+}
+
 button.primary {
   background: var(--accent);
   border-color: var(--accent);
