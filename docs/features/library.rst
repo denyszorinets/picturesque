@@ -20,7 +20,7 @@ Each tile shows the whole photo (never cropped), with:
 - **RAW** when the photo has a RAW file (the JPEG of a RAW+JPEG pair is
   shown),
 - a green **✓** for picks and a red **✕** for rejects (rejected photos are
-  dimmed),
+  dimmed and greyed),
 - its star rating,
 - a green border and **★** on the best photo of a series; the photos of a
   series are framed together (:ref:`features-series`).
@@ -118,8 +118,9 @@ Auto-pick
 ~~~~~~~~~
 
 Once photos are analyzed, the app marks the ones it thinks are keepers as
-**Auto-picked** (a green *✓ Auto* badge and a light-green ring on the
-tile, *Auto-picked* in the loupe; picks get a solid green ring). A photo is auto-picked when all of these hold:
+**Auto-picked** (a green *✓ Auto* badge and a thin light-green ring on the
+tile, *Auto-picked* in the loupe; picks get a thicker, solid green
+ring). A photo is auto-picked when all of these hold:
 
 - it is the best photo of its series (:ref:`features-series`), or in no
   series;

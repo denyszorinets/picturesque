@@ -302,7 +302,7 @@
     z-index: 30;
     display: grid;
     place-items: center;
-    background: rgb(0 0 0 / 0.4);
+    background: var(--scrim);
   }
 
   .dialog {

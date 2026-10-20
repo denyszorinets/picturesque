@@ -90,8 +90,9 @@ Copying the keepers
 -------------------
 
 To keep only the photos you want, for example from a memory card into
-the folder darktable imports from, click **Copy keepers…** (also offered
-after **Finish folder…**). It is :doc:`export` with these defaults:
+the folder darktable imports from, click **Copy keepers…**, the highlighted
+button in the toolbar while a folder is open (also offered after
+**Finish folder…**). It is :doc:`export` with these defaults:
 
 - **Keepers**: picks and auto-picked photos (or **Everything except
   rejects**);

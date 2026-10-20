@@ -260,7 +260,8 @@
   }
 
   header h1 {
-    font-size: 1.25rem;
+    font-size: 1.2rem;
+    letter-spacing: -0.01em;
   }
 
   header p {
@@ -281,9 +282,16 @@
     font-weight: 600;
   }
 
+  nav button:hover,
+  .help:hover {
+    background: var(--hover);
+    color: var(--fg);
+  }
+
   nav button.active {
     background: var(--surface-2);
     color: var(--fg);
+    box-shadow: inset 0 0 0 1px var(--border);
   }
 
   .status {
