@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from "../components/Icon.svelte";
   import * as api from "../api";
   import type { RejectMovePlan, RejectMoveResult } from "../api";
   import { formatSize } from "../ai/models.svelte";
@@ -94,7 +95,7 @@
     <button
       class="small link"
       onclick={() => (result = null)}
-      aria-label="Dismiss">✕</button
+      aria-label="Dismiss"><Icon name="x-mark" /></button
     >
   </span>
 {:else if rejected > 0}
@@ -103,7 +104,7 @@
     onclick={ask}
     disabled={busy}
     title="Move rejected photos into the library's _Rejected folder"
-    data-testid="rejects-open">Move rejects…</button
+    data-testid="rejects-open"><Icon name="archive-box" /> Move rejects…</button
   >
 {/if}
 {#if error}

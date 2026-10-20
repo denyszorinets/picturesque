@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from "../components/Icon.svelte";
   import * as api from "../api";
   import type { Settings } from "../api";
   import PathInput from "../components/PathInput.svelte";
@@ -101,22 +102,9 @@
       : "Culling the library"}
     data-testid="session-switcher"
   >
-    <svg
-      class="icon"
-      viewBox="0 0 16 16"
-      width="14"
-      height="14"
-      aria-hidden="true"
-    >
-      {#if settings.open_folder}
-        <path d="M1.5 3.5h4l1.5 1.5h7.5v8h-13z" />
-      {:else}
-        <rect x="1.5" y="2.5" width="13" height="11" rx="1.5" />
-        <path d="M1.5 6.5h13M5.5 6.5v7" />
-      {/if}
-    </svg>
+    <Icon name={settings.open_folder ? "folder-open" : "photo"} />
     <span class="name">{sessionLabel(settings)}</span>
-    <span aria-hidden="true" class="caret">▾</span>
+    <span class="caret"><Icon name="chevron-down" /></span>
   </button>
   {#if open}
     <div class="menu" role="menu" data-testid="session-menu">
@@ -127,7 +115,9 @@
         onclick={() => void leave(api.openLibrary)}
         data-testid="open-library"
       >
-        <span class="check">{settings.open_folder ? "" : "✓"}</span>
+        <span class="check"
+          >{#if !settings.open_folder}<Icon name="check" />{/if}</span
+        >
         <span>
           Library
           <span class="muted small">Photos copied into your library</span>
@@ -139,7 +129,7 @@
           role="menuitemradio"
           aria-checked="true"
         >
-          <span class="check">✓</span>
+          <span class="check"><Icon name="check" /></span>
           <span>
             {folderName(settings.open_folder)}
             <span class="muted small path">{settings.open_folder}</span>
@@ -264,17 +254,10 @@
     white-space: nowrap;
   }
 
-  .icon {
-    flex-shrink: 0;
-    fill: none;
-    stroke: currentColor;
-    stroke-width: 1.4;
-    stroke-linejoin: round;
-  }
-
   .caret {
+    display: inline-flex;
     color: var(--muted);
-    font-size: 0.75rem;
+    --icon-size: 0.9rem;
   }
 
   .menu {
@@ -315,6 +298,7 @@
   .check {
     width: 1rem;
     flex-shrink: 0;
+    display: inline-flex;
     color: var(--accent);
   }
 

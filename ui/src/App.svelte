@@ -12,14 +12,15 @@
   import SetupWizard from "./lib/setup/SetupWizard.svelte";
   import StatsView from "./lib/stats/StatsView.svelte";
   import HelpDialog from "./lib/help/HelpDialog.svelte";
+  import Icon, { type IconName } from "./lib/components/Icon.svelte";
   import { tourWanted } from "./lib/tour/policy";
 
   type Tab = "library" | "activity" | "statistics" | "settings";
-  const TABS: { id: Tab; label: string }[] = [
-    { id: "library", label: "Library" },
-    { id: "activity", label: "Activity" },
-    { id: "statistics", label: "Statistics" },
-    { id: "settings", label: "Settings" },
+  const TABS: { id: Tab; label: string; icon: IconName }[] = [
+    { id: "library", label: "Library", icon: "photo" },
+    { id: "activity", label: "Activity", icon: "arrow-path" },
+    { id: "statistics", label: "Statistics", icon: "chart-bar" },
+    { id: "settings", label: "Settings", icon: "cog-6-tooth" },
   ];
 
   let info = $state<AppInfo | null>(null);
@@ -154,6 +155,7 @@
             aria-current={tab === t.id ? "page" : undefined}
             onclick={() => (tab = t.id)}
           >
+            <Icon name={t.icon} />
             {t.label}
           </button>
         {/each}
@@ -164,7 +166,8 @@
           class="help"
           onclick={() => (help = true)}
           title="Keyboard shortcuts and guides (?)"
-          data-testid="open-help">Help</button
+          data-testid="open-help"
+          ><Icon name="question-mark-circle" /> Help</button
         >
         <p
           class="version"

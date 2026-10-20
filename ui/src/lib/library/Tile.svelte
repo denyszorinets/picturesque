@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from "../components/Icon.svelte";
   import { imageUrl, type PhotoSummary } from "../api";
 
   interface Props {
@@ -88,15 +89,16 @@
       />
     {/if}
     <span class="badges">
-      {#if photo.flag === "pick"}<span class="badge pick" title="Pick">✓</span
+      {#if photo.flag === "pick"}<span class="badge pick" title="Pick"
+          ><Icon name="check" /></span
         >{/if}
       {#if photo.keeper && photo.flag === "unflagged"}<span
           class="badge auto"
           title="Auto-picked: the app suggests keeping this photo. P makes it a pick, X rejects it."
-          data-testid="tile-auto-picked">✓ Auto</span
+          data-testid="tile-auto-picked"><Icon name="check" /> Auto</span
         >{/if}
       {#if photo.flag === "reject"}<span class="badge reject" title="Rejected"
-          >✕</span
+          ><Icon name="x-mark" /></span
         >{/if}
       {#if photo.has_raw}<span class="badge raw">RAW</span>{/if}
       {#if photo.eyes_closed}<span
@@ -120,12 +122,14 @@
     {/if}
     {#if photo.best_in_series}
       <span class="best-mark" title="Best of the series" data-testid="best-mark"
-        >★</span
+        ><Icon name="star" /></span
       >
     {/if}
     {#if photo.rating > 0}
-      <span class="stars" aria-label={`${photo.rating} stars`}
-        >{"★".repeat(photo.rating)}</span
+      <span class="stars" role="img" aria-label={`${photo.rating} stars`}
+        >{#each { length: photo.rating }, i (i)}<Icon
+            name="star"
+          />{/each}</span
       >
     {/if}
   </button>
@@ -139,7 +143,7 @@
       aria-label={`Select ${photo.file_name}`}
       title={selected ? "Remove from the selection" : "Add to the selection"}
       onclick={() => ontoggle()}
-      data-testid="tile-check">✓</button
+      data-testid="tile-check"><Icon name="check" /></button
     >
   {/if}
   {#if stack}
@@ -150,8 +154,13 @@
       title={stack.expanded
         ? "Stack this series"
         : `Show all ${stack.count} photos of this series`}
+      aria-label={stack.expanded
+        ? "Stack this series"
+        : `Show all ${stack.count} photos of this series`}
       onclick={() => onstack?.()}
-      >{stack.expanded ? "−" : `⧉ ${stack.count}`}</button
+      ><Icon name="rectangle-stack" />{stack.expanded
+        ? ""
+        : stack.count}</button
     >
   {/if}
 </div>
@@ -249,6 +258,10 @@
   }
 
   .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.2em;
+    --icon-size: 0.85rem;
     font-size: 0.7rem;
     font-weight: 700;
     line-height: 1.35;
@@ -286,7 +299,7 @@
     border-radius: 50%;
     background: var(--accent);
     color: var(--accent-fg);
-    font-size: 0.75rem;
+    --icon-size: 0.8rem;
   }
 
   .check {
@@ -302,8 +315,7 @@
     border: 2px solid #fff;
     background: rgb(0 0 0 / 0.35);
     color: transparent;
-    font-size: 0.75rem;
-    font-weight: 700;
+    --icon-size: 0.8rem;
     opacity: 0;
     box-shadow: 0 0 3px rgb(0 0 0 / 0.6);
     transition: opacity var(--dur-fast) var(--ease-out);
@@ -338,6 +350,10 @@
     border-radius: 4px;
     background: rgb(0 0 0 / 0.65);
     color: #fff;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    --icon-size: 0.85rem;
     font-size: 0.72rem;
     font-weight: 700;
   }
@@ -350,8 +366,9 @@
     position: absolute;
     bottom: 4px;
     right: 6px;
+    display: flex;
     color: #ffd25e;
-    font-size: 0.8rem;
-    text-shadow: 0 0 3px rgb(0 0 0 / 0.8);
+    --icon-size: 0.85rem;
+    filter: drop-shadow(0 0 2px rgb(0 0 0 / 0.8));
   }
 </style>

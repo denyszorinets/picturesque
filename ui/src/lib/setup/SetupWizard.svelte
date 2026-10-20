@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from "../components/Icon.svelte";
   import * as api from "../api";
   import type { ImportSource, Settings, TemplatePresetView } from "../api";
   import ModelList from "../ai/ModelList.svelte";
@@ -142,7 +143,9 @@
         <h2 id="setup-title">Welcome to Picturesque</h2>
         <p class="muted step">Step {step + 1} of {STEPS.length}</p>
       </div>
-      <button class="close" aria-label="Close" onclick={onclose}>✕</button>
+      <button class="close" aria-label="Close" onclick={onclose}
+        ><Icon name="x-mark" /></button
+      >
     </header>
 
     <ol class="progress" aria-label="Setup steps">

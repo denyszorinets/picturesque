@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from "../components/Icon.svelte";
   import { ApiError, type ReanalyzeResult } from "../api";
   import { waitingNote } from "./models";
 
@@ -77,7 +78,7 @@
       onclick={() => (confirm ? (asking = true) : start())}
       disabled={disabled || busy}
       {title}
-      data-testid="reanalyze">{label}</button
+      data-testid="reanalyze"><Icon name="sparkles" /> {label}</button
     >
   {/if}
   {#if error}

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from "../components/Icon.svelte";
   import * as api from "../api";
   import type { PhotoSummary } from "../api";
   import { CompareState } from "./compare-state.svelte";
@@ -131,7 +132,7 @@
     <button
       onclick={() => compare.move(-1)}
       disabled={compare.active === 0}
-      aria-label="Previous photo">←</button
+      aria-label="Previous photo"><Icon name="chevron-left" /></button
     >
     <span data-testid="compare-position"
       >{compare.active + 1} / {ids.length}</span
@@ -139,7 +140,7 @@
     <button
       onclick={() => compare.move(1)}
       disabled={compare.active >= ids.length - 1}
-      aria-label="Next photo">→</button
+      aria-label="Next photo"><Icon name="chevron-right" /></button
     >
     <button
       onclick={() => compare.togglePanes()}
@@ -160,7 +161,7 @@
       zoom · Shift+arrows pan · Esc close</span
     >
     <button onclick={() => onclose(compare.activeId)} aria-label="Close compare"
-      >✕</button
+      ><Icon name="x-mark" /></button
     >
   </div>
 </div>

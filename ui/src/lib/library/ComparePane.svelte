@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from "../components/Icon.svelte";
   import { imageUrl, type PhotoSummary } from "../api";
   import type { CompareState } from "./compare-state.svelte";
 
@@ -146,14 +147,23 @@
           >{Math.round(score * 100)}%</span
         >
       {/if}
-      {#if photo.rating > 0}<span class="stars">{"★".repeat(photo.rating)}</span
+      {#if photo.rating > 0}<span
+          class="stars"
+          role="img"
+          aria-label={`${photo.rating} stars`}
+          >{#each { length: photo.rating }, i (i)}<Icon
+              name="star"
+            />{/each}</span
         >{/if}
-      {#if photo.flag === "pick"}<span class="badge pick">✓ Pick</span>{/if}
-      {#if photo.flag === "reject"}<span class="badge reject">✕ Rejected</span
+      {#if photo.flag === "pick"}<span class="badge pick"
+          ><Icon name="check" /> Pick</span
+        >{/if}
+      {#if photo.flag === "reject"}<span class="badge reject"
+          ><Icon name="x-mark" /> Rejected</span
         >{/if}
       {#if photo.best_in_series}<span
           class="badge best"
-          data-testid="compare-best">★ Best</span
+          data-testid="compare-best"><Icon name="star" /> Best</span
         >{/if}
     </div>
   {/if}
@@ -243,10 +253,16 @@
   }
 
   .stars {
+    display: inline-flex;
     color: #ffd25e;
+    --icon-size: 0.9rem;
   }
 
   .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.2em;
+    --icon-size: 0.85rem;
     padding: 1px 6px;
     border-radius: 4px;
     font-weight: 700;
