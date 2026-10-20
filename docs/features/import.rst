@@ -51,7 +51,9 @@ through these steps, shown for each photo in **Activity → Photos**:
 A photo that fails says why (for example, a file that cannot be read) and
 the rest continue. Fix the cause and click **Retry failed**. The **Log**
 records every photo imported, skipped or failed, folders found and
-problems, newest first; the newest 20,000 entries are kept.
+problems, newest first; the newest 20,000 entries are kept. Each entry
+shows the file it is about and the time, with what happened below it;
+warnings and errors are marked with an icon and a coloured edge.
 
 Importing waits while no library folder is set, and continues once one is
 chosen.
