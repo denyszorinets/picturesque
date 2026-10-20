@@ -553,72 +553,77 @@
           >{selection.size} selected</span
         >
       {/if}
-      <select
-        class="small"
-        bind:value={filters.sort}
-        aria-label="Sort"
-        data-testid="sort"
-      >
-        <option value="captured_desc">Newest first</option>
-        <option value="captured_asc">Oldest first</option>
-        <option value="imported_desc">Recently imported</option>
-        <option value="quality_desc">Best quality first</option>
-      </select>
-      <button
-        class="small"
-        aria-pressed={filters.stacked}
-        onclick={() => {
-          filters.stacked = !filters.stacked;
-          filters.expanded.clear();
-        }}
-        title="Show each series as its best photo"
-        data-testid="toggle-stack">Stack series</button
-      >
-      <button
-        class="small"
-        onclick={() => openCompare()}
-        disabled={selection.focus === null && selection.size === 0}
-        title="Compare the selected photos, or the selected photo's series (C)"
-        data-testid="open-compare">Compare</button
-      >
-      <button
-        class="small"
-        onclick={() => (exporting = true)}
-        title={inFolder
-          ? "Copy the keepers to another folder, verified, with their sidecars"
-          : "Copy picks, the photos in view or the selection to a folder"}
-        data-testid="open-export"
-        >{inFolder ? "Copy keepers…" : "Export…"}</button
-      >
-      <Reanalyze
-        reanalyze={api.reanalyzePhotos}
-        photoIds={selectedIds}
-        small
-        label="Re-analyze"
-        disabled={selectedIds.length === 0}
-        title="Analyze the selected photos again (quality, series, faces and AI scores)"
-      />
-      {#if inFolder}
+      <div class="group" role="group" aria-label="View">
+        <select
+          class="small"
+          bind:value={filters.sort}
+          aria-label="Sort"
+          data-testid="sort"
+        >
+          <option value="captured_desc">Newest first</option>
+          <option value="captured_asc">Oldest first</option>
+          <option value="imported_desc">Recently imported</option>
+          <option value="quality_desc">Best quality first</option>
+        </select>
         <button
           class="small"
-          onclick={() => (finishing = true)}
-          title="Label the auto-picked photos and write every sidecar"
-          data-testid="open-finish">Finish folder…</button
+          aria-pressed={filters.stacked}
+          onclick={() => {
+            filters.stacked = !filters.stacked;
+            filters.expanded.clear();
+          }}
+          title="Show each series as its best photo"
+          data-testid="toggle-stack">Stack series</button
         >
-      {/if}
-      {#if inFolder && canClear && folder}
+      </div>
+      <div class="group" role="group" aria-label="Actions">
         <button
           class="small"
-          onclick={() => (clearing = true)}
-          title="Delete the originals you copied (each copy is checked again first)"
-          data-testid="open-clear">Clear folder…</button
+          onclick={() => openCompare()}
+          disabled={selection.focus === null && selection.size === 0}
+          title="Compare the selected photos, or the selected photo's series (C)"
+          data-testid="open-compare">Compare</button
         >
-      {/if}
-      <RejectsMove
-        rejected={store.facets.flags.find((f) => f.flag === "reject")?.count ??
-          0}
-        onmoved={() => void store.refresh()}
-      />
+        <button
+          class="small"
+          class:primary={inFolder}
+          onclick={() => (exporting = true)}
+          title={inFolder
+            ? "Copy the keepers to another folder, verified, with their sidecars"
+            : "Copy picks, the photos in view or the selection to a folder"}
+          data-testid="open-export"
+          >{inFolder ? "Copy keepers…" : "Export…"}</button
+        >
+        <Reanalyze
+          reanalyze={api.reanalyzePhotos}
+          photoIds={selectedIds}
+          small
+          label="Re-analyze"
+          disabled={selectedIds.length === 0}
+          title="Analyze the selected photos again (quality, series, faces and AI scores)"
+        />
+        {#if inFolder}
+          <button
+            class="small"
+            onclick={() => (finishing = true)}
+            title="Label the auto-picked photos and write every sidecar"
+            data-testid="open-finish">Finish folder…</button
+          >
+        {/if}
+        {#if inFolder && canClear && folder}
+          <button
+            class="small danger"
+            onclick={() => (clearing = true)}
+            title="Delete the originals you copied (each copy is checked again first)"
+            data-testid="open-clear">Clear folder…</button
+          >
+        {/if}
+        <RejectsMove
+          rejected={store.facets.flags.find((f) => f.flag === "reject")
+            ?.count ?? 0}
+          onmoved={() => void store.refresh()}
+        />
+      </div>
       <span class="spacer"></span>
       {#if sidecars.label}
         {@const folder = sidecars.status?.folder}
@@ -639,7 +644,7 @@
       {/if}
       {#if analysis.status && analysis.status.waiting_for_models.length > 0}
         <button
-          class="link"
+          class="link warn"
           onclick={() => onsettings?.()}
           title={waitingNote(analysis.status.waiting_for_models)}
           data-testid="analysis-needs-models">AI analysis needs models</button
@@ -651,18 +656,20 @@
       {#if culling.error}
         <span class="error-text" role="alert">{culling.error}</span>
       {/if}
-      <button
-        class="small"
-        onclick={() => culling.undo()}
-        disabled={!culling.canUndo}
-        title="Undo (Ctrl+Z)">Undo</button
-      >
-      <button
-        class="small"
-        onclick={() => culling.redo()}
-        disabled={!culling.canRedo}
-        title="Redo (Ctrl+Shift+Z)">Redo</button
-      >
+      <div class="group history" role="group" aria-label="History">
+        <button
+          class="small"
+          onclick={() => culling.undo()}
+          disabled={!culling.canUndo}
+          title="Undo (Ctrl+Z)">Undo</button
+        >
+        <button
+          class="small"
+          onclick={() => culling.redo()}
+          disabled={!culling.canRedo}
+          title="Redo (Ctrl+Shift+Z)">Redo</button
+        >
+      </div>
     </div>
     <div class="body">
       {#if showFilters}
@@ -783,9 +790,31 @@
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 1rem;
-    padding-bottom: 0.4rem;
+    gap: 0.5rem 0.9rem;
+    padding-bottom: 0.6rem;
     font-size: 0.9rem;
+  }
+
+  .group {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+
+  /* Undo and Redo read as one control. */
+  .history {
+    gap: 0;
+  }
+
+  .history > :first-child {
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+  }
+
+  .history > :last-child {
+    margin-left: -1px;
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
   }
 
   .spacer {
@@ -794,13 +823,25 @@
 
   .search input {
     width: 14rem;
+    height: 2rem;
     padding: 0.25rem 0.6rem;
     font-size: 0.88rem;
   }
 
   .small {
-    padding: 0.2rem 0.6rem;
+    height: 2rem;
+    padding: 0.2rem 0.7rem;
     font-size: 0.85rem;
+  }
+
+  /* Clear folder deletes originals (after asking). */
+  .danger {
+    color: var(--danger);
+  }
+
+  .danger:hover:not(:disabled) {
+    border-color: var(--danger);
+    background: color-mix(in srgb, var(--danger) 10%, var(--surface));
   }
 
   .body {
@@ -842,8 +883,23 @@
     font-size: 0.82rem;
   }
 
+  .chip button {
+    border-radius: 999px;
+  }
+
+  .chip button:hover,
+  .link:hover {
+    background: none;
+    color: var(--fg);
+  }
+
   .link {
     text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  .link.warn {
+    color: var(--warn);
   }
 
   .no-match {

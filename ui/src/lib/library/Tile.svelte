@@ -169,17 +169,20 @@
     height: 100%;
     padding: 0;
     border: 2px solid transparent;
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     background: var(--surface-2);
     overflow: hidden;
     cursor: default;
     display: flex;
     align-items: center;
     justify-content: center;
+    transition:
+      border-color var(--dur-fast) var(--ease-out),
+      box-shadow var(--dur-fast) var(--ease-out);
   }
 
   .tile:hover {
-    border-color: var(--border);
+    border-color: var(--muted);
   }
 
   .tile.selected {
@@ -210,15 +213,17 @@
   }
 
   .ring.pick {
-    box-shadow: inset 0 0 0 4px var(--pick);
+    box-shadow: inset 0 0 0 3px var(--pick);
   }
 
+  /* Quieter than a pick: often every photo of a folder is suggested. */
   .ring.auto {
-    box-shadow: inset 0 0 0 4px var(--auto-pick);
+    box-shadow: inset 0 0 0 2px var(--auto-pick);
   }
 
   .tile.rejected img {
     opacity: 0.35;
+    filter: grayscale(0.6);
   }
 
   img {
@@ -237,19 +242,21 @@
 
   .badges {
     position: absolute;
-    top: 4px;
-    left: 4px;
+    top: 6px;
+    left: 6px;
     display: flex;
     gap: 3px;
   }
 
   .badge {
-    font-size: 0.65rem;
+    font-size: 0.7rem;
     font-weight: 700;
-    padding: 1px 5px;
+    line-height: 1.35;
+    padding: 1px 6px;
     border-radius: 4px;
-    background: rgb(0 0 0 / 0.55);
+    background: rgb(0 0 0 / 0.62);
     color: #fff;
+    backdrop-filter: blur(4px);
   }
 
   .badge.pick {
@@ -257,9 +264,7 @@
   }
 
   .badge.auto {
-    background: rgb(0 0 0 / 0.55);
     color: #8ee3ad;
-    box-shadow: inset 0 0 0 1.5px #8ee3ad;
   }
 
   .badge.reject {
@@ -272,8 +277,8 @@
 
   .best-mark {
     position: absolute;
-    top: 4px;
-    right: 4px;
+    top: 6px;
+    right: 6px;
     width: 1.3rem;
     height: 1.3rem;
     display: grid;
@@ -286,8 +291,8 @@
 
   .check {
     position: absolute;
-    top: 4px;
-    right: 4px;
+    top: 6px;
+    right: 6px;
     width: 1.3rem;
     height: 1.3rem;
     padding: 0;
@@ -301,6 +306,11 @@
     font-weight: 700;
     opacity: 0;
     box-shadow: 0 0 3px rgb(0 0 0 / 0.6);
+    transition: opacity var(--dur-fast) var(--ease-out);
+  }
+
+  .check:hover:not([aria-checked="true"]) {
+    background: rgb(0 0 0 / 0.55);
   }
 
   .check.shifted {
@@ -321,8 +331,8 @@
 
   .stack {
     position: absolute;
-    bottom: 4px;
-    left: 4px;
+    bottom: 6px;
+    left: 6px;
     padding: 1px 6px;
     border: none;
     border-radius: 4px;
