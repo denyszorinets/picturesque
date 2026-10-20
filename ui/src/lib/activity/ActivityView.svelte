@@ -1,5 +1,6 @@
 <script lang="ts">
   import Icon from "../components/Icon.svelte";
+  import { logLine } from "./log";
   import type { JobFilter, LogLevel } from "../api";
   import PathInput from "../components/PathInput.svelte";
   import { STEP_LABELS, steps, type Pipeline } from "./pipeline.svelte";
@@ -328,9 +329,33 @@
     {:else}
       <ol class="entries" data-testid="log">
         {#each pipeline.log as entry (entry.id)}
+          {@const line = logLine(entry.message)}
           <li class={entry.level}>
             <time datetime={entry.at}>{time(entry.at)}</time>
-            <span class="message">{entry.message}</span>
+            <span class="subject" class:plain={!line.subject}>
+              {#if entry.level !== "info"}
+                <Icon
+                  name={entry.level === "error"
+                    ? "x-circle"
+                    : "exclamation-triangle"}
+                  label={entry.level === "error" ? "Error" : "Warning"}
+                />
+              {/if}
+              <span
+                >{#if line.subject}{line.subject}<span class="visually-hidden"
+                    >:&#32;</span
+                  >{:else}{#each line.detail as part, i (i)}<span class="seg"
+                      >{part}</span
+                    ><wbr />{/each}{/if}</span
+              >
+            </span>
+            {#if line.subject}
+              <span class="detail"
+                >{#each line.detail as part, i (i)}<span class="seg"
+                    >{part}</span
+                  ><wbr />{/each}</span
+              >
+            {/if}
           </li>
         {/each}
       </ol>
@@ -666,13 +691,21 @@
     flex-direction: column;
   }
 
+  /* The file and time on top, what happened (with its path) below. */
   .entries li {
     display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
-    gap: 0.6rem;
-    padding: 0.3rem 0.2rem 0.3rem 0.5rem;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "subject time"
+      "detail detail";
+    gap: 0.1rem 0.6rem;
+    padding: 0.45rem 0.4rem 0.45rem 0.6rem;
     border-left: 3px solid transparent;
     border-bottom: 1px solid var(--border);
+  }
+
+  .entries li:hover {
+    background: var(--hover);
   }
 
   .entries li.warn {
@@ -683,13 +716,44 @@
     border-left-color: var(--danger);
   }
 
+  .entries li.warn .subject {
+    color: var(--warn);
+  }
+
+  .entries li.error .subject {
+    color: var(--danger);
+  }
+
   .entries time {
+    grid-area: time;
     color: var(--muted);
-    font-variant-numeric: tabular-nums;
+    font-size: 0.78rem;
     white-space: nowrap;
   }
 
-  .message {
+  .subject {
+    grid-area: subject;
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    min-width: 0;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+  }
+
+  /* A path piece stays whole unless it alone is wider than the log. */
+  .seg {
+    display: inline-block;
+    max-width: 100%;
+  }
+
+  .subject.plain {
+    font-weight: 400;
+  }
+
+  .detail {
+    grid-area: detail;
+    color: var(--muted);
     overflow-wrap: anywhere;
   }
 </style>
