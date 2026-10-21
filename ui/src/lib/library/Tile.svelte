@@ -232,7 +232,6 @@
 
   .tile.rejected img {
     opacity: 0.35;
-    filter: grayscale(0.6);
   }
 
   img {
@@ -269,7 +268,6 @@
     border-radius: 4px;
     background: rgb(0 0 0 / 0.62);
     color: #fff;
-    backdrop-filter: blur(4px);
   }
 
   .badge.pick {
@@ -362,13 +360,18 @@
     background: rgb(0 0 0 / 0.85);
   }
 
+  /* A dark pill like the other badges keeps the stars readable on any
+     photo. No CSS filters on tiles: WebKitGTK repaints every filtered
+     tile on any change, which froze the app with many photos (#192). */
   .stars {
     position: absolute;
-    bottom: 4px;
+    bottom: 6px;
     right: 6px;
     display: flex;
+    padding: 2px 4px;
+    border-radius: 4px;
+    background: rgb(0 0 0 / 0.62);
     color: #ffd25e;
-    --icon-size: 0.85rem;
-    filter: drop-shadow(0 0 2px rgb(0 0 0 / 0.8));
+    --icon-size: 0.8rem;
   }
 </style>

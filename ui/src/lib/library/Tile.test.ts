@@ -2,6 +2,7 @@ import { cleanup, render, screen } from "@testing-library/svelte";
 import { afterEach, describe, expect, it } from "vitest";
 import type { PhotoSummary } from "../api";
 import Tile from "./Tile.svelte";
+import tileSource from "./Tile.svelte?raw";
 
 afterEach(cleanup);
 
@@ -60,5 +61,15 @@ describe("Tile ring", () => {
 
   it("leaves other photos without a ring", () => {
     expect(ring(photo())).toBeNull();
+  });
+});
+
+describe("Tile styles", () => {
+  // WebKitGTK repaints every filtered tile on any change; with thousands of
+  // photos the app froze and ran out of memory (#192).
+  it("use no CSS filters", () => {
+    const style = tileSource.slice(tileSource.indexOf("<style>"));
+    expect(style).not.toMatch(/(^|[^-])filter\s*:/m);
+    expect(style).not.toMatch(/backdrop-filter\s*:/);
   });
 });
