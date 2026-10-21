@@ -148,6 +148,20 @@ jobs:
       - name: Bundle Homebrew libraries into the app and make the dmg
         run: scripts/bundle-macos.sh
 
+      - name: Start the app from the dmg
+        run: |
+          dmg=$(ls target/release/bundle/dmg/*.dmg)
+          hdiutil attach "$dmg" -nobrowse -mountpoint /tmp/picturesque-dmg
+          cp -R /tmp/picturesque-dmg/Picturesque.app "$RUNNER_TEMP/"
+          hdiutil detach /tmp/picturesque-dmg
+          # The app opens its catalog once dyld loaded every library (a
+          # missing or rejected one stops it at launch, #52).
+          "$RUNNER_TEMP/Picturesque.app/Contents/MacOS/picturesque-desktop" &
+          catalog="$HOME/Library/Application Support/io.github.denyszorinets.picturesque/catalog.sqlite"
+          for _ in $(seq 1 30); do [ -f "$catalog" ] && break; sleep 2; done
+          kill %1 || true
+          test -f "$catalog"
+
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: installers-macos
