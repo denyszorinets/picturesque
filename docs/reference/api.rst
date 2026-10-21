@@ -21,6 +21,41 @@ Commands
 ``get_settings``, ``update_settings``
    See :doc:`settings`.
 
+``open_folder``
+   ``{ "path": "/home/me/Pictures/2026-10-18 Hike" }``. Closes the library
+   or the folder open now (writing pending sidecars first) and culls this
+   folder in place (:doc:`/features/folders`). Returns the settings as the
+   folder sees them: ``open_folder`` and ``library_root`` are the folder.
+   A relative path, a folder that cannot be read, a whole disk, and a
+   folder inside or holding the library are ``invalid_arguments``.
+
+``open_library``
+   No arguments. Goes back to the library from a folder; returns the
+   settings.
+
+``clear_plan``
+   No arguments. What **Clear folder…** would delete: ``{ "mode":
+   "verified", "photos": 40, "files": 80, "bytes": 2000000000,
+   "rejects": 0, "partly_copied": 1 }``. Only in a folder session
+   (``invalid_arguments`` in the library).
+
+``clear_folder``
+   No arguments. Deletes what the plan says, re-verifying every copy
+   first (:ref:`features-folders-clear`). Returns ``{ "deleted": 39,
+   "files": 78, "bytes": 1950000000, "kept": [{ "photo_id": 7, "reason":
+   "its copy … changed since it was copied" }] }``. Permanent.
+
+``finish_status``
+   No arguments. ``{ "auto_picked": 12, "labels_to_write": 12, "picks": 30,
+   "rejects": 41 }``: auto-picked photos, how many of them still need the
+   auto-pick label in their sidecars (or have it but are no longer
+   auto-picked), and the picks and rejects (:ref:`features-folders-finish`).
+
+``finish_folder``
+   No arguments. Marks exactly the auto-picked photos for the auto-pick
+   label and writes every pending sidecar now. Returns ``{ "auto_labeled":
+   12, "written": 15, "failed": 0, "error": null }``.
+
 ``template_presets``
    No arguments. The built-in templates: ``[{ "id", "label", "template" }]``.
 
@@ -225,6 +260,14 @@ Commands
    Removing a model while it downloads is ``invalid_arguments``; unknown
    models are ``not_found``.
 
+``sidecar_status``
+   No arguments. ``{ "pending": 0, "failed": 0, "error": null, "folder":
+   "/home/me/Pictures/Clean" }``: photos whose XMP sidecar does not yet
+   hold their latest decision, photos whose sidecar could not be written
+   on the latest attempt (with the first reason), and the folder sidecars
+   are written in (``null`` before a library is chosen). See
+   :ref:`features-library-sidecars`.
+
 ``analysis_status``
    No arguments. ``{ "analyzed": 120, "total": 300, "running": true,
    "paused": null, "waiting_for_models": ["AI scores and similar photos"]
@@ -358,6 +401,10 @@ events from ``GET /api/events``.
 
 ``analysis_progress``
    The ``analysis_status``, sent after each analyzed photo.
+
+``sidecar_progress``
+   The ``sidecar_status``, sent when decisions change and after each
+   batch of sidecars is written.
 
 ``series_changed``
    ``{ "series": 12, "photos": 57 }``: series membership changed (after

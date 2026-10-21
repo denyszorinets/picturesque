@@ -119,6 +119,8 @@ struct Queue {
     busy: usize,
     /// Why analysis waits; it tries again after `PAUSE_RETRY`.
     paused: Option<String>,
+    /// Set by [`AnalysisService::stop`]: workers exit.
+    stopped: bool,
 }
 
 const CACHE_FULL: &str =
@@ -171,6 +173,7 @@ impl AnalysisService {
                 wake: true,
                 busy: 0,
                 paused: None,
+                stopped: false,
             }),
             signal: Condvar::new(),
             started: AtomicBool::new(false),
@@ -248,6 +251,12 @@ impl AnalysisService {
         self.signal.notify_all();
     }
 
+    /// Stops the background workers after their current photo.
+    pub fn stop(&self) {
+        self.queue.lock().expect("queue lock").stopped = true;
+        self.signal.notify_all();
+    }
+
     /// Starts `workers` background threads (once).
     pub fn start(self: &Arc<Self>, workers: usize) {
         if self.analyzers.is_empty() || self.started.swap(true, Ordering::AcqRel) {
@@ -281,6 +290,9 @@ impl AnalysisService {
 
     fn worker(&self) {
         loop {
+            if self.queue.lock().expect("queue lock").stopped {
+                return;
+            }
             match self.next() {
                 Some(id) => {
                     let result = self.process(id);
@@ -306,6 +318,7 @@ impl AnalysisService {
                             let mut q = self.queue.lock().expect("queue lock");
                             while let Some(left) =
                                 deadline.checked_duration_since(std::time::Instant::now())
+                                && !q.stopped
                             {
                                 q = self.signal.wait_timeout(q, left).expect("queue lock").0;
                             }
@@ -316,7 +329,7 @@ impl AnalysisService {
                 }
                 None => {
                     let mut q = self.queue.lock().expect("queue lock");
-                    while !q.wake {
+                    while !q.wake && !q.stopped {
                         q = self.signal.wait(q).expect("queue lock");
                     }
                 }

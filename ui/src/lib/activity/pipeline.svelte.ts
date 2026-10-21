@@ -40,16 +40,6 @@ export function isBusy(status: PipelineStatus | null): boolean {
   );
 }
 
-/** Short text for the header indicator, or `null` when idle. */
-export function indicatorLabel(status: PipelineStatus | null): string | null {
-  if (!status) return null;
-  if (status.paused && status.queued > 0) return "Import paused";
-  if (status.queued > 0)
-    return `Importing ${status.queued} photo${status.queued === 1 ? "" : "s"}`;
-  if (status.scanning) return "Looking for new photos";
-  return null;
-}
-
 export type StepState = "done" | "active" | "pending" | "skipped" | "failed";
 
 export interface Step {

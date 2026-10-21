@@ -215,10 +215,104 @@ impl PhotoCatalog for SqliteCatalog {
         self.store_decision(id, decision)
     }
 
+    fn set_decision_saved(
+        &self,
+        id: PhotoId,
+        decision: picturesque_core::decision::Decision,
+    ) -> Result<(), CatalogError> {
+        self.store_decision(id, decision)?;
+        self.conn()
+            .execute(
+                "UPDATE decision SET sidecar_revision = revision,
+                     sidecar_written_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+                 WHERE photo_id = ?1",
+                [id.0],
+            )
+            .map_err(storage)?;
+        Ok(())
+    }
+
     fn dirty_decisions(
         &self,
     ) -> Result<Vec<picturesque_app::ports::catalog::DirtyDecision>, CatalogError> {
         self.load_dirty()
+    }
+
+    fn remove_photo(&self, id: PhotoId) -> Result<(), CatalogError> {
+        self.conn()
+            .execute("DELETE FROM photo WHERE id = ?1", [id.0])
+            .map_err(storage)?;
+        Ok(())
+    }
+
+    fn record_copies(
+        &self,
+        copies: &[picturesque_app::ports::catalog::CopyRecord],
+    ) -> Result<(), CatalogError> {
+        let mut conn = self.conn();
+        let tx = conn.transaction().map_err(storage)?;
+        for copy in copies {
+            tx.execute(
+                "INSERT INTO copy_record (photo_id, source, destination, hash, size)
+                 VALUES (?1, ?2, ?3, ?4, ?5)
+                 ON CONFLICT (photo_id, source) DO UPDATE SET destination = excluded.destination,
+                     hash = excluded.hash, size = excluded.size, copied_at = excluded.copied_at",
+                params![
+                    copy.photo_id.0,
+                    to_library_path(&copy.source)?,
+                    copy.destination
+                        .to_str()
+                        .ok_or_else(|| storage("copy path is not UTF-8"))?,
+                    copy.hash.as_bytes().as_slice(),
+                    i64::try_from(copy.size).map_err(storage)?
+                ],
+            )
+            .map_err(storage)?;
+        }
+        tx.commit().map_err(storage)
+    }
+
+    fn copies(&self) -> Result<Vec<picturesque_app::ports::catalog::CopyRecord>, CatalogError> {
+        let conn = self.conn();
+        let mut stmt = conn
+            .prepare(
+                "SELECT photo_id, source, destination, hash, size FROM copy_record
+                 ORDER BY photo_id, source",
+            )
+            .map_err(storage)?;
+        stmt.query_map([], |r| {
+            let hash: Vec<u8> = r.get(3)?;
+            Ok((
+                r.get::<_, i64>(0)?,
+                r.get::<_, String>(1)?,
+                r.get::<_, String>(2)?,
+                hash,
+                r.get::<_, i64>(4)?,
+            ))
+        })
+        .map_err(storage)?
+        .map(|row| {
+            let (id, source, destination, hash, size) = row.map_err(storage)?;
+            let hash: [u8; 32] = hash
+                .try_into()
+                .map_err(|_| storage("a copy's hash is not 32 bytes"))?;
+            Ok(picturesque_app::ports::catalog::CopyRecord {
+                photo_id: PhotoId(id),
+                source: from_library_path(&source),
+                destination: PathBuf::from(destination),
+                hash: ContentHash::from_bytes(hash),
+                size: u64::try_from(size).map_err(storage)?,
+            })
+        })
+        .collect()
+    }
+
+    fn auto_labeled(&self) -> Result<HashSet<PhotoId>, CatalogError> {
+        self.load_auto_labeled()
+    }
+
+    fn set_auto_labeled(&self, ids: &[PhotoId]) -> Result<usize, CatalogError> {
+        self.store_auto_labeled(ids)
     }
 
     fn mark_sidecar_written(&self, id: PhotoId, token: &str) -> Result<(), CatalogError> {

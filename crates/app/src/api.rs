@@ -167,6 +167,8 @@ pub struct Api {
     rejects: RejectsService,
     export: Arc<ExportService>,
     pipeline: Arc<ImportPipeline>,
+    finish: crate::finish::FinishService,
+    clear: crate::clear::ClearService,
 }
 
 impl fmt::Debug for Api {
@@ -212,6 +214,7 @@ impl Api {
             Arc::clone(&ctx.pixels),
             Arc::clone(&ctx.settings_store),
             Arc::clone(&events) as Arc<dyn EventSink>,
+            Arc::clone(&ctx.sidecars),
         ));
         let analysis = Arc::new(AnalysisService::new(
             Arc::clone(&ctx.catalog),
@@ -258,6 +261,7 @@ impl Api {
             Arc::clone(&ctx.catalog),
             Arc::clone(&ctx.settings_store),
             Arc::clone(&ctx.sidecars),
+            Arc::clone(&events) as Arc<dyn EventSink>,
         ));
         let search = TextSearch::new(
             Arc::clone(&models),
@@ -271,6 +275,12 @@ impl Api {
             Arc::clone(&ctx.settings_store),
         );
         Ok(Self {
+            clear: crate::clear::ClearService::new(
+                Arc::clone(&catalog),
+                Arc::clone(&ctx.fs),
+                Arc::clone(&ctx.settings_store),
+            ),
+            finish: crate::finish::FinishService::new(Arc::clone(&catalog), Arc::clone(&sidecars)),
             pipeline,
             export,
             search,
@@ -324,6 +334,17 @@ impl Api {
         self.analysis.start(analysis_workers());
         self.series.start();
         self.pipeline.start();
+    }
+
+    /// Writes pending sidecars and stops all background work, before the
+    /// `Api` is replaced by another session's (ADR-0013). Work in progress
+    /// finishes its current step; the catalog stays consistent.
+    pub fn shutdown(&self) {
+        self.sidecars.stop();
+        self.pipeline.stop();
+        self.analysis.stop();
+        self.series.stop();
+        self.thumbnails.stop();
     }
 
     /// Scans every import source and imports what it finds, on the calling
@@ -537,6 +558,7 @@ impl Api {
             "set_decisions" => {
                 let SetDecisionsArgs { changes } = parse_args(command, args)?;
                 let decisions = self.set_decisions(&changes)?;
+                self.sidecars.notify();
                 // Rejected photos are never chosen as best.
                 self.series.notify();
                 respond(decisions)
@@ -726,6 +748,30 @@ impl Api {
                 no_args(command, &args)?;
                 respond(self.ai.status().map_err(catalog_error)?)
             }
+            "clear_plan" => {
+                no_args(command, &args)?;
+                respond(self.clear.plan().map_err(clear_error)?)
+            }
+            "clear_folder" => {
+                no_args(command, &args)?;
+                let result = self.clear.clear().map_err(clear_error)?;
+                // Deleted photos leave their series and the search index.
+                self.series.notify();
+                self.embeddings.invalidate();
+                respond(result)
+            }
+            "finish_status" => {
+                no_args(command, &args)?;
+                respond(self.finish.status().map_err(catalog_error)?)
+            }
+            "finish_folder" => {
+                no_args(command, &args)?;
+                respond(self.finish.finish().map_err(catalog_error)?)
+            }
+            "sidecar_status" => {
+                no_args(command, &args)?;
+                respond(self.sidecars.status())
+            }
             "analysis_status" => {
                 no_args(command, &args)?;
                 respond(self.analysis.status())
@@ -833,6 +879,15 @@ fn catalog_error(e: crate::ports::catalog::CatalogError) -> ApiError {
     ApiError::internal(e.to_string())
 }
 
+fn clear_error(e: crate::clear::ClearError) -> ApiError {
+    match e {
+        crate::clear::ClearError::Invalid(msg) => {
+            ApiError::new(ApiErrorCode::InvalidArguments, msg)
+        }
+        crate::clear::ClearError::Failed(msg) => ApiError::internal(msg),
+    }
+}
+
 fn settings_error(e: SettingsError) -> ApiError {
     match e {
         SettingsError::Invalid(msg) => ApiError::new(ApiErrorCode::InvalidArguments, msg),
@@ -937,7 +992,11 @@ mod tests {
                 "ai": { "provider": "auto" },
                 "import": { "rescan_minutes": 5 },
                 "auto_pick": { "enabled": true, "min_quality": 0.5 },
-                "onboarding": { "tour_done": false }
+                "onboarding": { "tour_done": false },
+                "open_folder": null,
+                "recent_folders": [],
+                "labels": { "pick": "green", "auto_pick": "yellow" },
+                "delete_after_copy": "verified"
             })
         );
     }
@@ -1008,8 +1067,13 @@ mod tests {
         use picturesque_core::photo::{Asset, NewPhoto, PhotoAssets};
         use serde_json::json;
 
+        use std::path::Path;
+
+        use serde_json::Value;
+
         use crate::api::{Api, ApiErrorCode};
         use crate::ports::catalog::PhotoCatalog;
+        use crate::ports::settings::SettingsStore;
         use crate::testing::{FakeMetadata, MemFs, TestWorld};
 
         fn api_with_photos(n: u8) -> (Api, TestWorld) {
@@ -1048,6 +1112,130 @@ mod tests {
             assert_eq!(
                 result,
                 json!([{ "photo_id": 1, "flag": "pick", "rating": 4 }, { "photo_id": 2, "flag": "reject", "rating": 0 }])
+            );
+        }
+
+        /// Photos 1 and 2 are suggested keepers; 2 is rejected.
+        fn finishing_world() -> (Api, TestWorld) {
+            let (api, world) = api_with_photos(3);
+            world
+                .settings
+                .save_settings(&crate::settings::Settings {
+                    library_root: Some("/lib".into()),
+                    ..Default::default()
+                })
+                .unwrap();
+            let keeper = |id: i64| crate::ports::catalog::PhotoScore {
+                id: picturesque_core::photo::PhotoId(id),
+                score: 0.9,
+                aesthetic: None,
+                eyes_closed: None,
+                faces: 0,
+                keeper: true,
+            };
+            world
+                .catalog
+                .replace_scores(&[keeper(1), keeper(2)])
+                .unwrap();
+            api.call(
+                "set_decisions",
+                json!({ "changes": [{ "photo_id": 2, "flag": "reject" }] }),
+            )
+            .unwrap();
+            (api, world)
+        }
+
+        fn label(world: &TestWorld, file: &str) -> Option<crate::ports::sidecars::ColorLabel> {
+            world
+                .sidecars
+                .1
+                .lock()
+                .unwrap()
+                .get(Path::new(file))
+                .copied()
+                .flatten()
+        }
+
+        #[test]
+        fn finishing_labels_auto_picked_photos_and_writes_their_sidecars() {
+            let (api, world) = finishing_world();
+            assert_eq!(
+                api.call("finish_status", Value::Null).unwrap(),
+                json!({ "auto_picked": 1, "labels_to_write": 1, "picks": 0, "rejects": 1 })
+            );
+
+            let result = api.call("finish_folder", Value::Null).unwrap();
+
+            assert_eq!(result["auto_labeled"], 1);
+            assert_eq!(result["failed"], 0);
+            assert_eq!(
+                label(&world, "/lib/0.jpg.xmp"),
+                Some(crate::ports::sidecars::ColorLabel::Yellow)
+            );
+            assert_eq!(label(&world, "/lib/1.jpg.xmp"), None, "rejected");
+            assert_eq!(
+                api.call("finish_status", Value::Null).unwrap()["labels_to_write"],
+                0
+            );
+        }
+
+        #[test]
+        fn a_decision_after_finishing_replaces_the_auto_label() {
+            let (api, world) = finishing_world();
+            api.call("finish_folder", Value::Null).unwrap();
+
+            api.call(
+                "set_decisions",
+                json!({ "changes": [{ "photo_id": 1, "flag": "pick" }] }),
+            )
+            .unwrap();
+            api.flush_sidecars();
+            assert_eq!(
+                label(&world, "/lib/0.jpg.xmp"),
+                Some(crate::ports::sidecars::ColorLabel::Green)
+            );
+
+            api.call(
+                "set_decisions",
+                json!({ "changes": [{ "photo_id": 1, "flag": "reject" }] }),
+            )
+            .unwrap();
+            api.flush_sidecars();
+            assert_eq!(label(&world, "/lib/0.jpg.xmp"), None);
+        }
+
+        #[test]
+        fn a_photo_no_longer_auto_picked_loses_its_label_when_finishing_again() {
+            let (api, world) = finishing_world();
+            api.call("finish_folder", Value::Null).unwrap();
+            world.catalog.replace_scores(&[]).unwrap();
+
+            assert_eq!(
+                api.call("finish_status", Value::Null).unwrap()["labels_to_write"],
+                1
+            );
+            api.call("finish_folder", Value::Null).unwrap();
+
+            assert_eq!(label(&world, "/lib/0.jpg.xmp"), None);
+        }
+
+        #[test]
+        fn deciding_wakes_the_sidecar_writer() {
+            let (api, world) = api_with_photos(1);
+
+            api.call(
+                "set_decisions",
+                json!({ "changes": [{ "photo_id": 1, "flag": "pick" }] }),
+            )
+            .unwrap();
+
+            let events = world.events.0.lock().unwrap();
+            assert!(
+                events.iter().any(|e| matches!(
+                    e,
+                    crate::ports::events::AppEvent::SidecarProgress(s) if s.pending == 1
+                )),
+                "a decision reports a pending sidecar"
             );
         }
 

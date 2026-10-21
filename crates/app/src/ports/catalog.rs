@@ -76,6 +76,22 @@ pub struct DirtyDecision {
     pub id: PhotoId,
     pub decision: Decision,
     pub token: String,
+    /// Whether the photo gets the auto-pick label while unflagged.
+    pub auto_labeled: bool,
+}
+
+/// A verified copy of one of a photo's files, made out of a folder
+/// session (ADR-0014).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CopyRecord {
+    pub photo_id: PhotoId,
+    /// The original, relative to the folder.
+    pub source: PathBuf,
+    /// Where the copy is (absolute).
+    pub destination: PathBuf,
+    /// The copy's content when it was verified.
+    pub hash: ContentHash,
+    pub size: u64,
 }
 
 /// Stores and retrieves photos.
@@ -114,9 +130,31 @@ pub trait PhotoCatalog: Send + Sync {
 
     fn set_decision(&self, id: PhotoId, decision: Decision) -> Result<(), CatalogError>;
 
+    /// Records a decision read from the photo's sidecar: the sidecar
+    /// already holds it, so it is not written back.
+    fn set_decision_saved(&self, id: PhotoId, decision: Decision) -> Result<(), CatalogError>;
+
     /// Decisions changed since their sidecar was last written, with a token
     /// identifying the change.
     fn dirty_decisions(&self) -> Result<Vec<DirtyDecision>, CatalogError>;
+
+    /// Removes a photo and everything known about it (its files are
+    /// already gone).
+    fn remove_photo(&self, id: PhotoId) -> Result<(), CatalogError>;
+
+    /// Records verified copies, replacing earlier ones of the same files.
+    fn record_copies(&self, copies: &[CopyRecord]) -> Result<(), CatalogError>;
+
+    /// Every recorded copy.
+    fn copies(&self) -> Result<Vec<CopyRecord>, CatalogError>;
+
+    /// Photos marked to carry the auto-pick label.
+    fn auto_labeled(&self) -> Result<HashSet<PhotoId>, CatalogError>;
+
+    /// Marks exactly `ids` (photos without a decision get the default one)
+    /// to carry the auto-pick label; photos whose mark changes get their
+    /// sidecars rewritten. Returns how many changed.
+    fn set_auto_labeled(&self, ids: &[PhotoId]) -> Result<usize, CatalogError>;
 
     /// Records that the sidecar reflects the change identified by `token`.
     /// Does nothing if the decision changed again meanwhile.

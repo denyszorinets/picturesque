@@ -1,4 +1,6 @@
 <script lang="ts">
+  import Icon from "../components/Icon.svelte";
+  import { logLine } from "./log";
   import type { JobFilter, LogLevel } from "../api";
   import PathInput from "../components/PathInput.svelte";
   import { STEP_LABELS, steps, type Pipeline } from "./pipeline.svelte";
@@ -9,12 +11,21 @@
     visible: boolean;
     /** Whether a library folder is set; importing waits for one. */
     hasLibrary: boolean;
+    /** Whether a folder is culled in place: it is the only folder. */
+    inFolder?: boolean;
     onsettings?: () => void;
     /** Opens the setup wizard. */
     onsetup?: () => void;
   }
 
-  let { pipeline, visible, hasLibrary, onsettings, onsetup }: Props = $props();
+  let {
+    pipeline,
+    visible,
+    hasLibrary,
+    inFolder = false,
+    onsettings,
+    onsetup,
+  }: Props = $props();
   let draft = $state("");
 
   /** How often the view reloads while visible. */
@@ -83,7 +94,7 @@
 <div class="activity">
   <section class="card sources" aria-labelledby="sources-title">
     <div class="heading">
-      <h2 id="sources-title">Import folders</h2>
+      <h2 id="sources-title">{inFolder ? "Folder" : "Import folders"}</h2>
       {#if pipeline.sources.length > 0}
         <button
           class="small"
@@ -93,11 +104,20 @@
         >
       {/if}
     </div>
-    <p class="muted hint">
-      Photos in these folders and their subfolders are copied into the library.
-      Watched folders are imported automatically when new photos arrive. The
-      folders themselves are never changed.
-    </p>
+    {#if inFolder}
+      <p class="muted hint" data-testid="in-place-hint">
+        Photos in this folder and its subfolders are culled where they are:
+        nothing is copied, and only XMP sidecars are written next to them. New
+        photos show up when the folder is watched. To cull another folder, use
+        the folder menu at the top left.
+      </p>
+    {:else}
+      <p class="muted hint">
+        Photos in these folders and their subfolders are copied into the
+        library. Watched folders are imported automatically when new photos
+        arrive. The folders themselves are never changed.
+      </p>
+    {/if}
 
     {#if !hasLibrary}
       <div class="notice" data-testid="needs-library">
@@ -149,34 +169,34 @@
               onclick={() => pipeline.scan(source.id)}
               aria-label={`Check ${source.path} now`}>Check</button
             >
-            <button
-              class="remove"
-              onclick={() => pipeline.removeSource(source.id)}
-              aria-label={`Remove ${source.path}`}
-              title="Stop importing from this folder (imported photos stay)"
-              >✕</button
-            >
+            {#if !inFolder}<button
+                class="remove"
+                onclick={() => pipeline.removeSource(source.id)}
+                aria-label={`Remove ${source.path}`}
+                title="Stop importing from this folder (imported photos stay)"
+                ><Icon name="x-mark" /></button
+              >{/if}
           </li>
         {/each}
       </ul>
     {/if}
 
-    <div class="add">
-      <PathInput
-        label="Folder to import from"
-        bind:value={draft}
-        multiple
-        onpick={(paths) => paths.forEach((p) => void add(p))}
-        onsubmit={(p) => void add(p)}
-        testid="source-path"
-      />
-      <button
-        class="primary"
-        onclick={() => add(draft)}
-        disabled={!draft.trim()}
-        data-testid="add-source">Add folder</button
-      >
-    </div>
+    {#if !inFolder}<div class="add">
+        <PathInput
+          label="Folder to import from"
+          bind:value={draft}
+          multiple
+          onpick={(paths) => paths.forEach((p) => void add(p))}
+          onsubmit={(p) => void add(p)}
+          testid="source-path"
+        />
+        <button
+          class="primary"
+          onclick={() => add(draft)}
+          disabled={!draft.trim()}
+          data-testid="add-source">Add folder</button
+        >
+      </div>{/if}
     {#if pipeline.error}
       <p class="error-text" role="alert" data-testid="activity-error">
         {pipeline.error}
@@ -309,9 +329,33 @@
     {:else}
       <ol class="entries" data-testid="log">
         {#each pipeline.log as entry (entry.id)}
+          {@const line = logLine(entry.message)}
           <li class={entry.level}>
             <time datetime={entry.at}>{time(entry.at)}</time>
-            <span class="message">{entry.message}</span>
+            <span class="subject" class:plain={!line.subject}>
+              {#if entry.level !== "info"}
+                <Icon
+                  name={entry.level === "error"
+                    ? "x-circle"
+                    : "exclamation-triangle"}
+                  label={entry.level === "error" ? "Error" : "Warning"}
+                />
+              {/if}
+              <span
+                >{#if line.subject}{line.subject}<span class="visually-hidden"
+                    >:&#32;</span
+                  >{:else}{#each line.detail as part, i (i)}<span class="seg"
+                      >{part}</span
+                    ><wbr />{/each}{/if}</span
+              >
+            </span>
+            {#if line.subject}
+              <span class="detail"
+                >{#each line.detail as part, i (i)}<span class="seg"
+                    >{part}</span
+                  ><wbr />{/each}</span
+              >
+            {/if}
           </li>
         {/each}
       </ol>
@@ -647,13 +691,21 @@
     flex-direction: column;
   }
 
+  /* The file and time on top, what happened (with its path) below. */
   .entries li {
     display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
-    gap: 0.6rem;
-    padding: 0.3rem 0.2rem 0.3rem 0.5rem;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "subject time"
+      "detail detail";
+    gap: 0.1rem 0.6rem;
+    padding: 0.45rem 0.4rem 0.45rem 0.6rem;
     border-left: 3px solid transparent;
     border-bottom: 1px solid var(--border);
+  }
+
+  .entries li:hover {
+    background: var(--hover);
   }
 
   .entries li.warn {
@@ -664,13 +716,44 @@
     border-left-color: var(--danger);
   }
 
+  .entries li.warn .subject {
+    color: var(--warn);
+  }
+
+  .entries li.error .subject {
+    color: var(--danger);
+  }
+
   .entries time {
+    grid-area: time;
     color: var(--muted);
-    font-variant-numeric: tabular-nums;
+    font-size: 0.78rem;
     white-space: nowrap;
   }
 
-  .message {
+  .subject {
+    grid-area: subject;
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    min-width: 0;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+  }
+
+  /* A path piece stays whole unless it alone is wider than the log. */
+  .seg {
+    display: inline-block;
+    max-width: 100%;
+  }
+
+  .subject.plain {
+    font-weight: 400;
+  }
+
+  .detail {
+    grid-area: detail;
+    color: var(--muted);
     overflow-wrap: anywhere;
   }
 </style>

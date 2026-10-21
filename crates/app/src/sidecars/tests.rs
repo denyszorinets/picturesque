@@ -8,17 +8,19 @@ use picturesque_core::hash::ContentHash;
 use picturesque_core::media::MediaFormat;
 use picturesque_core::photo::{Asset, NewPhoto, PhotoAssets, PhotoId};
 
-use super::{SidecarService, sidecar_path};
+use super::{SidecarService, SidecarStatus, sidecar_path, sidecar_paths};
 use crate::ports::catalog::PhotoCatalog;
+use crate::ports::events::AppEvent;
 use crate::ports::settings::SettingsStore;
-use crate::ports::sidecars::SidecarStore;
+use crate::ports::sidecars::{ColorLabel, SidecarStore, SidecarValues};
 use crate::settings::tests::MemorySettings;
 use crate::settings::{Settings, SidecarNaming};
-use crate::testing::MemoryCatalog;
+use crate::testing::{MemoryCatalog, RecordedEvents};
 
 #[derive(Default)]
 struct FakeSidecars {
     files: Mutex<HashMap<PathBuf, Decision>>,
+    labels: Mutex<HashMap<PathBuf, Option<ColorLabel>>>,
     writes: Mutex<usize>,
     broken: Vec<PathBuf>,
 }
@@ -28,7 +30,12 @@ impl SidecarStore for FakeSidecars {
         Ok(self.files.lock().unwrap().get(path).copied())
     }
 
-    fn write(&self, path: &Path, decision: Decision) -> Result<(ContentHash, u64), String> {
+    fn write(&self, path: &Path, values: SidecarValues) -> Result<(ContentHash, u64), String> {
+        let decision = values.decision;
+        self.labels
+            .lock()
+            .unwrap()
+            .insert(path.to_path_buf(), values.label);
         if self.broken.iter().any(|b| b == path) {
             return Err("cannot parse existing sidecar".into());
         }
@@ -61,6 +68,8 @@ struct World {
     catalog: Arc<MemoryCatalog>,
     store: Arc<FakeSidecars>,
     service: Arc<SidecarService>,
+    events: Arc<RecordedEvents>,
+    settings: Arc<MemorySettings>,
 }
 
 fn world(store: FakeSidecars, naming: SidecarNaming) -> World {
@@ -74,15 +83,20 @@ fn world(store: FakeSidecars, naming: SidecarNaming) -> World {
         })
         .unwrap();
     let store = Arc::new(store);
+    let events = Arc::new(RecordedEvents::default());
     let service = Arc::new(SidecarService::new(
         catalog.clone(),
-        settings,
+        settings.clone(),
         store.clone(),
+        events.clone(),
     ));
+    let settings_handle = settings.clone();
     World {
         catalog,
         store,
         service,
+        events,
+        settings: settings_handle,
     }
 }
 
@@ -226,5 +240,185 @@ fn the_worker_writes_once_after_a_burst_of_changes() {
         *w.store.writes.lock().unwrap(),
         1,
         "debounced into one write"
+    );
+}
+
+#[test]
+fn status_counts_pending_and_failed_sidecars() {
+    let w = world(
+        FakeSidecars {
+            broken: vec!["/lib/b.JPG.xmp".into()],
+            ..Default::default()
+        },
+        SidecarNaming::FileExtension,
+    );
+    let ok = add(&w.catalog, vec![asset("a.JPG", 1)]);
+    let bad = add(&w.catalog, vec![asset("b.JPG", 2)]);
+    w.catalog.set_decision(ok, d(Flag::Pick, 0)).unwrap();
+    w.catalog.set_decision(bad, d(Flag::Pick, 0)).unwrap();
+
+    let before = w.service.status();
+    w.service.flush();
+    let after = w.service.status();
+
+    assert_eq!(
+        before,
+        SidecarStatus {
+            pending: 2,
+            failed: 0,
+            error: None,
+            folder: Some("/lib".into()),
+        }
+    );
+    assert_eq!(after.pending, 1, "the failed one is retried later");
+    assert_eq!(after.failed, 1);
+    assert_eq!(
+        after.error.as_deref(),
+        Some("cannot parse existing sidecar")
+    );
+}
+
+#[test]
+fn notify_and_flush_report_progress() {
+    let w = world(FakeSidecars::default(), SidecarNaming::FileExtension);
+    let id = add(&w.catalog, vec![asset("a.JPG", 1)]);
+    w.catalog.set_decision(id, d(Flag::Pick, 0)).unwrap();
+
+    w.service.notify();
+    w.service.flush();
+
+    let pending: Vec<usize> = w
+        .events
+        .0
+        .lock()
+        .unwrap()
+        .iter()
+        .filter_map(|e| match e {
+            AppEvent::SidecarProgress(s) => Some(s.pending),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(pending, [1, 0]);
+}
+
+#[test]
+fn in_place_every_file_of_a_pair_gets_a_sidecar() {
+    let w = world(FakeSidecars::default(), SidecarNaming::FileExtension);
+    let pair = add(
+        &w.catalog,
+        vec![asset("2026/IMG_1.CR3", 1), asset("2026/IMG_1.JPG", 2)],
+    );
+    let photo = w.catalog.photo(pair).unwrap().unwrap();
+
+    assert_eq!(
+        sidecar_paths(&photo, SidecarNaming::FileExtension, true),
+        [
+            PathBuf::from("2026/IMG_1.CR3.xmp"),
+            PathBuf::from("2026/IMG_1.JPG.xmp")
+        ]
+    );
+    // Lightroom-style names are shared by the pair.
+    assert_eq!(
+        sidecar_paths(&photo, SidecarNaming::BaseName, true),
+        [PathBuf::from("2026/IMG_1.xmp")]
+    );
+    // In the library, one sidecar as before.
+    assert_eq!(
+        sidecar_paths(&photo, SidecarNaming::FileExtension, false),
+        [PathBuf::from("2026/IMG_1.CR3.xmp")]
+    );
+}
+
+#[test]
+fn in_place_existing_sidecars_are_kept_up_to_date_too() {
+    let w = world(FakeSidecars::default(), SidecarNaming::FileExtension);
+    let id = add(
+        &w.catalog,
+        vec![
+            asset("IMG_1.CR3", 1),
+            asset("IMG_1.JPG", 2),
+            asset("IMG_1.xmp", 3),
+        ],
+    );
+    let photo = w.catalog.photo(id).unwrap().unwrap();
+
+    assert_eq!(
+        sidecar_paths(&photo, SidecarNaming::FileExtension, true),
+        [
+            PathBuf::from("IMG_1.xmp"),
+            PathBuf::from("IMG_1.CR3.xmp"),
+            PathBuf::from("IMG_1.JPG.xmp")
+        ]
+    );
+}
+
+#[test]
+fn in_place_flush_writes_every_sidecar_of_the_photo() {
+    let w = world(FakeSidecars::default(), SidecarNaming::FileExtension);
+    let mut settings = w.settings.load_settings().unwrap();
+    settings.open_folder = Some("/lib".into());
+    w.settings.save_settings(&settings).unwrap();
+    let pair = add(
+        &w.catalog,
+        vec![asset("IMG_1.CR3", 1), asset("IMG_1.JPG", 2)],
+    );
+    w.catalog.set_decision(pair, d(Flag::Pick, 3)).unwrap();
+
+    let report = w.service.flush();
+
+    assert_eq!(report.written, 1);
+    let files = w.store.files.lock().unwrap();
+    assert_eq!(files[Path::new("/lib/IMG_1.CR3.xmp")], d(Flag::Pick, 3));
+    assert_eq!(files[Path::new("/lib/IMG_1.JPG.xmp")], d(Flag::Pick, 3));
+    assert_eq!(
+        w.catalog
+            .photo(pair)
+            .unwrap()
+            .unwrap()
+            .assets
+            .sidecars()
+            .len(),
+        2
+    );
+}
+
+#[test]
+fn photos_without_a_decision_get_no_sidecar() {
+    let w = world(FakeSidecars::default(), SidecarNaming::FileExtension);
+    add(&w.catalog, vec![asset("IMG_1.JPG", 1)]);
+
+    assert_eq!(w.service.flush().written, 0);
+    assert!(w.store.files.lock().unwrap().is_empty());
+}
+
+#[test]
+fn picks_get_the_pick_label_and_others_none() {
+    let w = world(FakeSidecars::default(), SidecarNaming::FileExtension);
+    let pick = add(&w.catalog, vec![asset("a.JPG", 1)]);
+    let reject = add(&w.catalog, vec![asset("b.JPG", 2)]);
+    w.catalog.set_decision(pick, d(Flag::Pick, 0)).unwrap();
+    w.catalog.set_decision(reject, d(Flag::Reject, 0)).unwrap();
+
+    w.service.flush();
+
+    let labels = w.store.labels.lock().unwrap();
+    assert_eq!(labels[Path::new("/lib/a.JPG.xmp")], Some(ColorLabel::Green));
+    assert_eq!(labels[Path::new("/lib/b.JPG.xmp")], None);
+}
+
+#[test]
+fn the_pick_label_follows_the_settings() {
+    let w = world(FakeSidecars::default(), SidecarNaming::FileExtension);
+    let mut settings = w.settings.load_settings().unwrap();
+    settings.labels.pick = Some(ColorLabel::Purple);
+    w.settings.save_settings(&settings).unwrap();
+    let pick = add(&w.catalog, vec![asset("a.JPG", 1)]);
+    w.catalog.set_decision(pick, d(Flag::Pick, 0)).unwrap();
+
+    w.service.flush();
+
+    assert_eq!(
+        w.store.labels.lock().unwrap()[Path::new("/lib/a.JPG.xmp")],
+        Some(ColorLabel::Purple)
     );
 }

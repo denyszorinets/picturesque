@@ -1,5 +1,14 @@
 <script lang="ts">
-  import { ApiError, getPhoto, imageUrl, type PhotoDetail } from "../api";
+  import Icon from "../components/Icon.svelte";
+  import {
+    ApiError,
+    canReveal,
+    getPhoto,
+    imageUrl,
+    revealInFolder,
+    type PhotoDetail,
+  } from "../api";
+  import { joinPath } from "./sidecars.svelte";
   import type { LibraryStore } from "./store.svelte";
 
   type Flag = "pick" | "reject" | "unflagged";
@@ -15,6 +24,8 @@
     onrate?: (rating: number) => void;
     /** Move to the next photo after every decision. */
     autoAdvance?: boolean;
+    /** The library folder, to show files in the file manager. */
+    libraryFolder?: string | null;
   }
 
   let {
@@ -25,6 +36,7 @@
     onflag,
     onrate,
     autoAdvance = $bindable(false),
+    libraryFolder = null,
   }: Props = $props();
 
   /** Runs a toolbar action and gives the keyboard back to the shortcuts. */
@@ -212,21 +224,23 @@
       <button
         onclick={() => go(-1)}
         disabled={index === 0}
-        aria-label="Previous photo">←</button
+        aria-label="Previous photo"><Icon name="chevron-left" /></button
       >
       <span data-testid="loupe-position">{index + 1} / {store.total}</span>
       <button
         onclick={() => go(1)}
         disabled={index >= store.total - 1}
-        aria-label="Next photo">→</button
+        aria-label="Next photo"><Icon name="chevron-right" /></button
       >
       <button onclick={() => toggleZoom()} aria-pressed={zoomed}
-        >{zoomed ? "Fit" : "100%"}</button
+        ><Icon name="magnifying-glass-plus" /> {zoomed ? "Fit" : "100%"}</button
       >
       <button onclick={() => (showInfo = !showInfo)} aria-pressed={showInfo}
-        >Info</button
+        ><Icon name="information-circle" /> Info</button
       >
-      <button onclick={onclose} aria-label="Close">✕</button>
+      <button onclick={onclose} aria-label="Close"
+        ><Icon name="x-mark" /></button
+      >
     </div>
 
     {#if photo}
@@ -243,14 +257,14 @@
           aria-pressed={photo.flag === "pick"}
           title="Pick (P)"
           onclick={(e) => act(e, () => onflag?.("pick"))}
-          data-testid="loupe-pick">✓ Pick</button
+          data-testid="loupe-pick"><Icon name="check" /> Pick</button
         >
         <button
           class="reject"
           aria-pressed={photo.flag === "reject"}
           title="Reject (X)"
           onclick={(e) => act(e, () => onflag?.("reject"))}
-          data-testid="loupe-reject">✕ Reject</button
+          data-testid="loupe-reject"><Icon name="x-mark" /> Reject</button
         >
         <button
           title="Unflag (U)"
@@ -269,7 +283,8 @@
                 ? `Clear rating (0)`
                 : `${n} star${n === 1 ? "" : "s"} (${n})`}
               onclick={(e) =>
-                act(e, () => onrate?.(photo.rating === n ? 0 : n))}>★</button
+                act(e, () => onrate?.(photo.rating === n ? 0 : n))}
+              ><Icon name="star" /></button
             >
           {/each}
         </span>
@@ -374,6 +389,16 @@
               <div class="file">
                 <code>{file.path}</code>
                 <span class="muted">{bytes(file.size)}</span>
+                {#if libraryFolder && canReveal()}
+                  {@const folder = libraryFolder}
+                  <button
+                    class="link"
+                    onclick={() =>
+                      void revealInFolder(joinPath(folder, file.path))}
+                    title="Show this file in the file manager"
+                    data-testid="reveal-file">Show in folder</button
+                  >
+                {/if}
               </div>
             {/each}
           </dd>
@@ -387,19 +412,19 @@
           {#each detail.reasons as reason (reason.text)}
             <li class={reason.tone}>
               <span class="mark" aria-hidden="true"
-                >{reason.tone === "good"
-                  ? "✓"
-                  : reason.tone === "bad"
-                    ? "✕"
-                    : "•"}</span
+                >{#if reason.tone === "good"}<Icon
+                    name="check"
+                  />{:else if reason.tone === "bad"}<Icon
+                    name="x-mark"
+                  />{:else}•{/if}</span
               >{reason.text}
             </li>
           {/each}
         </ul>
       {/if}
       <p class="keys muted">
-        ← → move · P pick · X reject · U unflag · 0–5 stars · Shift+P/X/U decide
-        and move on · Z zoom · I info · Esc close
+        ← → move · P or ↑ pick · X or ↓ reject · U unflag · 0–5 stars ·
+        Shift+key decides and moves on · Z zoom · I info · Esc close
       </p>
     </aside>
   {/if}
@@ -518,7 +543,11 @@
     border: none;
     padding: 0.2rem 0.2rem;
     color: #6b6b66;
-    font-size: 1rem;
+    --icon-size: 1.15rem;
+  }
+
+  .cull .star:hover:not(.on) {
+    color: #9a9a94;
   }
 
   .cull .star.on {
@@ -598,8 +627,11 @@
   .mark {
     width: 1rem;
     flex-shrink: 0;
-    text-align: center;
+    display: inline-flex;
+    justify-content: center;
+    align-items: center;
     font-weight: 700;
+    --icon-size: 0.95rem;
   }
 
   .reasons .good .mark {

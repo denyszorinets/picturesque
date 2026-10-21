@@ -97,6 +97,15 @@ impl MemFs {
         self
     }
 
+    /// Makes a folder read-only from now on (a locked card).
+    pub fn lock_folder(&self, path: &str) {
+        self.state
+            .lock()
+            .unwrap()
+            .read_only
+            .insert(PathBuf::from(path));
+    }
+
     pub fn read_only(self, path: &str) -> Self {
         self.state
             .lock()
@@ -109,6 +118,13 @@ impl MemFs {
     /// Deletes a file (as if removed outside the app).
     pub fn delete(&self, path: &Path) {
         let _ = self.remove_file(path);
+    }
+
+    /// Removes a folder and everything in it (a card taken out).
+    pub fn delete_dir(&self, path: &Path) {
+        let mut s = self.state.lock().unwrap();
+        s.dirs.retain(|d| !d.starts_with(path));
+        s.files.retain(|f, _| !f.starts_with(path));
     }
 
     pub fn write(&self, path: &Path, bytes: &[u8]) {
@@ -316,6 +332,9 @@ impl FileSystem for MemFs {
 
     fn remove_file(&self, path: &Path) -> Result<(), String> {
         let mut s = self.state.lock().unwrap();
+        if s.read_only.iter().any(|d| path.starts_with(d)) {
+            return Err("read-only file system".into());
+        }
         if let Some((bytes, _)) = s.files.remove(path)
             && let Some(space) = s.space.as_mut()
         {
@@ -379,6 +398,10 @@ pub struct MemoryCatalog {
     pub decisions: Mutex<HashMap<PhotoId, picturesque_core::decision::Decision>>,
     /// (revision, revision the sidecar reflects) per decision.
     pub revisions: Mutex<HashMap<PhotoId, (u64, Option<u64>)>>,
+    /// Photos marked to carry the auto-pick label.
+    pub auto_labeled: Mutex<StdHashSet<PhotoId>>,
+    /// Verified copies out of a folder session.
+    pub copies: Mutex<Vec<crate::ports::catalog::CopyRecord>>,
     /// (photo, analyzer) → (version, result).
     pub analysis: Mutex<HashMap<(PhotoId, String), (u32, serde_json::Value)>>,
     /// Results marked for analysis again.
@@ -496,6 +519,8 @@ impl PhotoCatalog for MemoryCatalog {
         query: &crate::library::PhotoQuery,
     ) -> Result<crate::library::PhotoPage, CatalogError> {
         let decisions = self.decisions.lock().unwrap().clone();
+        let scores = self.scores.lock().unwrap().clone();
+        let keeper = |id: &PhotoId| scores.get(id).is_some_and(|s| s.keeper);
         let mut photos: Vec<Photo> = self
             .photos
             .lock()
@@ -503,7 +528,15 @@ impl PhotoCatalog for MemoryCatalog {
             .iter()
             .filter(|p| {
                 let flag = decisions.get(&p.id).map(|d| d.flag).unwrap_or_default();
-                query.flags.as_ref().is_none_or(|f| f.contains(&flag))
+                let auto = keeper(&p.id) && flag == picturesque_core::decision::Flag::Unflagged;
+                // Flags and auto-picked photos match either.
+                let decided = match (&query.flags, query.auto_picked == Some(true)) {
+                    (None, false) => true,
+                    (None, true) => auto,
+                    (Some(f), false) => f.contains(&flag),
+                    (Some(f), true) => f.contains(&flag) || auto,
+                };
+                decided
                     && query
                         .photo_ids
                         .as_ref()
@@ -543,7 +576,7 @@ impl PhotoCatalog for MemoryCatalog {
                     aesthetic: None,
                     eyes_closed: None,
                     faces: 0,
-                    keeper: false,
+                    keeper: keeper(&p.id),
                 }
             })
             .collect();
@@ -598,8 +631,21 @@ impl PhotoCatalog for MemoryCatalog {
         Ok(())
     }
 
+    fn set_decision_saved(
+        &self,
+        id: PhotoId,
+        decision: picturesque_core::decision::Decision,
+    ) -> Result<(), CatalogError> {
+        self.set_decision(id, decision)?;
+        if let Some((rev, written)) = self.revisions.lock().unwrap().get_mut(&id) {
+            *written = Some(*rev);
+        }
+        Ok(())
+    }
+
     fn dirty_decisions(&self) -> Result<Vec<crate::ports::catalog::DirtyDecision>, CatalogError> {
         let decisions = self.decisions.lock().unwrap();
+        let auto = self.auto_labeled.lock().unwrap();
         let mut dirty: Vec<_> = self
             .revisions
             .lock()
@@ -608,12 +654,53 @@ impl PhotoCatalog for MemoryCatalog {
             .filter(|(_, (rev, written))| *written != Some(*rev))
             .map(|(id, (rev, _))| crate::ports::catalog::DirtyDecision {
                 id: *id,
-                decision: decisions[id],
+                decision: decisions.get(id).copied().unwrap_or_default(),
                 token: rev.to_string(),
+                auto_labeled: auto.contains(id),
             })
             .collect();
         dirty.sort_by_key(|d| d.id);
         Ok(dirty)
+    }
+
+    fn remove_photo(&self, id: PhotoId) -> Result<(), CatalogError> {
+        self.photos.lock().unwrap().retain(|p| p.id != id);
+        self.decisions.lock().unwrap().remove(&id);
+        self.revisions.lock().unwrap().remove(&id);
+        self.copies.lock().unwrap().retain(|c| c.photo_id != id);
+        Ok(())
+    }
+
+    fn record_copies(
+        &self,
+        copies: &[crate::ports::catalog::CopyRecord],
+    ) -> Result<(), CatalogError> {
+        let mut stored = self.copies.lock().unwrap();
+        for copy in copies {
+            stored.retain(|c| !(c.photo_id == copy.photo_id && c.source == copy.source));
+            stored.push(copy.clone());
+        }
+        Ok(())
+    }
+
+    fn copies(&self) -> Result<Vec<crate::ports::catalog::CopyRecord>, CatalogError> {
+        Ok(self.copies.lock().unwrap().clone())
+    }
+
+    fn auto_labeled(&self) -> Result<StdHashSet<PhotoId>, CatalogError> {
+        Ok(self.auto_labeled.lock().unwrap().clone())
+    }
+
+    fn set_auto_labeled(&self, ids: &[PhotoId]) -> Result<usize, CatalogError> {
+        let wanted: StdHashSet<PhotoId> = ids.iter().copied().collect();
+        let mut auto = self.auto_labeled.lock().unwrap();
+        let changed: Vec<PhotoId> = auto.symmetric_difference(&wanted).copied().collect();
+        let mut revisions = self.revisions.lock().unwrap();
+        for id in &changed {
+            revisions.entry(*id).or_insert((0, None)).0 += 1;
+        }
+        *auto = wanted;
+        Ok(changed.len())
     }
 
     fn mark_sidecar_written(&self, id: PhotoId, token: &str) -> Result<(), CatalogError> {
@@ -1260,7 +1347,11 @@ pub fn fake_sha256(bytes: &[u8]) -> String {
 
 /// Sidecars kept in memory: path → decision.
 #[derive(Default)]
-pub struct MemorySidecars(pub Mutex<HashMap<PathBuf, picturesque_core::decision::Decision>>);
+pub struct MemorySidecars(
+    pub Mutex<HashMap<PathBuf, picturesque_core::decision::Decision>>,
+    /// The colour label last written to each sidecar.
+    pub Mutex<HashMap<PathBuf, Option<crate::ports::sidecars::ColorLabel>>>,
+);
 
 impl crate::ports::sidecars::SidecarStore for MemorySidecars {
     fn read(&self, path: &Path) -> Result<Option<picturesque_core::decision::Decision>, String> {
@@ -1270,9 +1361,16 @@ impl crate::ports::sidecars::SidecarStore for MemorySidecars {
     fn write(
         &self,
         path: &Path,
-        decision: picturesque_core::decision::Decision,
+        values: crate::ports::sidecars::SidecarValues,
     ) -> Result<(ContentHash, u64), String> {
-        self.0.lock().unwrap().insert(path.to_path_buf(), decision);
+        self.0
+            .lock()
+            .unwrap()
+            .insert(path.to_path_buf(), values.decision);
+        self.1
+            .lock()
+            .unwrap()
+            .insert(path.to_path_buf(), values.label);
         Ok((fake_hash(path.to_string_lossy().as_bytes()), 1))
     }
 }

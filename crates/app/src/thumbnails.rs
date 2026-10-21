@@ -98,6 +98,8 @@ pub struct ThumbnailService {
     cache_dir: PathBuf,
     prefilling: AtomicBool,
     prefill_again: AtomicBool,
+    /// Set by [`ThumbnailService::stop`].
+    stopped: AtomicBool,
 }
 
 impl std::fmt::Debug for ThumbnailService {
@@ -126,6 +128,7 @@ impl ThumbnailService {
             cache_dir,
             prefilling: AtomicBool::new(false),
             prefill_again: AtomicBool::new(false),
+            stopped: AtomicBool::new(false),
         }
     }
 
@@ -210,6 +213,9 @@ impl ThumbnailService {
     /// Generates grid images for every photo that lacks one, on background
     /// threads. Does nothing if a prefill is already running.
     pub fn prefill_in_background(self: &Arc<Self>) {
+        if self.stopped.load(Ordering::Acquire) {
+            return;
+        }
         // A request while a pass runs makes it run once more, so photos
         // imported meanwhile are not missed.
         self.prefill_again.store(true, Ordering::Release);
@@ -231,6 +237,11 @@ impl ThumbnailService {
                 }
             }
         });
+    }
+
+    /// Stops background prefilling after the images being made now.
+    pub fn stop(&self) {
+        self.stopped.store(true, Ordering::Release);
     }
 
     /// Waits until a background prefill, if any, has finished (tests and
@@ -282,6 +293,9 @@ impl ThumbnailService {
             for _ in 0..workers {
                 scope.spawn(|| {
                     loop {
+                        if self.stopped.load(Ordering::Acquire) {
+                            break;
+                        }
                         let i = next.fetch_add(1, Ordering::Relaxed);
                         let Some(photo) = missing.get(i) else { break };
                         if self.ensure(&root, photo, ImageSize::Grid).is_ok() {

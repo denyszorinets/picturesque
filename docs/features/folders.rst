@@ -1,0 +1,163 @@
+.. _features-folders:
+
+Culling a Folder in Place
+=========================
+
+Besides the library, Picturesque can cull **a folder where it is**: a
+folder darktable already knows, a dump of last weekend, a memory card.
+Nothing is copied. Decisions are written to XMP sidecars next to the
+photos, so the tools that read that folder see them
+(:doc:`ADR-0013 </architecture/decisions/0013-folder-sessions>`).
+
+One folder is open at a time: open it, cull, open the next one. The
+library stays as it is meanwhile and is one click away.
+
+Opening a folder
+----------------
+
+Click the **folder menu** at the top left of the window (it shows
+**Library**, or the open folder's name) and choose **Open folder…**. On
+first launch, the setup wizard also offers **Or cull a folder where it
+is, without a library…**.
+
+Picturesque then finds every photo in the folder and its subfolders,
+reads its date, camera, place and any decision already in its sidecar
+(ratings from darktable or Lightroom, for example), and analyzes it as
+it would a library photo. The progress ring at the top right shows how
+far it got (:ref:`features-library-progress`); you can start culling
+right away.
+
+Everything you know from the library works the same: the timeline,
+filters, the loupe, compare, series and auto-pick, export and
+statistics. The **Activity** tab shows the folder's photos and log.
+
+What changes in the folder
+--------------------------
+
+- **Nothing is copied or renamed.** Picturesque reads the photos where
+  they are.
+- **Sidecars are written next to the photos** you decide on, as in the
+  library (:ref:`features-library-sidecars`). Each file of a RAW+JPEG pair
+  gets its own (``IMG_0042.CR3.xmp`` and ``IMG_0042.JPG.xmp``), because
+  darktable imports both files as separate images; with Lightroom-style
+  names (:ref:`reference-settings-sidecar-naming`) the pair shares
+  ``IMG_0042.xmp``. Existing sidecars are updated in place, keeping
+  everything other tools stored in them.
+- **Photos you do not touch are left alone.** A rating or reject read
+  from an existing sidecar is shown, but that sidecar is only rewritten
+  once you change the decision; photos without a decision get no sidecar.
+- **Move rejects…** moves rejected photos into ``_Rejected`` inside the
+  folder, if you ask for it (:doc:`rejects`).
+
+A folder that cannot be written to (a read-only card, a network share)
+can still be opened and culled. Sidecars that cannot be written are
+reported in the toolbar (*XMP: N not saved*, with the reason when you
+hover it); the decisions are kept in Picturesque and written as soon as
+the folder can be written to (after the next change, or when the app
+starts).
+
+.. _features-folders-finish:
+
+Finishing a folder
+------------------
+
+Auto-picked photos (:ref:`features-library-auto-pick`) are only
+suggestions, and they change while analysis runs, so they are not written
+to sidecars as you go. **Finish folder…** in the toolbar does that when
+you are done:
+
+- Every auto-picked photo gets the **auto-pick colour label** (yellow by
+  default, :ref:`reference-settings-labels`) in its sidecars, so darktable
+  and the other tools show the app's suggestions next to your picks
+  (green). A photo no longer auto-picked loses the label.
+- Every decision not yet in its sidecar is written right away.
+
+It then offers what usually comes next: **Export keepers…**, or **Open
+the next folder…**. Rejected photos stay where they are; **Move
+rejects…** moves them aside. You can finish a folder again at any time.
+
+Deciding on an auto-picked photo afterwards replaces the label: a pick
+gets the pick label, a reject none.
+
+If you open another folder or the library while auto-picked photos still
+lack their label, the folder menu asks: **Write labels, then switch**,
+**Switch without**, or **Cancel**. Your decisions are in their sidecars
+either way.
+
+.. _features-folders-copy:
+
+Copying the keepers
+-------------------
+
+To keep only the photos you want, for example from a memory card into
+the folder darktable imports from, click **Copy keepers…**, the highlighted
+button in the toolbar while a folder is open (also offered after
+**Finish folder…**). It is :doc:`export` with these defaults:
+
+- **Keepers**: picks and auto-picked photos (or **Everything except
+  rejects**);
+- the original files, RAW too, each with an XMP sidecar holding its
+  decision and colour label;
+- every copy verified against the original; the folder and names are
+  remembered for next time.
+
+Picturesque remembers which photos were copied where, so the folder can
+then be cleared of exactly those.
+
+.. _features-folders-clear:
+
+Clearing the folder
+-------------------
+
+Once the keepers are copied, **Clear folder…** deletes their originals,
+for example to empty a memory card
+(:doc:`ADR-0014 </architecture/decisions/0014-optional-source-deletion>`).
+What it may delete is set in **Settings → After copying keepers**
+(:ref:`reference-settings-delete-after-copy`):
+
+- **Verified copies only** (default): photos whose files were all copied
+  out. Each copy is hashed again right before its original is deleted; a
+  copy that is missing or changed keeps its original.
+- **Verified copies and rejects**: also rejected photos, which have no
+  copy. The confirmation lists them apart and asks for its own yes.
+- **Never**: the action is not offered.
+
+Photos copied only in part (a RAW+JPEG pair exported without the RAW) and
+unflagged photos that were not copied always stay. A photo's files (RAW,
+JPEG and sidecars) are deleted together; if one cannot be deleted (a
+locked card), the photo is reported. Deleting is **permanent**: deleted
+files do not go to a trash folder, which would keep the card full. The
+library itself is never cleared.
+
+Switching folders and back to the library
+-----------------------------------------
+
+The folder menu lists **Library**, the open folder and the **recent
+folders**. Choosing one closes the current folder: decisions not yet in
+their sidecars are written first, then the other folder (or the library)
+opens. Reopening a folder is quick: its photos, analysis and decisions
+are kept.
+
+When the app starts, it reopens the folder that was open when it was
+closed, or the library if that folder is gone (a card taken out).
+
+Folders not opened for 30 days are forgotten: their entry in the recent
+list and their catalog are deleted. The folder and its sidecars are not
+touched; opening it again reads its sidecars again.
+
+Settings
+--------
+
+Settings apply everywhere, except the library folder and its folder
+structure, which only apply to the library. While a folder is open,
+**Settings** says so instead of showing them.
+
+Using it with darktable: :doc:`/getting-started/darktable`.
+
+Limitations
+-----------
+
+- A folder inside the library, or a folder holding the library, cannot
+  be opened: cull those photos in the library.
+- One folder at a time; to cull two folders together, open the folder
+  that holds both.

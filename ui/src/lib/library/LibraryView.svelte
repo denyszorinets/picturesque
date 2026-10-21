@@ -1,8 +1,14 @@
 <script lang="ts">
+  import Icon from "../components/Icon.svelte";
   import * as api from "../api";
   import { AnalysisProgress } from "./analysis.svelte";
+  import { SidecarProgress } from "./sidecars.svelte";
+  import { flagForKey } from "./keys";
   import Compare from "./Compare.svelte";
   import ExportDialog from "./ExportDialog.svelte";
+  import FinishDialog from "../session/FinishDialog.svelte";
+  import DarktableNote from "../session/DarktableNote.svelte";
+  import ClearDialog from "../session/ClearDialog.svelte";
   import Reanalyze from "../analysis/Reanalyze.svelte";
   import { waitingNote } from "../analysis/models";
   import Tour from "../tour/Tour.svelte";
@@ -34,6 +40,17 @@
     importing?: boolean;
     store?: LibraryStore;
     selection?: Selection;
+    /** Background analysis progress, shared with the header. */
+    analysis?: AnalysisProgress;
+    /** Whether a folder is culled in place (offers Finish folder). */
+    inFolder?: boolean;
+    /** The auto-pick colour label from the settings. */
+    autoLabel?: api.ColorLabel | null;
+    /** Opens the folder menu, to go on with the next folder. */
+    onnextfolder?: () => void;
+    /** The open folder, and whether clearing it is allowed (ADR-0014). */
+    folder?: string | null;
+    canClear?: boolean;
   }
 
   let {
@@ -46,10 +63,19 @@
     importing = false,
     store = new LibraryStore(api),
     selection = new Selection(),
+    analysis = new AnalysisProgress(api),
+    inFolder = false,
+    autoLabel = null,
+    onnextfolder,
+    folder = null,
+    canClear = false,
   }: Props = $props();
 
+  let finishing = $state(false);
+  let clearing = $state(false);
+
   const filters = new Filters();
-  const analysis = new AnalysisProgress(api);
+  const sidecars = new SidecarProgress(api);
   let showFilters = $state(true);
 
   /** The search box's text; searching starts on Enter. */
@@ -120,11 +146,6 @@
     }),
   );
 
-  const FLAGS: Record<string, "pick" | "reject" | "unflagged"> = {
-    p: "pick",
-    x: "reject",
-    u: "unflagged",
-  };
   const ARROWS: Record<string, Direction> = {
     ArrowLeft: "left",
     ArrowRight: "right",
@@ -219,7 +240,7 @@
     // Shift moves on after the decision; in the loupe, so does
     // Auto-advance.
     const next = e.shiftKey || (loupe !== null && autoAdvance);
-    const flag = FLAGS[key];
+    const flag = flagForKey(e.key, loupe === null ? "grid" : "loupe");
     if (flag) {
       const photos = targets();
       decide(() => culling.flag(photos, flag), next);
@@ -369,7 +390,8 @@
       return;
     // The library is hidden while the Import tab is shown; the compare
     // view handles its own keys.
-    if (!section?.offsetParent || compare || exporting) return;
+    if (!section?.offsetParent || compare || exporting || finishing || clearing)
+      return;
     if (e.key === "/" && loupe === null) {
       e.preventDefault();
       searchInput?.focus();
@@ -408,18 +430,21 @@
   }
 
   $effect(() => {
+    // Loading and following events is idempotent, so a shared progress
+    // can be followed here too.
     void analysis.load();
+    void sidecars.load();
     const unsubscribe = api.onAppEvent((event) => {
       if (event.type === "pipeline_progress") {
         if (event.imported !== lastImported) photosImported();
         lastImported = event.imported;
       } else if (event.type === "series_changed") void store.refresh();
       analysis.handle(event);
+      sidecars.handle(event);
     });
     return () => {
       unsubscribe();
       clearTimeout(liveTimer);
-      analysis.dispose();
     };
   });
 </script>
@@ -444,6 +469,12 @@
         <button class="primary" onclick={() => onsetup?.()}
           >Set up Picturesque</button
         >
+      {:else if inFolder}
+        <h2>No photos in this folder</h2>
+        <p class="muted">
+          Photos in this folder and its subfolders appear here; new ones too, as
+          they arrive. Open another folder from the folder menu at the top left.
+        </p>
       {:else}
         <h2>No photos yet</h2>
         <p class="muted">
@@ -456,12 +487,13 @@
       {/if}
     </div>
   {:else if store.facets}
+    {#if inFolder}<DarktableNote />{/if}
     <div class="bar">
       <button
         class="small"
         aria-pressed={showFilters}
         onclick={() => (showFilters = !showFilters)}
-        data-testid="toggle-filters">Filters</button
+        data-testid="toggle-filters"><Icon name="funnel" /> Filters</button
       >
       <form
         class="search"
@@ -471,7 +503,7 @@
           filters.search = searchText.trim();
         }}
       >
-        <input
+        <Icon name="magnifying-glass" /><input
           type="search"
           bind:value={searchText}
           bind:this={searchInput}
@@ -506,7 +538,7 @@
           >{chip.label}
           <button
             aria-label={`Remove filter ${chip.label}`}
-            onclick={chip.clear}>✕</button
+            onclick={chip.clear}><Icon name="x-mark" /></button
           ></span
         >
       {/each}
@@ -522,95 +554,131 @@
           >{selection.size} selected</span
         >
       {/if}
-      <select
-        class="small"
-        bind:value={filters.sort}
-        aria-label="Sort"
-        data-testid="sort"
-      >
-        <option value="captured_desc">Newest first</option>
-        <option value="captured_asc">Oldest first</option>
-        <option value="imported_desc">Recently imported</option>
-        <option value="quality_desc">Best quality first</option>
-      </select>
-      <button
-        class="small"
-        aria-pressed={filters.stacked}
-        onclick={() => {
-          filters.stacked = !filters.stacked;
-          filters.expanded.clear();
-        }}
-        title="Show each series as its best photo"
-        data-testid="toggle-stack">Stack series</button
-      >
-      <button
-        class="small"
-        onclick={() => openCompare()}
-        disabled={selection.focus === null && selection.size === 0}
-        title="Compare the selected photos, or the selected photo's series (C)"
-        data-testid="open-compare">Compare</button
-      >
-      <button
-        class="small"
-        onclick={() => (exporting = true)}
-        title="Copy picks, the photos in view or the selection to a folder"
-        data-testid="open-export">Export…</button
-      >
-      <Reanalyze
-        reanalyze={api.reanalyzePhotos}
-        photoIds={selectedIds}
-        small
-        label="Re-analyze"
-        disabled={selectedIds.length === 0}
-        title="Analyze the selected photos again (quality, series, faces and AI scores)"
-      />
-      <RejectsMove
-        rejected={store.facets.flags.find((f) => f.flag === "reject")?.count ??
-          0}
-        onmoved={() => void store.refresh()}
-      />
-      <span class="spacer"></span>
-      {#if analysis.status?.paused && analysis.remaining > 0}
-        <span
-          class="paused"
-          data-testid="analysis-paused"
-          title={`Analysis paused: ${analysis.status.paused}`}
-          >Analysis paused: {analysis.status.paused.split(";")[0]}</span
+      <div class="group" role="group" aria-label="View">
+        <select
+          class="small"
+          bind:value={filters.sort}
+          aria-label="Sort"
+          data-testid="sort"
         >
-      {:else if analysis.status && analysis.remaining > 0}
-        <span
-          class="muted"
-          data-testid="analysis-progress"
-          title="Scoring photos in the background; photos on screen go first"
-          >Analyzing {analysis.status.analyzed} / {analysis.status.total}</span
-        >
-      {/if}
-      {#if analysis.status && analysis.status.waiting_for_models.length > 0}
+          <option value="captured_desc">Newest first</option>
+          <option value="captured_asc">Oldest first</option>
+          <option value="imported_desc">Recently imported</option>
+          <option value="quality_desc">Best quality first</option>
+        </select>
         <button
-          class="link"
-          onclick={() => onsettings?.()}
-          title={waitingNote(analysis.status.waiting_for_models)}
-          data-testid="analysis-needs-models">AI analysis needs models</button
+          class="small"
+          aria-pressed={filters.stacked}
+          onclick={() => {
+            filters.stacked = !filters.stacked;
+            filters.expanded.clear();
+          }}
+          title="Show each series as its best photo"
+          data-testid="toggle-stack"
+          ><Icon name="rectangle-stack" /> Stack series</button
         >
-      {/if}
-      {#if seriesError}
-        <span class="error-text" role="alert">{seriesError}</span>
-      {/if}
-      {#if culling.error}
-        <span class="error-text" role="alert">{culling.error}</span>
-      {/if}
-      <button
-        class="small"
-        onclick={() => culling.undo()}
-        disabled={!culling.canUndo}
-        title="Undo (Ctrl+Z)">Undo</button
-      >
-      <button
-        class="small"
-        onclick={() => culling.redo()}
-        disabled={!culling.canRedo}
-        title="Redo (Ctrl+Shift+Z)">Redo</button
-      >
+      </div>
+      <div class="group" role="group" aria-label="Actions">
+        <button
+          class="small"
+          onclick={() => openCompare()}
+          disabled={selection.focus === null && selection.size === 0}
+          title="Compare the selected photos, or the selected photo's series (C)"
+          data-testid="open-compare"><Icon name="squares-2x2" /> Compare</button
+        >
+        <button
+          class="small"
+          class:primary={inFolder}
+          onclick={() => (exporting = true)}
+          title={inFolder
+            ? "Copy the keepers to another folder, verified, with their sidecars"
+            : "Copy picks, the photos in view or the selection to a folder"}
+          data-testid="open-export"
+          ><Icon name={inFolder ? "document-duplicate" : "arrow-up-tray"} />
+          {inFolder ? "Copy keepers…" : "Export…"}</button
+        >
+        <Reanalyze
+          reanalyze={api.reanalyzePhotos}
+          photoIds={selectedIds}
+          small
+          label="Re-analyze"
+          disabled={selectedIds.length === 0}
+          title="Analyze the selected photos again (quality, series, faces and AI scores)"
+        />
+        {#if inFolder}
+          <button
+            class="small"
+            onclick={() => (finishing = true)}
+            title="Label the auto-picked photos and write every sidecar"
+            data-testid="open-finish"
+            ><Icon name="check-circle" /> Finish folder…</button
+          >
+        {/if}
+        {#if inFolder && canClear && folder}
+          <button
+            class="small danger"
+            onclick={() => (clearing = true)}
+            title="Delete the originals you copied (each copy is checked again first)"
+            data-testid="open-clear"><Icon name="trash" /> Clear folder…</button
+          >
+        {/if}
+        <RejectsMove
+          rejected={store.facets.flags.find((f) => f.flag === "reject")
+            ?.count ?? 0}
+          onmoved={() => void store.refresh()}
+        />
+      </div>
+      <!-- Status and history stay together at the right, even when the bar wraps. -->
+      <div class="trailing">
+        {#if sidecars.label}
+          {@const folder = sidecars.status?.folder}
+          {#if api.canReveal() && folder}
+            <button
+              class="link sidecars {sidecars.label.tone}"
+              onclick={() => void api.revealInFolder(folder)}
+              title={`${sidecars.label.title}. Click to open the folder.`}
+              data-testid="sidecar-status">{sidecars.label.text}</button
+            >
+          {:else}
+            <span
+              class="sidecars {sidecars.label.tone}"
+              title={sidecars.label.title}
+              data-testid="sidecar-status">{sidecars.label.text}</span
+            >
+          {/if}
+        {/if}
+        {#if analysis.status && analysis.status.waiting_for_models.length > 0}
+          <button
+            class="link warn"
+            onclick={() => onsettings?.()}
+            title={waitingNote(analysis.status.waiting_for_models)}
+            data-testid="analysis-needs-models"
+            ><Icon name="exclamation-triangle" /> AI analysis needs models</button
+          >
+        {/if}
+        {#if seriesError}
+          <span class="error-text" role="alert">{seriesError}</span>
+        {/if}
+        {#if culling.error}
+          <span class="error-text" role="alert">{culling.error}</span>
+        {/if}
+        <div class="group history" role="group" aria-label="History">
+          <button
+            class="small"
+            onclick={() => culling.undo()}
+            disabled={!culling.canUndo}
+            title="Undo (Ctrl+Z)"
+            aria-label="Undo"><Icon name="arrow-uturn-left" /></button
+          >
+          <button
+            class="small"
+            onclick={() => culling.redo()}
+            disabled={!culling.canRedo}
+            title="Redo (Ctrl+Shift+Z)"
+            aria-label="Redo"><Icon name="arrow-uturn-right" /></button
+          >
+        </div>
+      </div>
     </div>
     <div class="body">
       {#if showFilters}
@@ -655,6 +723,21 @@
     {#if tour && store.total > 0 && loupe === null && !compare && !exporting}
       <Tour steps={CULLING_TOUR} onend={() => ontourend?.()} />
     {/if}
+    {#if clearing && folder}
+      <ClearDialog
+        {folder}
+        onclose={() => (clearing = false)}
+        oncleared={() => void store.refresh()}
+      />
+    {/if}
+    {#if finishing}
+      <FinishDialog
+        {autoLabel}
+        onclose={() => (finishing = false)}
+        onexport={() => (exporting = true)}
+        {onnextfolder}
+      />
+    {/if}
     {#if exporting}
       <ExportDialog
         view={filters.search
@@ -663,6 +746,11 @@
         viewCount={store.total}
         selected={selectedIds}
         picks={store.facets.flags.find((f) => f.flag === "pick")?.count ?? 0}
+        autoPicked={store.facets.auto_picked}
+        notRejected={store.facets.flags
+          .filter((f) => f.flag !== "reject")
+          .reduce((n, f) => n + f.count, 0)}
+        {inFolder}
         onclose={() => (exporting = false)}
       />
     {/if}
@@ -678,6 +766,7 @@
     {#if loupe !== null}
       <Loupe
         {store}
+        libraryFolder={sidecars.status?.folder ?? null}
         index={loupe}
         onnavigate={(i) => {
           loupe = i;
@@ -710,24 +799,78 @@
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 1rem;
-    padding-bottom: 0.4rem;
+    gap: 0.5rem 0.75rem;
+    padding-bottom: 0.6rem;
     font-size: 0.9rem;
   }
 
-  .spacer {
-    flex: 1;
+  .group {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+
+  /* Undo and Redo read as one control. */
+  .history {
+    gap: 0;
+  }
+
+  .history > :first-child {
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+  }
+
+  .history > :last-child {
+    margin-left: -1px;
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
+  }
+
+  .trailing {
+    margin-left: auto;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 0.5rem 0.75rem;
+  }
+
+  /* The magnifier sits inside the box, on the left. */
+  .search {
+    position: relative;
+    display: flex;
+    align-items: center;
+    color: var(--muted);
+    --icon-size: 1rem;
+  }
+
+  .search :global(.icon) {
+    position: absolute;
+    left: 0.55rem;
+    pointer-events: none;
   }
 
   .search input {
     width: 14rem;
-    padding: 0.25rem 0.6rem;
+    height: 2rem;
+    padding: 0.25rem 0.6rem 0.25rem 1.9rem;
     font-size: 0.88rem;
   }
 
   .small {
-    padding: 0.2rem 0.6rem;
+    height: 2rem;
+    padding: 0.2rem 0.7rem;
     font-size: 0.85rem;
+  }
+
+  /* Clear folder deletes originals (after asking). */
+  .danger {
+    color: var(--danger);
+  }
+
+  .danger:hover:not(:disabled) {
+    border-color: var(--danger);
+    background: color-mix(in srgb, var(--danger) 10%, var(--surface));
   }
 
   .body {
@@ -769,8 +912,30 @@
     font-size: 0.82rem;
   }
 
+  .chip button {
+    display: inline-flex;
+    padding: 0.2rem;
+    border-radius: 999px;
+    --icon-size: 0.9rem;
+  }
+
+  .chip button:hover,
+  .link:hover {
+    background: none;
+    color: var(--fg);
+  }
+
   .link {
     text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  .history .small {
+    padding: 0.2rem 0.55rem;
+  }
+
+  .link.warn {
+    color: var(--warn);
   }
 
   .no-match {
@@ -781,9 +946,22 @@
     gap: 0.6rem;
   }
 
-  .paused {
-    color: var(--warn);
-    font-size: 0.9rem;
+  .sidecars {
+    font-size: 0.85rem;
+    white-space: nowrap;
+  }
+
+  .sidecars.ok {
+    color: var(--accent);
+  }
+
+  .sidecars.busy {
+    color: var(--muted);
+  }
+
+  .sidecars.error {
+    color: var(--danger);
+    font-weight: 600;
   }
 
   .empty {

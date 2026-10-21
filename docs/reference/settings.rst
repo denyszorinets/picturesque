@@ -122,6 +122,53 @@ Watched import folders (:ref:`features-import-watching`).
    0–1440 minutes. ``0`` scans only when a folder reports a change and when
    the app starts.
 
+.. _reference-settings-labels:
+
+``labels``
+----------
+
+The colour labels written to XMP sidecars (:ref:`features-library-sidecars`),
+so tools without a pick flag, like darktable, show picks.
+
+:Type: object with ``pick`` and ``auto_pick``, each ``red``, ``yellow``,
+   ``green``, ``blue``, ``purple`` or ``null`` (no label)
+:Default: ``{ "pick": "green", "auto_pick": "yellow" }``
+:Behaviour: ``pick`` is written for picks; ``auto_pick`` for auto-picked
+   photos when a folder is finished. A change applies to sidecars written
+   from then on.
+
+.. _reference-settings-delete-after-copy:
+
+``delete_after_copy``
+---------------------
+
+What **Clear folder…** may delete after keepers were copied out of a
+folder culled in place (:ref:`features-folders-clear`).
+
+:Type: ``never``, ``verified`` or ``verified_and_rejects``
+:Default: ``verified``
+:Behaviour: ``verified`` deletes photos whose copies are verified again
+   first; ``verified_and_rejects`` also deletes rejected photos, which
+   have no copy; ``never`` turns the action off. Deleting is permanent and
+   only happens when asked.
+
+.. _reference-settings-folders:
+
+``open_folder``, ``recent_folders``
+-----------------------------------
+
+The folder culled in place, and the folders opened recently
+(:doc:`/features/folders`). They are changed with the ``open_folder`` and
+``open_library`` commands (:doc:`api`), not with ``update_settings``.
+
+:Type: ``open_folder``: absolute path, or ``null`` in the library.
+   ``recent_folders``: list of ``{ "path", "opened_at" }``, most recent
+   first, ``opened_at`` in seconds since 1970.
+:Default: ``null`` and ``[]``
+:Behaviour: while a folder is open, ``library_root`` reads as that folder;
+   the library folder and ``path_template`` are kept for the library.
+   Folders not opened for 30 days are removed from the list at startup.
+
 Where settings are stored
 -------------------------
 
@@ -142,7 +189,11 @@ API
                      "aesthetic": 0.4 },
         "ai": { "provider": "auto" },
         "import": { "rescan_minutes": 5 },
-        "auto_pick": { "enabled": true, "min_quality": 0.5 } }
+        "auto_pick": { "enabled": true, "min_quality": 0.5 },
+        "onboarding": { "tour_done": false },
+        "open_folder": null, "recent_folders": [],
+        "labels": { "pick": "green", "auto_pick": "yellow" },
+        "delete_after_copy": "verified" }
 
 ``update_settings``
    Arguments: any subset of the settings. Unknown fields are rejected.

@@ -11,7 +11,20 @@
   --info: #2f6db3;
   --danger: #c0392b;
   --warn: #b7791f;
+  /* Tile rings: picks, and photos the app suggests keeping. */
+  --pick: #2f9a52;
+  --auto-pick: #a6dcb5;
   --radius: 10px;
+  --radius-sm: 6px;
+  /* Hover and press layers drawn over any surface. */
+  --hover: color-mix(in srgb, var(--fg) 6%, transparent);
+  --press: color-mix(in srgb, var(--fg) 11%, transparent);
+  --ring: color-mix(in srgb, var(--accent) 70%, var(--fg));
+  --scrim: rgb(20 20 18 / 0.45);
+  --shadow-lg: 0 12px 32px rgb(0 0 0 / 0.16), 0 2px 6px rgb(0 0 0 / 0.08);
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --dur-fast: 120ms;
+  --dur: 180ms;
   font-family:
     system-ui,
     -apple-system,
@@ -35,6 +48,11 @@
     --info: #6aa6ec;
     --danger: #ef6a5b;
     --warn: #e0a443;
+    --pick: #3fb36b;
+    --auto-pick: #2c6a43;
+    --scrim: rgb(0 0 0 / 0.62);
+    --shadow-lg:
+      0 16px 40px rgb(0 0 0 / 0.5), 0 0 0 1px rgb(255 255 255 / 0.04);
   }
 }
 
@@ -44,6 +62,18 @@
 
 body {
   margin: 0;
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+/* Thin, quiet scrollbars: the photos are the content. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--muted) 45%, transparent) transparent;
 }
 
 h1,
@@ -61,10 +91,40 @@ button {
   color: var(--fg);
   padding: 0.45rem 0.9rem;
   cursor: pointer;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
 }
 
 button:hover:not(:disabled) {
   border-color: var(--muted);
+}
+
+/* As specific as plain button, so any component class overrides it. */
+button:where(:hover:not(:disabled)) {
+  background-color: color-mix(in srgb, var(--surface), var(--fg) 5%);
+}
+
+button:where(:active:not(:disabled)) {
+  background-color: color-mix(in srgb, var(--surface), var(--fg) 10%);
+}
+
+/* Toggles show that they are on. :where keeps this below any view's own
+   pressed style (Loupe, Compare, tiles). */
+:where(button)[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--accent) 16%, var(--surface));
+  border-color: color-mix(in srgb, var(--accent) 60%, var(--border));
+  color: var(--fg);
+}
+
+/* A button with an icon lines it up with its text. */
+button:has(> .icon) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4em;
 }
 
 button.primary {
@@ -74,9 +134,14 @@ button.primary {
   font-weight: 600;
 }
 
+button.primary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 88%, var(--fg));
+  border-color: color-mix(in srgb, var(--accent) 88%, var(--fg));
+}
+
 button:disabled {
-  opacity: 0.5;
-  cursor: default;
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 input,
@@ -88,13 +153,34 @@ select {
   border-radius: 8px;
   padding: 0.45rem 0.6rem;
   min-width: 0;
+  transition: border-color var(--dur-fast) var(--ease-out);
+}
+
+input:hover:not(:disabled, :focus),
+select:hover:not(:disabled, :focus) {
+  border-color: var(--muted);
+}
+
+select {
+  cursor: pointer;
+}
+
+input[type="checkbox"],
+input[type="radio"] {
+  accent-color: var(--accent);
+  cursor: pointer;
 }
 
 input:focus,
-select:focus,
-button:focus-visible {
-  outline: 2px solid var(--accent);
+select:focus {
+  outline: 2px solid var(--ring);
   outline-offset: 1px;
+  border-color: var(--accent);
+}
+
+:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
 }
 
 code {
@@ -115,4 +201,48 @@ code {
 
 .error-text {
   color: var(--danger);
+}
+
+/* Read by screen readers, not shown. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Dialogs: lifted above a scrim, fading in from where they stand. */
+.backdrop {
+  animation: fade-in var(--dur) var(--ease-out);
+}
+
+.backdrop > .card {
+  box-shadow: var(--shadow-lg);
+  animation: rise-in var(--dur) var(--ease-out);
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.985);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

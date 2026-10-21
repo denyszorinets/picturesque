@@ -7,3 +7,4 @@ Getting Started
    install
    first-import
    first-cull
+   darktable

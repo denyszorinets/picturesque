@@ -105,11 +105,18 @@ fn exports_verified_originals_and_upright_jpegs_with_metadata() {
     api.call("start_export", json!({ "destination": out }))
         .unwrap();
     let status = wait(&api);
+    // The photo and a sidecar with its decision.
     assert_eq!(
         (status["state"].clone(), status["files"].clone()),
-        (json!("completed"), json!(1))
+        (json!("completed"), json!(2))
     );
     assert_eq!(std::fs::read(out.join("IMG_6.jpg")).unwrap(), bytes);
+    let sidecar = std::fs::read_to_string(out.join("IMG_6.jpg.xmp")).unwrap();
+    assert!(sidecar.contains(r#"picturesque:Flag="pick""#), "{sidecar}");
+    assert!(
+        sidecar.contains("<rdf:li>2</rdf:li>"),
+        "green label: {sidecar}"
+    );
 
     // Resized JPEGs: upright, at most 100 px, metadata kept, named by
     // template, the earlier file untouched.

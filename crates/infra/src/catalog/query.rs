@@ -1,5 +1,7 @@
 //! Browsing queries and decisions on SQLite.
 
+use std::collections::HashSet;
+
 use picturesque_app::analysis::technical::TechnicalAnalyzer;
 use picturesque_app::library::{
     CameraFacet, CameraKey, Counted, FlagCount, PhotoFacets, PhotoPage, PhotoQuery, PhotoSort,
@@ -108,11 +110,7 @@ fn photo_filters(
     let mut clauses = Vec::new();
     let mut values = Vec::new();
     let mut add = |clause: &str, vals: Vec<Value>| {
-        clauses.push(
-            clause
-                .replace("p.", &format!("{p}."))
-                .replace("d.", &format!("{d}.")),
-        );
+        clauses.push(realias(&realias(clause, "p", p), "d", d));
         values.extend(vals);
     };
     if let Some(from) = &query.from {
@@ -224,6 +222,27 @@ fn photo_filters(
         );
     }
     (clauses, values)
+}
+
+/// `sql` with the table alias `from` (as in `p.id`) renamed to `to`. Only
+/// whole aliases change: `ap.photo_id` keeps its own alias `ap`.
+fn realias(sql: &str, from: &str, to: &str) -> String {
+    let pattern = format!("{from}.");
+    let mut out = String::with_capacity(sql.len());
+    let mut rest = sql;
+    while let Some(at) = rest.find(&pattern) {
+        let whole = rest[..at]
+            .chars()
+            .next_back()
+            .or_else(|| out.chars().next_back())
+            .is_none_or(|c| !(c.is_ascii_alphanumeric() || c == '_'));
+        out.push_str(&rest[..at]);
+        out.push_str(if whole { to } else { from });
+        out.push('.');
+        rest = &rest[at + pattern.len()..];
+    }
+    out.push_str(rest);
+    out
 }
 
 /// SQL for a technical score of photo `p`; NULL until analyzed (or when
@@ -709,7 +728,7 @@ impl SqliteCatalog {
         let conn = self.conn();
         let mut stmt = conn
             .prepare(
-                "SELECT photo_id, flag, rating, revision FROM decision
+                "SELECT photo_id, flag, rating, revision, auto_label FROM decision
                  WHERE sidecar_revision IS NULL OR sidecar_revision <> revision ORDER BY photo_id",
             )
             .map_err(storage)?;
@@ -722,11 +741,48 @@ impl SqliteCatalog {
                     rating: Rating::new(r.get(2)?).unwrap_or_default(),
                 },
                 token: r.get::<_, i64>(3)?.to_string(),
+                auto_labeled: r.get(4)?,
             })
         })
         .map_err(storage)?
         .collect::<Result<Vec<_>, _>>()
         .map_err(storage)
+    }
+
+    pub(super) fn load_auto_labeled(&self) -> Result<HashSet<PhotoId>, CatalogError> {
+        let conn = self.conn();
+        let mut stmt = conn
+            .prepare("SELECT photo_id FROM decision WHERE auto_label = 1")
+            .map_err(storage)?;
+        stmt.query_map([], |r| Ok(PhotoId(r.get(0)?)))
+            .map_err(storage)?
+            .collect::<Result<HashSet<_>, _>>()
+            .map_err(storage)
+    }
+
+    pub(super) fn store_auto_labeled(&self, ids: &[PhotoId]) -> Result<usize, CatalogError> {
+        let json = serde_json::to_string(&ids.iter().map(|id| id.0).collect::<Vec<_>>())
+            .map_err(storage)?;
+        let mut conn = self.conn();
+        let tx = conn.transaction().map_err(storage)?;
+        tx.execute(
+            "INSERT INTO decision (photo_id)
+             SELECT p.id FROM photo p JOIN json_each(?1) j ON j.value = p.id
+             WHERE true
+             ON CONFLICT (photo_id) DO NOTHING",
+            [&json],
+        )
+        .map_err(storage)?;
+        let changed = tx
+            .execute(
+                "UPDATE decision
+                 SET auto_label = 1 - auto_label, revision = revision + 1
+                 WHERE auto_label <> (photo_id IN (SELECT value FROM json_each(?1)))",
+                [&json],
+            )
+            .map_err(storage)?;
+        tx.commit().map_err(storage)?;
+        Ok(changed)
     }
 
     pub(super) fn mark_written(&self, id: PhotoId, token: &str) -> Result<(), CatalogError> {
@@ -747,6 +803,19 @@ impl SqliteCatalog {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn realias_renames_whole_aliases_only() {
+        assert_eq!(
+            realias(AUTO_PICKED_SQL, "p", "p2"),
+            AUTO_PICKED_SQL.replace("ap.photo_id = p.id", "ap.photo_id = p2.id")
+        );
+        assert_eq!(
+            realias("p.id = d.photo_id", "d", "d2"),
+            "p.id = d2.photo_id"
+        );
+        assert_eq!(realias("(p.x) AND tmp.y", "p", "q"), "(q.x) AND tmp.y");
+    }
 
     #[test]
     fn cursors_round_trip() {

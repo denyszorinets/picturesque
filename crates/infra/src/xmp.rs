@@ -8,6 +8,14 @@
 //! | `xmp:Rating` | stars 0–5, or −1 when rejected | darktable, Lightroom, Bridge |
 //! | `digiKam:PickLabel` | 3 pick, 1 reject, 0 none | digiKam |
 //! | `picturesque:Flag`, `picturesque:Stars` | flag and stars | Picturesque |
+//! | `darktable:colorlabels` | colour labels, 0 red … 4 purple | darktable |
+//! | `xmp:Label` | `Red` … `Purple` | Lightroom, Bridge |
+//! | `digiKam:ColorLabel` | 1 red, 3 yellow, 4 green, 5 blue, 6 purple | digiKam |
+//! | `picturesque:Label` | the label Picturesque set | Picturesque |
+//!
+//! Colour labels belong to the user as much as to Picturesque: only the
+//! label Picturesque set last (`picturesque:Label`) is ever removed or
+//! replaced, so a label set in another tool stays.
 //!
 //! Existing sidecars are rewritten as an event stream: only these
 //! properties (matched by namespace URI, whatever their prefix, in
@@ -16,6 +24,7 @@
 use std::collections::HashMap;
 use std::io::Cursor;
 
+use picturesque_app::ports::sidecars::{ColorLabel, SidecarValues};
 use picturesque_core::decision::{Decision, Flag, Rating};
 use quick_xml::Reader;
 use quick_xml::Writer;
@@ -25,21 +34,98 @@ pub const NS_RDF: &str = "http://www.w3.org/1999/02/22-rdf-syntax-ns#";
 pub const NS_XMP: &str = "http://ns.adobe.com/xap/1.0/";
 pub const NS_DIGIKAM: &str = "http://www.digikam.org/ns/1.0/";
 pub const NS_PICTURESQUE: &str = "https://github.com/denyszorinets/picturesque/ns/1.0/";
+pub const NS_DARKTABLE: &str = "http://darktable.sf.net/";
 
-/// Properties this module owns: (namespace, local name).
+/// Simple properties this module owns: (namespace, local name), in the
+/// order they are written.
 const OWNED: &[(&str, &str)] = &[
     (NS_XMP, "Rating"),
     (NS_DIGIKAM, "PickLabel"),
     (NS_PICTURESQUE, "Flag"),
     (NS_PICTURESQUE, "Stars"),
+    (NS_XMP, "Label"),
+    (NS_DIGIKAM, "ColorLabel"),
+    (NS_PICTURESQUE, "Label"),
 ];
+
+/// darktable's list of colour labels, rewritten as an element.
+const COLORLABELS: (&str, &str) = (NS_DARKTABLE, "colorlabels");
 
 /// Preferred prefixes for the namespaces we add.
 const PREFIXES: &[(&str, &str)] = &[
     (NS_XMP, "xmp"),
     (NS_DIGIKAM, "digiKam"),
     (NS_PICTURESQUE, "picturesque"),
+    (NS_DARKTABLE, "darktable"),
 ];
+
+fn darktable_label(label: ColorLabel) -> u8 {
+    match label {
+        ColorLabel::Red => 0,
+        ColorLabel::Yellow => 1,
+        ColorLabel::Green => 2,
+        ColorLabel::Blue => 3,
+        ColorLabel::Purple => 4,
+    }
+}
+
+fn lightroom_label(label: ColorLabel) -> &'static str {
+    match label {
+        ColorLabel::Red => "Red",
+        ColorLabel::Yellow => "Yellow",
+        ColorLabel::Green => "Green",
+        ColorLabel::Blue => "Blue",
+        ColorLabel::Purple => "Purple",
+    }
+}
+
+fn digikam_label(label: ColorLabel) -> &'static str {
+    match label {
+        ColorLabel::Red => "1",
+        ColorLabel::Yellow => "3",
+        ColorLabel::Green => "4",
+        ColorLabel::Blue => "5",
+        ColorLabel::Purple => "6",
+    }
+}
+
+/// The colour labels a sidecar holds.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Labels {
+    /// The label Picturesque set (`picturesque:Label`).
+    pub ours: Option<ColorLabel>,
+    /// darktable's labels, in file order.
+    pub darktable: Vec<u8>,
+    pub lightroom: Option<String>,
+    pub digikam: Option<String>,
+}
+
+impl Labels {
+    /// The labels after Picturesque sets `label` (or removes its own).
+    fn with(&self, label: Option<ColorLabel>) -> Labels {
+        let mut darktable = self.darktable.clone();
+        if let Some(old) = self.ours {
+            darktable.retain(|&l| l != darktable_label(old));
+        }
+        if let Some(new) = label
+            && !darktable.contains(&darktable_label(new))
+        {
+            darktable.push(darktable_label(new));
+        }
+        // Single-valued fields: ours replaces, and goes only if still ours.
+        let single = |current: &Option<String>, name: fn(ColorLabel) -> &'static str| match label {
+            Some(new) => Some(name(new).to_owned()),
+            None if self.ours.map(name) == current.as_deref() => None,
+            None => current.clone(),
+        };
+        Labels {
+            ours: label,
+            darktable,
+            lightroom: single(&self.lightroom, lightroom_label),
+            digikam: single(&self.digikam, digikam_label),
+        }
+    }
+}
 
 /// A sidecar could not be read or merged; it is left untouched.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -57,7 +143,7 @@ fn err(e: impl std::fmt::Display) -> XmpError {
     XmpError(e.to_string())
 }
 
-fn owned_values(decision: Decision) -> [(&'static str, &'static str, String); 4] {
+fn owned_values(decision: Decision, labels: &Labels) -> Vec<(&'static str, &'static str, String)> {
     let stars = decision.rating.stars();
     let rating = if decision.flag == Flag::Reject {
         "-1".to_owned()
@@ -69,20 +155,90 @@ fn owned_values(decision: Decision) -> [(&'static str, &'static str, String); 4]
         Flag::Reject => "1",
         Flag::Unflagged => "0",
     };
-    [
+    let mut values = vec![
         (NS_XMP, "Rating", rating),
         (NS_DIGIKAM, "PickLabel", pick.to_owned()),
         (NS_PICTURESQUE, "Flag", decision.flag.as_str().to_owned()),
         (NS_PICTURESQUE, "Stars", stars.to_string()),
-    ]
+    ];
+    if let Some(label) = &labels.lightroom {
+        values.push((NS_XMP, "Label", label.clone()));
+    }
+    if let Some(label) = &labels.digikam {
+        values.push((NS_DIGIKAM, "ColorLabel", label.clone()));
+    }
+    if let Some(label) = labels.ours {
+        values.push((NS_PICTURESQUE, "Label", label.as_str().to_owned()));
+    }
+    values
+}
+
+/// darktable's `colorlabels` element, written right inside the
+/// `rdf:Description`.
+fn colorlabels_events(
+    writer: &mut Writer<Cursor<Vec<u8>>>,
+    darktable: &str,
+    rdf: &str,
+    labels: &[u8],
+) -> Result<(), XmpError> {
+    let tag = format!("{darktable}:colorlabels");
+    let seq = format!("{rdf}:Seq");
+    let li = format!("{rdf}:li");
+    writer
+        .write_event(Event::Start(BytesStart::new(tag.as_str())))
+        .map_err(err)?;
+    writer
+        .write_event(Event::Start(BytesStart::new(seq.as_str())))
+        .map_err(err)?;
+    for label in labels {
+        writer
+            .write_event(Event::Start(BytesStart::new(li.as_str())))
+            .map_err(err)?;
+        writer
+            .write_event(Event::Text(quick_xml::events::BytesText::new(
+                &label.to_string(),
+            )))
+            .map_err(err)?;
+        writer
+            .write_event(Event::End(quick_xml::events::BytesEnd::new(li.as_str())))
+            .map_err(err)?;
+    }
+    writer
+        .write_event(Event::End(quick_xml::events::BytesEnd::new(seq.as_str())))
+        .map_err(err)?;
+    writer
+        .write_event(Event::End(quick_xml::events::BytesEnd::new(tag.as_str())))
+        .map_err(err)?;
+    Ok(())
 }
 
 /// A new sidecar holding `decision`.
 pub fn new_sidecar(decision: Decision) -> String {
-    let attrs: String = owned_values(decision)
+    new_sidecar_with(SidecarValues {
+        decision,
+        label: None,
+    })
+}
+
+/// A new sidecar holding `values`.
+pub fn new_sidecar_with(values: SidecarValues) -> String {
+    let labels = Labels::default().with(values.label);
+    let attrs: String = owned_values(values.decision, &labels)
         .iter()
         .map(|(ns, name, value)| format!("\n    {}:{name}=\"{value}\"", prefix_for(ns)))
         .collect();
+    let darktable = if labels.darktable.is_empty() {
+        "/>".to_owned()
+    } else {
+        let items: String = labels
+            .darktable
+            .iter()
+            .map(|l| format!("<rdf:li>{l}</rdf:li>"))
+            .collect();
+        format!(
+            ">\n   <darktable:colorlabels><rdf:Seq>{items}</rdf:Seq></darktable:colorlabels>\n  </rdf:Description>"
+        )
+    };
     format!(
         r#"<?xml version="1.0" encoding="UTF-8"?>
 <x:xmpmeta xmlns:x="adobe:ns:meta/" x:xmptk="Picturesque">
@@ -90,7 +246,8 @@ pub fn new_sidecar(decision: Decision) -> String {
   <rdf:Description rdf:about=""
     xmlns:xmp="{NS_XMP}"
     xmlns:digiKam="{NS_DIGIKAM}"
-    xmlns:picturesque="{NS_PICTURESQUE}"{attrs}/>
+    xmlns:picturesque="{NS_PICTURESQUE}"
+    xmlns:darktable="{NS_DARKTABLE}"{attrs}{darktable}
  </rdf:RDF>
 </x:xmpmeta>
 "#
@@ -162,7 +319,7 @@ impl Scopes {
 }
 
 fn is_owned(ns: &str, local: &str) -> bool {
-    OWNED.iter().any(|(n, l)| *n == ns && *l == local)
+    OWNED.iter().any(|(n, l)| *n == ns && *l == local) || (ns, local) == COLORLABELS
 }
 
 fn is_description(scopes: &Scopes, name: &str) -> bool {
@@ -171,11 +328,13 @@ fn is_description(scopes: &Scopes, name: &str) -> bool {
 
 /// Rewrites `start` (an `rdf:Description`) without our attributes and, if
 /// `add` is set, with our current values (declaring namespaces as needed).
+/// Also returns the prefix for darktable's colour labels when they are to
+/// be written inside it.
 fn rewrite_description(
     start: &BytesStart<'_>,
     scopes: &Scopes,
-    add: Option<Decision>,
-) -> Result<BytesStart<'static>, XmpError> {
+    add: Option<(Decision, &Labels)>,
+) -> Result<(BytesStart<'static>, Option<String>), XmpError> {
     let name = start.name().as_ref().to_owned();
     let mut out = BytesStart::new(name);
     for attr in start.attributes() {
@@ -191,12 +350,18 @@ fn rewrite_description(
             .map_err(err)?;
         out.push_attribute((key, value.as_ref()));
     }
-    if let Some(decision) = add {
+    let mut darktable = None;
+    if let Some((decision, labels)) = add {
         // Declarations first, then values, so merging again gives identical
         // output. Each namespace is declared at most once.
         let mut bound: Vec<(String, &str)> = Vec::new();
         let mut values = Vec::new();
-        for (ns, local, value) in owned_values(decision) {
+        let mut namespaces: Vec<(&str, &str, String)> = owned_values(decision, labels);
+        if !labels.darktable.is_empty() {
+            // Only its namespace is needed here; the element follows.
+            namespaces.push((NS_DARKTABLE, "colorlabels", String::new()));
+        }
+        for (ns, local, value) in namespaces {
             let existing = bound.iter().find(|(_, n)| *n == ns).map(|(p, _)| p.clone());
             let prefix = match existing.or_else(|| scopes.prefix_of(ns)) {
                 Some(p) => p,
@@ -216,19 +381,37 @@ fn rewrite_description(
                     prefix
                 }
             };
-            values.push((format!("{prefix}:{local}"), value));
+            if (ns, local) == COLORLABELS {
+                darktable = Some(prefix);
+            } else {
+                values.push((format!("{prefix}:{local}"), value));
+            }
         }
         for (key, value) in &values {
             out.push_attribute((key.as_str(), value.as_str()));
         }
     }
-    Ok(out)
+    Ok((out, darktable))
 }
 
 /// `existing` with our properties set to `decision`, everything else kept.
 /// Fails (and the caller leaves the file alone) if the XML cannot be
 /// parsed or has no `rdf:Description`.
 pub fn merge(existing: &str, decision: Decision) -> Result<String, XmpError> {
+    merge_values(
+        existing,
+        SidecarValues {
+            decision,
+            label: None,
+        },
+    )
+}
+
+/// `existing` with our properties set to `values`, everything else kept
+/// (see the module docs for colour labels).
+pub fn merge_values(existing: &str, values: SidecarValues) -> Result<String, XmpError> {
+    let labels = read_labels(existing)?.with(values.label);
+    let decision = values.decision;
     let mut reader = Reader::from_str(existing);
     let mut writer = Writer::new(Cursor::new(Vec::new()));
     let mut scopes = Scopes::default();
@@ -259,11 +442,18 @@ pub fn merge(existing: &str, decision: Decision) -> Result<String, XmpError> {
                     continue;
                 }
                 if is_description(&scopes, &name) {
-                    let rewritten =
-                        rewrite_description(&start, &scopes, (!added).then_some(decision))?;
+                    let (rewritten, darktable) = rewrite_description(
+                        &start,
+                        &scopes,
+                        (!added).then_some((decision, &labels)),
+                    )?;
                     added = true;
                     in_description = Some(depth);
                     writer.write_event(Event::Start(rewritten)).map_err(err)?;
+                    if let Some(darktable) = darktable {
+                        let rdf = scopes.prefix_of(NS_RDF).unwrap_or_else(|| "rdf".into());
+                        colorlabels_events(&mut writer, &darktable, &rdf, &labels.darktable)?;
+                    }
                 } else {
                     writer.write_event(Event::Start(start)).map_err(err)?;
                 }
@@ -277,10 +467,28 @@ pub fn merge(existing: &str, decision: Decision) -> Result<String, XmpError> {
                         .is_some_and(|(ns, local)| is_owned(ns, local));
                 if skipping == 0 && !owned_child {
                     if is_description(&scopes, &name) {
-                        let rewritten =
-                            rewrite_description(&start, &scopes, (!added).then_some(decision))?;
+                        let (rewritten, darktable) = rewrite_description(
+                            &start,
+                            &scopes,
+                            (!added).then_some((decision, &labels)),
+                        )?;
                         added = true;
-                        writer.write_event(Event::Empty(rewritten)).map_err(err)?;
+                        match darktable {
+                            // The labels go inside: open and close it.
+                            Some(darktable) => {
+                                let end = rewritten.to_end().into_owned();
+                                writer.write_event(Event::Start(rewritten)).map_err(err)?;
+                                let rdf = scopes.prefix_of(NS_RDF).unwrap_or_else(|| "rdf".into());
+                                colorlabels_events(
+                                    &mut writer,
+                                    &darktable,
+                                    &rdf,
+                                    &labels.darktable,
+                                )?;
+                                writer.write_event(Event::End(end)).map_err(err)?;
+                            }
+                            None => writer.write_event(Event::Empty(rewritten)).map_err(err)?,
+                        }
                     } else {
                         writer.write_event(Event::Empty(start)).map_err(err)?;
                     }
@@ -310,6 +518,88 @@ pub fn merge(existing: &str, decision: Decision) -> Result<String, XmpError> {
         return Err(XmpError("no rdf:Description element".into()));
     }
     String::from_utf8(writer.into_inner().into_inner()).map_err(err)
+}
+
+/// The colour labels in a sidecar written by any tool.
+pub fn read_labels(text: &str) -> Result<Labels, XmpError> {
+    let mut reader = Reader::from_str(text);
+    let mut scopes = Scopes::default();
+    let mut labels = Labels::default();
+    // Resolved names of the open elements.
+    let mut open: Vec<Option<(String, String)>> = Vec::new();
+
+    let attributes = |scopes: &Scopes, start: &BytesStart<'_>, labels: &mut Labels| {
+        for attr in start.attributes() {
+            let attr = attr.map_err(err)?;
+            let Some((ns, local)) = scopes.resolve(attr.key.as_ref()) else {
+                continue;
+            };
+            let value = attr
+                .normalized_value(quick_xml::XmlVersion::Implicit1_0)
+                .map_err(err)?
+                .into_owned();
+            set_label(labels, ns, local, value);
+        }
+        Ok::<(), XmpError>(())
+    };
+
+    loop {
+        match reader.read_event().map_err(err)? {
+            Event::Eof => break,
+            Event::Start(start) => {
+                scopes.push(&start)?;
+                attributes(&scopes, &start, &mut labels)?;
+                let qname = start.name();
+                open.push(
+                    scopes
+                        .resolve(qname.as_ref())
+                        .map(|(ns, local)| (ns.to_owned(), local.to_owned())),
+                );
+            }
+            Event::Empty(start) => {
+                scopes.push(&start)?;
+                attributes(&scopes, &start, &mut labels)?;
+                scopes.pop();
+            }
+            Event::Text(text) => {
+                let value = text.xml10_content().trim().to_owned();
+                if value.is_empty() {
+                    continue;
+                }
+                let in_colorlabels = open.iter().any(|e| {
+                    e.as_ref()
+                        .is_some_and(|(ns, local)| (ns.as_str(), local.as_str()) == COLORLABELS)
+                });
+                match open.last() {
+                    Some(Some((ns, local))) if in_colorlabels && ns == NS_RDF && local == "li" => {
+                        if let Ok(label) = value.parse() {
+                            labels.darktable.push(label);
+                        }
+                    }
+                    Some(Some((ns, local))) => {
+                        let (ns, local) = (ns.clone(), local.clone());
+                        set_label(&mut labels, &ns, &local, value);
+                    }
+                    _ => {}
+                }
+            }
+            Event::End(_) => {
+                open.pop();
+                scopes.pop();
+            }
+            _ => {}
+        }
+    }
+    Ok(labels)
+}
+
+fn set_label(labels: &mut Labels, ns: &str, local: &str, value: String) {
+    match (ns, local) {
+        (NS_XMP, "Label") => labels.lightroom = Some(value),
+        (NS_DIGIKAM, "ColorLabel") => labels.digikam = Some(value),
+        (NS_PICTURESQUE, "Label") => labels.ours = ColorLabel::from_name(&value),
+        _ => {}
+    }
 }
 
 /// A decision read from a sidecar written by any tool. `None` when the
@@ -414,11 +704,11 @@ impl picturesque_app::ports::sidecars::SidecarStore for XmpSidecars {
     fn write(
         &self,
         path: &std::path::Path,
-        decision: Decision,
+        values: SidecarValues,
     ) -> Result<(picturesque_core::hash::ContentHash, u64), String> {
         let xml = match std::fs::read_to_string(path) {
-            Ok(existing) => merge(&existing, decision).map_err(|e| e.to_string())?,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => new_sidecar(decision),
+            Ok(existing) => merge_values(&existing, values).map_err(|e| e.to_string())?,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => new_sidecar_with(values),
             Err(e) => return Err(e.to_string()),
         };
         // Write beside the target and rename over it, so a crash never
@@ -572,13 +862,94 @@ mod tests {
         assert_eq!(read_decision(&merged).unwrap(), Some(d(Flag::Pick, 2)));
     }
 
+    fn v(flag: Flag, stars: u8, label: Option<ColorLabel>) -> SidecarValues {
+        SidecarValues {
+            decision: d(flag, stars),
+            label,
+        }
+    }
+
+    #[test]
+    fn labels_are_written_for_darktable_lightroom_and_digikam() {
+        let xml = new_sidecar_with(v(Flag::Pick, 0, Some(ColorLabel::Green)));
+
+        assert!(xml.contains(r#"xmp:Label="Green""#), "{xml}");
+        assert!(xml.contains(r#"digiKam:ColorLabel="4""#), "{xml}");
+        assert!(xml.contains(r#"picturesque:Label="green""#), "{xml}");
+        assert!(
+            xml.contains("<darktable:colorlabels><rdf:Seq><rdf:li>2</rdf:li></rdf:Seq></darktable:colorlabels>"),
+            "{xml}"
+        );
+        assert_eq!(read_labels(&xml).unwrap().darktable, [2]);
+        assert_eq!(read_decision(&xml).unwrap(), Some(d(Flag::Pick, 0)));
+    }
+
+    /// darktable's own colour label (red) in element form.
+    const DARKTABLE_RED: &str = r#"<x:xmpmeta xmlns:x="adobe:ns:meta/">
+ <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+  <rdf:Description rdf:about="" xmlns:darktable="http://darktable.sf.net/" darktable:xmp_version="5">
+   <darktable:colorlabels>
+    <rdf:Seq>
+     <rdf:li>0</rdf:li>
+    </rdf:Seq>
+   </darktable:colorlabels>
+  </rdf:Description>
+ </rdf:RDF>
+</x:xmpmeta>"#;
+
+    #[test]
+    fn our_label_joins_and_leaves_other_labels_alone() {
+        let picked =
+            merge_values(DARKTABLE_RED, v(Flag::Pick, 0, Some(ColorLabel::Green))).unwrap();
+        assert_eq!(read_labels(&picked).unwrap().darktable, [0, 2], "{picked}");
+        assert!(picked.contains(r#"darktable:xmp_version="5""#));
+        assert_eq!(picked.matches("xmlns:darktable=").count(), 1, "{picked}");
+
+        let unpicked = merge_values(&picked, v(Flag::Unflagged, 0, None)).unwrap();
+        let labels = read_labels(&unpicked).unwrap();
+        assert_eq!(labels.darktable, [0], "{unpicked}");
+        assert_eq!(labels.ours, None);
+        assert!(!unpicked.contains("xmp:Label"), "{unpicked}");
+        assert!(!unpicked.contains("digiKam:ColorLabel"), "{unpicked}");
+    }
+
+    #[test]
+    fn a_label_set_in_another_tool_is_kept_when_ours_goes() {
+        let lightroom = r#"<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description xmlns:xmp="http://ns.adobe.com/xap/1.0/" xmp:Label="Red"/></rdf:RDF></x:xmpmeta>"#;
+
+        let unchanged = merge_values(lightroom, v(Flag::Unflagged, 0, None)).unwrap();
+
+        assert!(unchanged.contains(r#"xmp:Label="Red""#), "{unchanged}");
+    }
+
+    #[test]
+    fn changing_the_label_replaces_ours_only() {
+        let yellow = merge_values(
+            DARKTABLE_RED,
+            v(Flag::Unflagged, 0, Some(ColorLabel::Yellow)),
+        )
+        .unwrap();
+        let green = merge_values(&yellow, v(Flag::Pick, 0, Some(ColorLabel::Green))).unwrap();
+
+        assert_eq!(read_labels(&green).unwrap().darktable, [0, 2], "{green}");
+        assert!(green.contains(r#"xmp:Label="Green""#));
+    }
+
+    #[test]
+    fn merging_labels_twice_gives_the_same_result() {
+        let once = merge_values(DARKTABLE_RED, v(Flag::Pick, 2, Some(ColorLabel::Purple))).unwrap();
+        let twice = merge_values(&once, v(Flag::Pick, 2, Some(ColorLabel::Purple))).unwrap();
+
+        assert_eq!(once, twice);
+    }
+
     #[test]
     fn the_store_creates_merges_and_reads_sidecars() {
         use picturesque_app::ports::sidecars::SidecarStore;
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("IMG_1.CR3.xmp");
 
-        let (hash, size) = XmpSidecars.write(&path, d(Flag::Pick, 3)).unwrap();
+        let (hash, size) = XmpSidecars.write(&path, v(Flag::Pick, 3, None)).unwrap();
         assert_eq!(XmpSidecars.read(&path).unwrap(), Some(d(Flag::Pick, 3)));
         assert_eq!(size, std::fs::metadata(&path).unwrap().len());
         assert_eq!(
@@ -587,7 +958,7 @@ mod tests {
         );
 
         std::fs::write(&path, DARKTABLE).unwrap();
-        XmpSidecars.write(&path, d(Flag::Reject, 0)).unwrap();
+        XmpSidecars.write(&path, v(Flag::Reject, 0, None)).unwrap();
         let text = std::fs::read_to_string(&path).unwrap();
         assert!(text.contains("<rdf:li>holiday</rdf:li>"));
         assert_eq!(XmpSidecars.read(&path).unwrap(), Some(d(Flag::Reject, 0)));
@@ -605,7 +976,7 @@ mod tests {
         let path = dir.path().join("a.xmp");
         std::fs::write(&path, "<not-xmp").unwrap();
 
-        assert!(XmpSidecars.write(&path, d(Flag::Pick, 1)).is_err());
+        assert!(XmpSidecars.write(&path, v(Flag::Pick, 1, None)).is_err());
         assert_eq!(std::fs::read_to_string(&path).unwrap(), "<not-xmp");
     }
 }

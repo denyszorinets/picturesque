@@ -19,10 +19,10 @@ Each tile shows the whole photo (never cropped), with:
 
 - **RAW** when the photo has a RAW file (the JPEG of a RAW+JPEG pair is
   shown),
-- a green **✓** for picks and a red **✕** for rejects (rejected photos are
-  dimmed),
+- a green check mark for picks and a red cross for rejects (rejected
+  photos are dimmed and greyed),
 - its star rating,
-- a green border and **★** on the best photo of a series; the photos of a
+- a green border and a star on the best photo of a series; the photos of a
   series are framed together (:ref:`features-series`).
 
 Hover a tile for its file name, capture time, camera and place.
@@ -102,9 +102,12 @@ Culling
 Mark photos as **picks** or **rejects** and give them **star ratings**
 with the keyboard (:doc:`/reference/keyboard-shortcuts`): P, X and U for
 pick, reject and unflag, 1–5 for stars and 0 to clear. In the timeline the
-keys apply to every selected photo; in the loupe, to the photo shown. Hold
+keys apply to every selected photo; in the loupe, to the photo shown.
+Picked photos have a green ring in the timeline. Hold
 **Shift** (Shift+P, Shift+X, Shift+U) to move on to the next photo
 afterwards, in the loupe or with one photo selected in the timeline.
+In the loupe and in compare, **↑** picks and **↓** rejects too (with
+**Shift** to move on), so a whole cull fits on the arrow keys.
 
 **Picks** counts only photos you marked. The app's suggestions are
 separate: see :ref:`features-library-auto-pick`.
@@ -115,8 +118,9 @@ Auto-pick
 ~~~~~~~~~
 
 Once photos are analyzed, the app marks the ones it thinks are keepers as
-**Auto-picked** (a green *✓ Auto* badge on the tile, *Auto-picked* in the
-loupe). A photo is auto-picked when all of these hold:
+**Auto-picked** (an *Auto* badge with a check mark and a thin light-green ring
+on the tile, *Auto-picked* in the loupe; picks get a thicker, solid green
+ring). A photo is auto-picked when all of these hold:
 
 - it is the best photo of its series (:ref:`features-series`), or in no
   series;
@@ -134,8 +138,8 @@ suggestions, click **Pick all N auto-picked** under **Flag** in the
 filters: every auto-picked photo becomes a pick, in one step that
 **Undo** reverses. Filter by **Auto-picked** to go through them first.
 
-Decisions are saved immediately. **Undo** and **Redo** (above the
-timeline, or Ctrl+Z / Ctrl+Shift+Z) step back and forward through the
+Decisions are saved immediately. **Undo** and **Redo** (the two arrow
+buttons at the right of the toolbar, or Ctrl+Z / Ctrl+Shift+Z) step back and forward through the
 last 200 changes; undoing restores each photo's previous flag and rating,
 even when a change covered photos that had different ones.
 
@@ -185,7 +189,7 @@ The **Filters** panel beside the timeline (toggle it with the
 Filters combine: *Picks* with *3★+* in *Lisbon* shows picked photos of
 three stars or more taken in Lisbon. Every option shows how many photos
 in the library have it. Active filters appear as chips above the
-timeline; remove one with its ✕, or all with **Clear all**. Filters are
+timeline; remove one with its cross, or all with **Clear all**. Filters are
 kept while the app is open.
 
 The timeline, day headers and counts all reflect the filters. A photo you
@@ -217,8 +221,8 @@ score its sharpness, exposure and noise
 (:doc:`/reference/quality-scores`) and to hash its visual layout for
 finding similar photos (:doc:`/reference/similarity`), which groups photos
 into :doc:`series </features/series>`. The loupe shows the scores under
-**Quality**. While it works, the toolbar shows
-**Analyzing 120 / 300**. Photos on screen are analyzed first, so scrolling
+**Quality**. While it works, the progress ring at the top right shows
+**Analyzing 120 / 300** (:ref:`features-library-progress`). Photos on screen are analyzed first, so scrolling
 to a day gets its results within seconds. Analysis continues where it left
 off after the app restarts. With the CLIP model downloaded, analysis also
 computes image embeddings (:ref:`features-ai-embeddings`).
@@ -229,6 +233,34 @@ needs its models, which are not bundled with the app
 the other analyses, and the toolbar shows **AI analysis needs models**:
 click it to open Settings, where **AI models** downloads them. Photos are
 then analyzed with the new models automatically.
+
+.. _features-library-progress:
+
+Progress ring
+~~~~~~~~~~~~~
+
+The ring at the top right of the window shows background work on every
+tab, one thing at a time:
+
+.. list-table::
+   :header-rows: 1
+
+   * - Shows
+     - Meaning
+   * - **Importing · 12 left**
+     - Photos are being read and copied into the library; the ring spins.
+   * - **Looking for photos**
+     - An import folder is being scanned.
+   * - **Analyzing 120 / 300**
+     - Photos are being analyzed; the ring fills as they finish.
+   * - **Import paused**, **Analysis paused**
+     - Work waits, for example for disk space (amber).
+   * - **Up to date**
+     - Nothing is waiting.
+
+Photos that could not be imported are counted in red next to it. Click
+the ring for details (what is being copied, why work is paused) and
+**Open Activity**.
 
 .. _features-library-reanalyze:
 
@@ -242,7 +274,7 @@ an analysis failed or after downloading a new model:
 - click **Re-analyze all photos** in **Settings → Analysis** (and confirm).
 
 The photos go back into the queue, the selected ones first, and the
-toolbar shows **Analyzing …** again. Until a photo's new results are
+progress ring shows **Analyzing …** again. Until a photo's new results are
 ready, its earlier ones stay in use, so scores, series, auto-picks and
 quality filters keep working meanwhile; when the new results are stored,
 series and auto-picks are updated. Your decisions (picks, rejects,
@@ -274,6 +306,21 @@ Photo files themselves are never modified.
    * - ``picturesque:Flag``, ``picturesque:Stars``
      - The exact flag and stars (a rejected photo keeps its stars)
      - Picturesque
+   * - ``darktable:colorlabels``
+     - The colour label for picks, and for auto-picks once a folder is
+       finished (:ref:`reference-settings-labels`)
+     - darktable
+   * - ``xmp:Label``, ``digiKam:ColorLabel``
+     - The same colour label
+     - Lightroom, Bridge, digiKam
+   * - ``picturesque:Label``
+     - Which label Picturesque set, so it only ever changes its own
+     - Picturesque
+
+darktable has no pick flag, so picks show there as a **colour label**:
+green by default. A label you set in another tool is kept: darktable keeps
+both, and Lightroom and digiKam (which allow one label) get ours while the
+photo is a pick and keep theirs otherwise.
 
 - If a photo already has a sidecar (for example from darktable or
   Lightroom), it is **updated in place**: only the properties above are
@@ -283,8 +330,15 @@ Photo files themselves are never modified.
   digiKam) or ``IMG_0042.xmp`` (Lightroom, Bridge); see
   :ref:`reference-settings-sidecar-naming`.
 - Sidecars are written in the background about a second after you stop
-  changing decisions, so rapid culling writes each file once. Anything not
-  yet written when the app closes is written the next time it starts.
+  changing decisions, so rapid culling writes each file once, and again
+  when the app closes. Anything that could not be written is retried after
+  the next change and when the app starts.
+- Sidecars live next to the photos **in the library**, not in the folders
+  you imported from. The toolbar says **Saved to XMP ✓** once every
+  decision is written (*Saving to XMP…* meanwhile, or how many could not
+  be written and why); in the desktop app, clicking it opens the library
+  folder. In the photo view, **Show in folder** next to each file opens
+  its folder with the file selected.
 - A sidecar that cannot be read as XMP is left untouched.
 
 On import, decisions found in existing sidecars (ratings, darktable or

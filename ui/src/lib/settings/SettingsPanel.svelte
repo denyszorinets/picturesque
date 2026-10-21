@@ -18,6 +18,16 @@
   import ModelList from "../ai/ModelList.svelte";
   import Reanalyze from "../analysis/Reanalyze.svelte";
   import PathInput from "../components/PathInput.svelte";
+  import type { ColorLabel, DeleteAfterCopy } from "../api";
+
+  const LABELS: { value: ColorLabel | ""; label: string }[] = [
+    { value: "", label: "No label" },
+    { value: "red", label: "Red" },
+    { value: "yellow", label: "Yellow" },
+    { value: "green", label: "Green" },
+    { value: "blue", label: "Blue" },
+    { value: "purple", label: "Purple" },
+  ];
 
   interface Props {
     /** Called whenever settings are loaded or saved. */
@@ -26,15 +36,20 @@
     onsetup?: () => void;
     /** Shows the culling tour again. */
     ontour?: () => void;
+    /** Whether a folder is culled in place (library settings do not apply). */
+    inFolder?: boolean;
   }
 
-  let { onchange, onsetup, ontour }: Props = $props();
+  let { onchange, onsetup, ontour, inFolder = false }: Props = $props();
 
   let saved = $state<Settings | null>(null);
   let presets = $state<TemplatePresetView[]>([]);
   let libraryRoot = $state("");
   let template = $state("");
   let sidecarNaming = $state<Settings["sidecar_naming"]>("file_extension");
+  let pickLabel = $state<ColorLabel | null>("green");
+  let autoLabel = $state<ColorLabel | null>("yellow");
+  let deleteAfterCopy = $state<DeleteAfterCopy>("verified");
   let maxGap = $state(30);
   let maxDistance = $state(16);
   let rescanMinutes = $state(5);
@@ -92,6 +107,9 @@
       (libraryRoot.trim() !== (saved.library_root ?? "") ||
         template.trim() !== saved.path_template ||
         sidecarNaming !== saved.sidecar_naming ||
+        pickLabel !== saved.labels.pick ||
+        autoLabel !== saved.labels.auto_pick ||
+        deleteAfterCopy !== saved.delete_after_copy ||
         seriesChanged ||
         rankingChanged ||
         rescanMinutes !== saved.import.rescan_minutes ||
@@ -133,6 +151,9 @@
     libraryRoot = settings.library_root ?? "";
     template = settings.path_template;
     sidecarNaming = settings.sidecar_naming;
+    pickLabel = settings.labels.pick;
+    autoLabel = settings.labels.auto_pick;
+    deleteAfterCopy = settings.delete_after_copy;
     maxGap = settings.series.max_gap_seconds;
     maxDistance = settings.series.max_distance;
     rescanMinutes = settings.import.rescan_minutes;
@@ -169,6 +190,13 @@
         update.import = { rescan_minutes: rescanMinutes };
       if (sidecarNaming !== saved.sidecar_naming)
         update.sidecar_naming = sidecarNaming;
+      if (
+        pickLabel !== saved.labels.pick ||
+        autoLabel !== saved.labels.auto_pick
+      )
+        update.labels = { pick: pickLabel, auto_pick: autoLabel };
+      if (deleteAfterCopy !== saved.delete_after_copy)
+        update.delete_after_copy = deleteAfterCopy;
       if (libraryRoot.trim() !== (saved.library_root ?? ""))
         update.library_root = libraryRoot.trim();
       if (template.trim() !== saved.path_template)
@@ -200,56 +228,64 @@
     </span>
   </div>
 
-  <div class="field">
-    <span class="label">Library folder (output)</span>
-    <PathInput
-      label="Library folder"
-      bind:value={libraryRoot}
-      testid="library-root"
-    />
-    <p class="hint muted">
-      Imported photos are <strong>copied</strong> here. Your originals are only read:
-      never moved, renamed, edited or deleted.
+  {#if inFolder}
+    <p class="notice" data-testid="settings-in-folder">
+      You are culling <code>{saved?.open_folder}</code> in place. The library folder
+      and its folder structure apply when you go back to the library; every other
+      setting applies everywhere.
     </p>
-  </div>
-
-  <div class="field">
-    <label class="label" for="preset">Folder structure</label>
-    <select
-      id="preset"
-      value={presetId}
-      onchange={(e) => choosePreset(e.currentTarget.value)}
-    >
-      {#each presets as preset (preset.id)}
-        <option value={preset.id}>{preset.label}</option>
-      {/each}
-      <option value="custom" disabled={presetId !== "custom"}>Custom</option>
-    </select>
-    <input
-      type="text"
-      aria-label="Path template"
-      bind:value={template}
-      spellcheck="false"
-      data-testid="path-template"
-    />
-
-    {#if preview?.error}
-      <p class="error-text" role="alert" data-testid="template-error">
-        {preview.error}
+  {:else}
+    <div class="field">
+      <span class="label">Library folder (output)</span>
+      <PathInput
+        label="Library folder"
+        bind:value={libraryRoot}
+        testid="library-root"
+      />
+      <p class="hint muted">
+        Imported photos are <strong>copied</strong> here. Your originals are only
+        read: never moved, renamed, edited or deleted.
       </p>
-    {:else if preview}
-      <ul class="examples" data-testid="template-preview">
-        {#each preview.examples as example (example.description)}
-          <li>
-            <span class="muted">{example.description}</span>
-            {#each example.paths as path (path)}
-              <code>{path}</code>
-            {/each}
-          </li>
+    </div>
+
+    <div class="field">
+      <label class="label" for="preset">Folder structure</label>
+      <select
+        id="preset"
+        value={presetId}
+        onchange={(e) => choosePreset(e.currentTarget.value)}
+      >
+        {#each presets as preset (preset.id)}
+          <option value={preset.id}>{preset.label}</option>
         {/each}
-      </ul>
-    {/if}
-  </div>
+        <option value="custom" disabled={presetId !== "custom"}>Custom</option>
+      </select>
+      <input
+        type="text"
+        aria-label="Path template"
+        bind:value={template}
+        spellcheck="false"
+        data-testid="path-template"
+      />
+
+      {#if preview?.error}
+        <p class="error-text" role="alert" data-testid="template-error">
+          {preview.error}
+        </p>
+      {:else if preview}
+        <ul class="examples" data-testid="template-preview">
+          {#each preview.examples as example (example.description)}
+            <li>
+              <span class="muted">{example.description}</span>
+              {#each example.paths as path (path)}
+                <code>{path}</code>
+              {/each}
+            </li>
+          {/each}
+        </ul>
+      {/if}
+    </div>
+  {/if}
 
   <div class="field">
     <label class="inline">
@@ -284,6 +320,67 @@
     <p class="hint muted">
       Picks, rejects and ratings are written to sidecars so other photo tools
       see them.
+    </p>
+  </div>
+
+  <div class="field">
+    <span class="label">Colour labels in sidecars</span>
+    <div class="labels">
+      <label>
+        Picks
+        <select
+          value={pickLabel ?? ""}
+          onchange={(e) =>
+            (pickLabel = (e.currentTarget.value || null) as ColorLabel | null)}
+          data-testid="pick-label"
+        >
+          {#each LABELS as option (option.value)}
+            <option value={option.value}>{option.label}</option>
+          {/each}
+        </select>
+      </label>
+      <label>
+        Auto-picked
+        <select
+          value={autoLabel ?? ""}
+          onchange={(e) =>
+            (autoLabel = (e.currentTarget.value || null) as ColorLabel | null)}
+          data-testid="auto-pick-label"
+        >
+          {#each LABELS as option (option.value)}
+            <option value={option.value}>{option.label}</option>
+          {/each}
+        </select>
+      </label>
+    </div>
+    <p class="hint muted">
+      darktable has no pick flag: it shows picks by this colour label (Lightroom
+      and digiKam show it too). Auto-picked photos get theirs when you finish a
+      folder. Labels you set in another tool are kept; changes apply to sidecars
+      written from now on.
+    </p>
+  </div>
+
+  <div class="field">
+    <label class="label" for="delete-after-copy">After copying keepers</label>
+    <select
+      id="delete-after-copy"
+      bind:value={deleteAfterCopy}
+      data-testid="delete-after-copy"
+    >
+      <option value="verified">Clear folder deletes verified copies only</option
+      >
+      <option value="verified_and_rejects"
+        >Clear folder deletes verified copies and rejects</option
+      >
+      <option value="never">Never delete originals</option>
+    </select>
+    <p class="hint muted">
+      In a folder culled in place (a memory card), <strong>Clear folder…</strong
+      >
+      deletes the originals you copied, after checking each copy again. With rejects,
+      rejected photos are deleted too, without a copy. Deleting is permanent and only
+      happens when you click it.
     </p>
   </div>
 
@@ -519,5 +616,23 @@
     display: flex;
     align-items: center;
     gap: 0.8rem;
+  }
+
+  .notice {
+    padding: 0.7rem 0.9rem;
+    border-radius: var(--radius);
+    background: var(--surface-2);
+  }
+
+  .labels {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem 1.4rem;
+  }
+
+  .labels label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
   }
 </style>

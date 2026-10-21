@@ -169,6 +169,8 @@ export class LibraryStore {
         cursor = page.next_cursor;
       } while (cursor !== null && photos.length < want);
       this.sort = this.filter.sort;
+      // A refresh can overtake the load that cleared a search.
+      this.rankedLabel = null;
       this.facets = facets;
       this.photos = photos;
       this.cursor = cursor;

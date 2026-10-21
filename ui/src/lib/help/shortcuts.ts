@@ -23,6 +23,7 @@ export const SHORTCUTS: ShortcutGroup[] = [
       { keys: ["P"], action: "Pick" },
       { keys: ["X"], action: "Reject" },
       { keys: ["U"], action: "Unflag" },
+      { keys: ["↑", "↓"], action: "Pick, reject (loupe and compare)" },
       { keys: ["1–5"], action: "Rate 1 to 5 stars" },
       { keys: ["0"], action: "Clear the rating" },
       { keys: ["Shift", "key"], action: "Decide, then go to the next photo" },
@@ -67,6 +68,7 @@ export const SHORTCUTS: ShortcutGroup[] = [
       { keys: ["Z"], action: "Zoom all photos together" },
       { keys: ["Shift", "arrow"], action: "Pan while zoomed" },
       { keys: ["P", "X", "B"], action: "Pick, reject, or choose the best" },
+      { keys: ["↑", "↓"], action: "Pick or reject" },
       { keys: ["Esc"], action: "Back to the timeline" },
     ],
   },
@@ -78,6 +80,9 @@ export const SHORTCUTS: ShortcutGroup[] = [
 
 const DOCS = "https://denyszorinets.github.io/picturesque/docs";
 
+/** The darktable guide, also linked when a folder is opened. */
+export const DARKTABLE_GUIDE = `${DOCS}/getting-started/darktable.html`;
+
 /** Guides opened in the browser from Help. */
 export const GUIDES: { label: string; url: string }[] = [
   {
@@ -85,6 +90,10 @@ export const GUIDES: { label: string; url: string }[] = [
     url: `${DOCS}/getting-started/first-import.html`,
   },
   { label: "Your first cull", url: `${DOCS}/getting-started/first-cull.html` },
+  {
+    label: "Using Picturesque with darktable",
+    url: DARKTABLE_GUIDE,
+  },
   { label: "Documentation", url: `${DOCS}/` },
   {
     label: "Report a problem",

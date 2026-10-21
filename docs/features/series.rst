@@ -114,7 +114,7 @@ In the Library timeline:
 
 - The photos of a series sit inside a **frame**. When a series continues
   on the next row, the frame's edge there is dashed and open.
-- The best photo has a **green border** and a **★** badge. Rejected
+- The best photo has a **green border** and a star badge. Rejected
   photos stay dimmed.
 - Press **C** to compare the photos of the selected photo's series side by
   side, best first (:ref:`features-compare`).
@@ -122,9 +122,9 @@ In the Library timeline:
   best of its series; press it again on that photo to withdraw the choice
   (:doc:`/reference/keyboard-shortcuts`).
 - **Stack series** (above the timeline) shows each series as its best
-  photo, with a **⧉ n** button giving the series' size. Click it to show
-  all photos of that series; click **−** on its best photo to stack it
-  again. Stacking works with filters: a stacked series shows its
+  photo, with a stack button giving the series' size. Click it to show
+  all photos of that series; click the stack button (now without a
+  number) on its best photo to stack it again. Stacking works with filters: a stacked series shows its
   best-placed photo among those matching the filters. Whether series are
   stacked is kept for the session.
 

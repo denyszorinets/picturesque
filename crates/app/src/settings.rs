@@ -14,6 +14,7 @@ use crate::ports::catalog::{CatalogError, PhotoCatalog};
 use crate::ports::fs::FileSystem;
 use crate::ports::inference::ProviderChoice;
 use crate::ports::settings::SettingsStore;
+use crate::ports::sidecars::ColorLabel;
 
 /// Folder structure used until the user picks another template (the first
 /// preset): `2026/2026-10-12/IMG_0042.CR3`.
@@ -44,6 +45,64 @@ pub struct Settings {
     pub auto_pick: AutoPickSettings,
     /// What the user has already been shown.
     pub onboarding: OnboardingSettings,
+    /// The folder being culled in place, reopened at startup; `None` while
+    /// working in the library (ADR-0013). In a folder session,
+    /// `library_root` is this folder.
+    #[ts(type = "string | null")]
+    pub open_folder: Option<PathBuf>,
+    /// Folders culled in place, most recently opened first.
+    pub recent_folders: Vec<RecentFolder>,
+    /// Colour labels written to sidecars.
+    pub labels: LabelSettings,
+    /// What clearing a folder after copying may delete (ADR-0014).
+    pub delete_after_copy: DeleteAfterCopy,
+}
+
+/// What **Clear folder…** may delete after keepers were copied out of a
+/// folder culled in place (ADR-0014).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export)]
+pub enum DeleteAfterCopy {
+    /// Nothing: clearing is not offered.
+    Never,
+    /// Photos whose copy was verified (and is verified again first).
+    #[default]
+    Verified,
+    /// Those, and photos you rejected.
+    VerifiedAndRejects,
+}
+
+/// Colour labels written to XMP sidecars, so tools without a pick flag
+/// (darktable) show picks (`docs/reference/settings.rst`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(default)]
+#[ts(export)]
+pub struct LabelSettings {
+    /// For picks; `None` writes no label.
+    pub pick: Option<ColorLabel>,
+    /// For auto-picked photos, written when a folder is finished.
+    pub auto_pick: Option<ColorLabel>,
+}
+
+impl Default for LabelSettings {
+    fn default() -> Self {
+        Self {
+            pick: Some(ColorLabel::Green),
+            auto_pick: Some(ColorLabel::Yellow),
+        }
+    }
+}
+
+/// A folder culled in place, for the list of recent folders.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct RecentFolder {
+    #[ts(type = "string")]
+    pub path: PathBuf,
+    /// When it was last opened, in seconds since the Unix epoch.
+    #[ts(type = "number")]
+    pub opened_at: i64,
 }
 
 /// First-run guidance the user has seen (`docs/getting-started`).
@@ -192,6 +251,10 @@ impl Default for Settings {
             import: ImportSettings::default(),
             auto_pick: AutoPickSettings::default(),
             onboarding: OnboardingSettings::default(),
+            open_folder: None,
+            recent_folders: Vec::new(),
+            labels: LabelSettings::default(),
+            delete_after_copy: DeleteAfterCopy::default(),
         }
     }
 }
@@ -219,6 +282,10 @@ pub struct SettingsUpdate {
     pub auto_pick: Option<AutoPickSettings>,
     #[ts(optional)]
     pub onboarding: Option<OnboardingSettings>,
+    #[ts(optional)]
+    pub labels: Option<LabelSettings>,
+    #[ts(optional)]
+    pub delete_after_copy: Option<DeleteAfterCopy>,
 }
 
 /// Why settings could not be read or changed.
@@ -359,6 +426,12 @@ impl SettingsService {
         }
         if let Some(onboarding) = update.onboarding {
             settings.onboarding = onboarding;
+        }
+        if let Some(labels) = update.labels {
+            settings.labels = labels;
+        }
+        if let Some(mode) = update.delete_after_copy {
+            settings.delete_after_copy = mode;
         }
         self.store.save_settings(&settings)?;
         Ok(settings)

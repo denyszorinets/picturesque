@@ -11,11 +11,16 @@ use std::time::Duration;
 
 use picturesque_core::grouping::base_name;
 use picturesque_core::photo::Photo;
+use serde::Serialize;
+use ts_rs::TS;
 
-use crate::ports::catalog::PhotoCatalog;
+use picturesque_core::decision::Flag;
+
+use crate::ports::catalog::{DirtyDecision, PhotoCatalog};
+use crate::ports::events::{AppEvent, EventSink};
 use crate::ports::settings::SettingsStore;
-use crate::ports::sidecars::SidecarStore;
-use crate::settings::SidecarNaming;
+use crate::ports::sidecars::{ColorLabel, SidecarStore, SidecarValues};
+use crate::settings::{Settings, SidecarNaming};
 
 /// How long to wait after the last change before writing.
 pub const DEBOUNCE: Duration = Duration::from_millis(750);
@@ -28,11 +33,29 @@ pub struct FlushReport {
     pub failed: Vec<(i64, String)>,
 }
 
+/// Whether decisions have reached their sidecars (`sidecar_status`, and
+/// `sidecar_progress` events).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, TS)]
+#[ts(export)]
+pub struct SidecarStatus {
+    /// Photos whose sidecar does not yet hold their latest decision.
+    pub pending: usize,
+    /// Photos whose sidecar could not be written by the latest attempt.
+    pub failed: usize,
+    /// Why the first of those failed.
+    pub error: Option<String>,
+    /// The folder the sidecars are written in (the library), if set.
+    pub folder: Option<String>,
+}
+
 pub struct SidecarService {
     catalog: Arc<dyn PhotoCatalog>,
     settings: Arc<dyn SettingsStore>,
     store: Arc<dyn SidecarStore>,
+    events: Arc<dyn EventSink>,
     notify: Mutex<Option<Sender<()>>>,
+    /// Failures of the latest flush.
+    failed: Mutex<Vec<(i64, String)>>,
 }
 
 impl std::fmt::Debug for SidecarService {
@@ -59,22 +82,108 @@ pub fn sidecar_path(photo: &Photo, naming: SidecarNaming) -> PathBuf {
     primary.with_file_name(file)
 }
 
+/// Every sidecar a photo's decision is written to. In the library, one
+/// ([`sidecar_path`]). In a folder culled in place (`every_file`), also
+/// one per RAW and image file, since darktable imports each file of a
+/// RAW+JPEG pair as its own image with its own sidecar; sidecars that
+/// already exist are kept up to date as well.
+pub fn sidecar_paths(photo: &Photo, naming: SidecarNaming, every_file: bool) -> Vec<PathBuf> {
+    if !every_file {
+        return vec![sidecar_path(photo, naming)];
+    }
+    let mut paths: Vec<PathBuf> = photo
+        .assets
+        .sidecars()
+        .iter()
+        .map(|s| s.path.clone())
+        .collect();
+    let media = [photo.assets.primary(), photo.assets.display()];
+    for file in media {
+        let name = file
+            .path
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        let own = format!("{name}.xmp");
+        let has_own = paths.iter().any(|p| {
+            p.file_name()
+                .is_some_and(|n| n.to_string_lossy().eq_ignore_ascii_case(&own))
+        });
+        if has_own {
+            continue;
+        }
+        let new = match naming {
+            SidecarNaming::FileExtension => file.path.with_file_name(own),
+            SidecarNaming::BaseName => file
+                .path
+                .with_file_name(format!("{}.xmp", base_name(&name).unwrap_or(&name))),
+        };
+        if !paths.contains(&new) {
+            paths.push(new);
+        }
+    }
+    paths
+}
+
+/// The colour label a photo gets in its sidecars: the pick label for
+/// picks, the auto-pick label for unflagged photos marked when a folder
+/// was finished (`docs/reference/settings.rst`).
+fn label_for(item: &DirtyDecision, settings: &Settings) -> Option<ColorLabel> {
+    match item.decision.flag {
+        Flag::Pick => settings.labels.pick,
+        Flag::Unflagged if item.auto_labeled => settings.labels.auto_pick,
+        Flag::Unflagged | Flag::Reject => None,
+    }
+}
+
 impl SidecarService {
     pub fn new(
         catalog: Arc<dyn PhotoCatalog>,
         settings: Arc<dyn SettingsStore>,
         store: Arc<dyn SidecarStore>,
+        events: Arc<dyn EventSink>,
     ) -> Self {
         Self {
             catalog,
             settings,
             store,
+            events,
             notify: Mutex::new(None),
+            failed: Mutex::new(Vec::new()),
         }
+    }
+
+    /// How many decisions still wait for their sidecar, and what failed.
+    pub fn status(&self) -> SidecarStatus {
+        let pending = self.catalog.dirty_decisions().map_or(0, |d| d.len());
+        let folder = self
+            .settings
+            .load_settings()
+            .ok()
+            .and_then(|s| s.library_root)
+            .map(|root| root.to_string_lossy().into_owned());
+        let failed = self.failed.lock().expect("failed lock");
+        SidecarStatus {
+            pending,
+            failed: failed.len(),
+            error: failed.first().map(|(_, reason)| reason.clone()),
+            folder,
+        }
+    }
+
+    fn report(&self) {
+        self.events.emit(&AppEvent::SidecarProgress(self.status()));
     }
 
     /// Writes every dirty decision now.
     pub fn flush(&self) -> FlushReport {
+        let report = self.write_dirty();
+        *self.failed.lock().expect("failed lock") = report.failed.clone();
+        self.report();
+        report
+    }
+
+    fn write_dirty(&self) -> FlushReport {
         let mut report = FlushReport::default();
         let (Ok(dirty), Ok(settings)) = (
             self.catalog.dirty_decisions(),
@@ -82,11 +191,16 @@ impl SidecarService {
         ) else {
             return report;
         };
-        let Some(root) = settings.library_root else {
+        let Some(root) = settings.library_root.clone() else {
             return report;
         };
+        let every_file = settings.open_folder.is_some();
         for item in dirty {
-            match self.write_one(&root, item.id, item.decision, settings.sidecar_naming) {
+            let values = SidecarValues {
+                decision: item.decision,
+                label: label_for(&item, &settings),
+            };
+            match self.write_one(&root, item.id, values, settings.sidecar_naming, every_file) {
                 Ok(()) => {
                     let _ = self.catalog.mark_sidecar_written(item.id, &item.token);
                     report.written += 1;
@@ -101,27 +215,38 @@ impl SidecarService {
         &self,
         root: &Path,
         id: picturesque_core::photo::PhotoId,
-        decision: picturesque_core::decision::Decision,
+        values: SidecarValues,
         naming: SidecarNaming,
+        every_file: bool,
     ) -> Result<(), String> {
         let photo = self
             .catalog
             .photo(id)
             .map_err(|e| e.to_string())?
             .ok_or("photo no longer exists")?;
-        let relative = sidecar_path(&photo, naming);
-        let (hash, size) = self.store.write(&root.join(&relative), decision)?;
-        self.catalog
-            .upsert_sidecar(id, &relative, size, &hash)
-            .map_err(|e| e.to_string())
+        for relative in sidecar_paths(&photo, naming, every_file) {
+            let (hash, size) = self.store.write(&root.join(&relative), values)?;
+            self.catalog
+                .upsert_sidecar(id, &relative, size, &hash)
+                .map_err(|e| e.to_string())?;
+        }
+        Ok(())
     }
 
-    /// Asks the background worker to write soon. Does nothing until
+    /// Reports the new pending count and asks the background worker to
+    /// write soon. The worker only writes once
     /// [`SidecarService::start`] has been called.
     pub fn notify(&self) {
+        self.report();
         if let Some(tx) = self.notify.lock().expect("notify lock").as_ref() {
             let _ = tx.send(());
         }
+    }
+
+    /// Writes what is pending, then stops the background worker.
+    pub fn stop(&self) {
+        self.flush();
+        *self.notify.lock().expect("notify lock") = None;
     }
 
     /// Starts the background worker; it flushes once immediately (to catch

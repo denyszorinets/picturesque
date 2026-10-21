@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from "../components/Icon.svelte";
   import ExternalLink from "../components/ExternalLink.svelte";
   import { GUIDES, SHORTCUTS } from "./shortcuts";
 
@@ -30,7 +31,9 @@
   >
     <header>
       <h2 id="help-title">Help</h2>
-      <button class="close" aria-label="Close" onclick={onclose}>✕</button>
+      <button class="close" aria-label="Close" onclick={onclose}
+        ><Icon name="x-mark" /></button
+      >
     </header>
 
     <nav class="guides" aria-label="Guides">
@@ -68,7 +71,7 @@
     z-index: 30;
     display: grid;
     place-items: center;
-    background: rgb(0 0 0 / 0.4);
+    background: var(--scrim);
   }
 
   .dialog {

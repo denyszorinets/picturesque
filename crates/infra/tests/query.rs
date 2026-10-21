@@ -349,6 +349,82 @@ fn decisions_update_in_place_and_need_an_existing_photo() {
 }
 
 #[test]
+fn decisions_read_from_sidecars_are_not_written_back() {
+    let c = sample();
+    let read = Decision {
+        flag: Flag::Reject,
+        rating: Rating::new(2).unwrap(),
+    };
+
+    c.set_decision_saved(PhotoId(1), read).unwrap();
+
+    assert_eq!(c.decision(PhotoId(1)).unwrap(), read);
+    assert!(c.dirty_decisions().unwrap().is_empty());
+    // A later change by the user is written as usual.
+    c.set_decision(PhotoId(1), Decision::default()).unwrap();
+    assert_eq!(c.dirty_decisions().unwrap().len(), 1);
+}
+
+#[test]
+fn auto_labels_mark_exactly_the_given_photos_and_dirty_the_changes() {
+    let c = sample();
+    for d in c.dirty_decisions().unwrap() {
+        c.mark_sidecar_written(d.id, &d.token).unwrap();
+    }
+
+    // Photo 6 has no decision yet: it gets the default one.
+    assert_eq!(c.set_auto_labeled(&[PhotoId(1), PhotoId(6)]).unwrap(), 2);
+    assert_eq!(
+        c.auto_labeled().unwrap(),
+        [PhotoId(1), PhotoId(6)].into_iter().collect()
+    );
+    let dirty = c.dirty_decisions().unwrap();
+    assert_eq!(
+        dirty
+            .iter()
+            .map(|d| (d.id, d.auto_labeled))
+            .collect::<Vec<_>>(),
+        [(PhotoId(1), true), (PhotoId(6), true)]
+    );
+    for d in dirty {
+        c.mark_sidecar_written(d.id, &d.token).unwrap();
+    }
+
+    // Unchanged marks stay clean; a removed one is dirty again.
+    assert_eq!(c.set_auto_labeled(&[PhotoId(6)]).unwrap(), 1);
+    let dirty = c.dirty_decisions().unwrap();
+    assert_eq!(dirty.len(), 1);
+    assert_eq!((dirty[0].id, dirty[0].auto_labeled), (PhotoId(1), false));
+}
+
+#[test]
+fn copies_are_recorded_and_go_with_their_photo() {
+    use picturesque_app::ports::catalog::CopyRecord;
+    use picturesque_core::hash::ContentHash;
+    let c = sample();
+    let copy = |id: i64, source: &str, n: u8| CopyRecord {
+        photo_id: PhotoId(id),
+        source: source.into(),
+        destination: std::env::temp_dir().join("out").join(source),
+        hash: ContentHash::from_bytes([n; 32]),
+        size: u64::from(n),
+    };
+
+    c.record_copies(&[copy(1, "2026/a.CR3", 1), copy(2, "2026/b.JPG", 2)])
+        .unwrap();
+    // A second copy of the same file replaces the first record.
+    c.record_copies(&[copy(1, "2026/a.CR3", 3)]).unwrap();
+
+    assert_eq!(
+        c.copies().unwrap(),
+        [copy(1, "2026/a.CR3", 3), copy(2, "2026/b.JPG", 2)]
+    );
+    c.remove_photo(PhotoId(1)).unwrap();
+    assert!(c.photo(PhotoId(1)).unwrap().is_none());
+    assert_eq!(c.copies().unwrap(), [copy(2, "2026/b.JPG", 2)]);
+}
+
+#[test]
 fn summaries_carry_what_the_grid_needs() {
     let c = sample();
     c.set_dimensions(PhotoId(2), 6000, 4000).unwrap();
@@ -1109,4 +1185,60 @@ fn one_camera_spelled_two_ways_is_one_filter_option() {
         };
         assert_eq!(ids(&c, q).len(), 3, "{model}");
     }
+}
+
+#[test]
+fn auto_picked_works_with_stacked_series() {
+    // #155: the filters applied to the other members of a series renamed
+    // `ap.photo_id` inside the auto-pick clause to `ap2.photo_id`.
+    use picturesque_app::ports::catalog::StoredSeries;
+    use picturesque_core::ranking::Ranked;
+
+    let c = sample();
+    let ranked = |order: &[i64]| -> Vec<Ranked> {
+        order
+            .iter()
+            .map(|id| Ranked {
+                id: PhotoId(*id),
+                score: None,
+            })
+            .collect()
+    };
+    c.replace_series(&[StoredSeries {
+        members: vec![PhotoId(2), PhotoId(1)],
+        ranking: ranked(&[1, 2]),
+        best: PhotoId(1),
+        best_chosen: false,
+    }])
+    .unwrap();
+    c.replace_scores(&[
+        PhotoScore {
+            keeper: true,
+            ..score(1, 0.9)
+        },
+        PhotoScore {
+            keeper: true,
+            ..score(2, 0.8)
+        },
+    ])
+    .unwrap();
+    let query = PhotoQuery {
+        auto_picked: Some(true),
+        collapse_series: Some(true),
+        ..Default::default()
+    };
+
+    assert_eq!(ids(&c, query.clone()), [1]);
+    assert_eq!(c.facets(Some(&query)).unwrap().total, 1);
+    // Picked, the best photo is no longer auto-picked: the other suggested
+    // member stands in for the series.
+    c.set_decision(
+        PhotoId(1),
+        Decision {
+            flag: Flag::Pick,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    assert_eq!(ids(&c, query), [2]);
 }

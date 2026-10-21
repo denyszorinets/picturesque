@@ -3,7 +3,11 @@ ADR-0008: Non-Destructive, Verified Import
 
 :Status: Accepted; amended by
    :doc:`ADR-0012 <0012-continuous-import-pipeline>` (import runs with a
-   review step replaced by a per-photo pipeline; the copy guarantees stand)
+   review step replaced by a per-photo pipeline; the copy guarantees stand),
+   :doc:`ADR-0013 <0013-folder-sessions>` (a folder culled in place
+   gets XMP sidecars written into it) and
+   :doc:`ADR-0014 <0014-optional-source-deletion>` (in a folder session,
+   originals with a verified copy may be deleted when the user asks)
 :Date: 2026-10-12
 
 Context

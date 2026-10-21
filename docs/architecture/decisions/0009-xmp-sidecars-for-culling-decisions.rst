@@ -1,7 +1,9 @@
 ADR-0009: XMP Sidecars for Culling Decisions
 ============================================
 
-:Status: Accepted
+:Status: Accepted; amended by
+   :doc:`ADR-0013 <0013-folder-sessions>` (in a folder session, sidecars
+   are written next to the originals in that folder)
 :Date: 2026-10-12
 
 Context

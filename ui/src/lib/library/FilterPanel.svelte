@@ -339,6 +339,10 @@
     border-color: var(--fg);
   }
 
+  .toggles button.on .count {
+    opacity: 0.75;
+  }
+
   .count {
     opacity: 0.6;
   }
@@ -351,6 +355,12 @@
     font-size: 0.8rem;
     color: var(--muted);
     text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  .more:hover {
+    background: none;
+    color: var(--fg);
   }
 
   .accept {
@@ -359,6 +369,11 @@
     font-size: 0.82rem;
     border-color: var(--accent);
     color: var(--accent);
+  }
+
+  .accept:hover:not(:disabled) {
+    border-color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 12%, var(--surface));
   }
 
   label {

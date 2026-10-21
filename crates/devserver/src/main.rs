@@ -9,13 +9,10 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 use std::sync::Arc;
 
-use picturesque_app::api::{Api, AppContext};
+use picturesque_app::sessions::Host;
 use picturesque_devserver::EventBus;
 use picturesque_infra::catalog::SqliteCatalog;
-use picturesque_infra::fs::StdFileSystem;
-use picturesque_infra::geocode::GeoNamesGeocoder;
-use picturesque_infra::images::VipsDecoder;
-use picturesque_infra::metadata::ExifMetadataReader;
+use picturesque_infra::sessions::StandardSessions;
 
 const DEFAULT_ADDR: &str = "127.0.0.1:5174";
 const DEFAULT_DATA_DIR: &str = "target/devserver-data";
@@ -58,29 +55,14 @@ async fn serve() -> Result<(), String> {
         None => picturesque_app::models::catalog(),
     };
     let events = EventBus::default();
-    let api = Api::new(AppContext {
-        pipeline_store: catalog.clone(),
-        watcher: Arc::new(picturesque_infra::watcher::NotifyWatcher::new()),
-        settings_store: catalog.clone(),
-        catalog,
-        fs: Arc::new(StdFileSystem),
-        metadata: Arc::new(ExifMetadataReader),
-        geocoder: Arc::new(GeoNamesGeocoder::default()),
-        events: Arc::new(events.clone()),
-        decoder: Arc::new(VipsDecoder),
-        sidecars: Arc::new(picturesque_infra::xmp::XmpSidecars),
-        pixels: Arc::new(picturesque_infra::images::VipsPixels),
-        analyzers: picturesque_app::analysis::default_analyzers(),
-        inference: Arc::new(picturesque_infra::inference::OrtEngine::for_background()),
+    let sessions = StandardSessions::new(
+        data_dir.clone(),
+        data_dir.join("cache"),
+        catalog.clone(),
+        Arc::new(events.clone()),
         models,
-        model_store: Arc::new(picturesque_infra::models::HttpModelStore::new(
-            data_dir.join("models"),
-        )),
-        cache_dir: data_dir.join("cache"),
-    })
-    .map_err(|e| e.message)?;
-
-    api.start_background_work();
+    );
+    let host = Arc::new(Host::start(Arc::new(sessions), catalog).map_err(|e| e.message)?);
 
     let listener = tokio::net::TcpListener::bind(addr)
         .await
@@ -92,11 +74,13 @@ async fn serve() -> Result<(), String> {
 
     axum::serve(
         listener,
-        picturesque_devserver::router(Arc::new(api), events),
+        picturesque_devserver::router(host.clone(), events),
     )
     .with_graceful_shutdown(async {
         let _ = tokio::signal::ctrl_c().await;
     })
     .await
-    .map_err(|e| format!("server error: {e}"))
+    .map_err(|e| format!("server error: {e}"))?;
+    host.shutdown();
+    Ok(())
 }

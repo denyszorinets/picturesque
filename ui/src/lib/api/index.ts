@@ -1,5 +1,10 @@
 import type { AiStatus } from "./generated/AiStatus";
 import type { AnalysisStatus } from "./generated/AnalysisStatus";
+import type { SidecarStatus } from "./generated/SidecarStatus";
+import type { FinishResult } from "./generated/FinishResult";
+import type { ClearPlan } from "./generated/ClearPlan";
+import type { ClearResult } from "./generated/ClearResult";
+import type { FinishStatus } from "./generated/FinishStatus";
 import type { ModelView } from "./generated/ModelView";
 import type { ExportArgs } from "./generated/ExportArgs";
 import type { ExportStatus } from "./generated/ExportStatus";
@@ -67,10 +72,24 @@ export type { CameraKey } from "./generated/CameraKey";
 export type { SeriesEditView } from "./generated/SeriesEditView";
 export type { SeriesView } from "./generated/SeriesView";
 export type { Settings } from "./generated/Settings";
+export type { RecentFolder } from "./generated/RecentFolder";
+export type { ColorLabel } from "./generated/ColorLabel";
+export type { FinishResult } from "./generated/FinishResult";
+export type { ClearPlan } from "./generated/ClearPlan";
+export type { ClearResult } from "./generated/ClearResult";
+export type { DeleteAfterCopy } from "./generated/DeleteAfterCopy";
+export type { FinishStatus } from "./generated/FinishStatus";
+export type { LabelSettings } from "./generated/LabelSettings";
+export type { SidecarStatus } from "./generated/SidecarStatus";
 export type { SettingsUpdate } from "./generated/SettingsUpdate";
 export type { TemplatePresetView } from "./generated/TemplatePresetView";
 export type { TemplatePreview } from "./generated/TemplatePreview";
-export { canPickFolders, pickFolders } from "./dialogs";
+export {
+  canPickFolders,
+  canReveal,
+  pickFolders,
+  revealInFolder,
+} from "./dialogs";
 export type { ImageSize } from "./transport";
 
 const transport = selectTransport();
@@ -91,6 +110,45 @@ export function getSettings(): Promise<Settings> {
  */
 export function updateSettings(update: SettingsUpdate): Promise<Settings> {
   return transport.call<Settings>("update_settings", update);
+}
+
+/**
+ * Culls `path` in place instead of the library or the folder open now
+ * (ADR-0013). Returns the settings as the folder sees them.
+ */
+export function openFolder(path: string): Promise<Settings> {
+  return transport.call<Settings>("open_folder", { path });
+}
+
+/** What clearing the folder after copying would delete (ADR-0014). */
+export function clearPlan(): Promise<ClearPlan> {
+  return transport.call<ClearPlan>("clear_plan");
+}
+
+/**
+ * Deletes originals whose copy is verified again, and rejects when the
+ * settings allow it. Permanent.
+ */
+export function clearFolder(): Promise<ClearResult> {
+  return transport.call<ClearResult>("clear_folder");
+}
+
+/** What finishing the folder would do. */
+export function finishStatus(): Promise<FinishStatus> {
+  return transport.call<FinishStatus>("finish_status");
+}
+
+/**
+ * Gives auto-picked photos the auto-pick colour label and writes every
+ * pending sidecar.
+ */
+export function finishFolder(): Promise<FinishResult> {
+  return transport.call<FinishResult>("finish_folder");
+}
+
+/** Goes back to the library from a folder culled in place. */
+export function openLibrary(): Promise<Settings> {
+  return transport.call<Settings>("open_library");
 }
 
 /** Built-in path templates. */
@@ -215,6 +273,11 @@ export function reanalyzePhotos(photoIds?: number[]): Promise<ReanalyzeResult> {
     "reanalyze_photos",
     photoIds ? { photo_ids: photoIds } : undefined,
   );
+}
+
+/** Whether decisions have been written to their XMP sidecars. */
+export function sidecarStatus(): Promise<SidecarStatus> {
+  return transport.call<SidecarStatus>("sidecar_status");
 }
 
 /** How many photos background analysis has finished. */

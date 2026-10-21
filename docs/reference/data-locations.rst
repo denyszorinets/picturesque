@@ -16,6 +16,11 @@ Picturesque keeps three kinds of data
    * - Catalog (``catalog.sqlite``)
      - Application data folder (below)
      - No: it holds metadata, decisions and import history.
+   * - Folder catalogs (``sessions/*.sqlite``)
+     - Application data folder (below), one per folder culled in place
+       (:doc:`/features/folders`)
+     - Yes: the folder is read again when next opened, and decisions come
+       back from its sidecars. Deleted on their own after 30 days unused.
    * - AI models (``models/``)
      - Application data folder (below)
      - Yes, but they must be downloaded again (:doc:`/features/ai`).
