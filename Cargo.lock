@@ -3293,7 +3293,7 @@ dependencies = [
 
 [[package]]
 name = "picturesque-app"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "chrono",
  "picturesque-core",
@@ -3304,7 +3304,7 @@ dependencies = [
 
 [[package]]
 name = "picturesque-core"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "chrono",
  "serde",
@@ -3313,7 +3313,7 @@ dependencies = [
 
 [[package]]
 name = "picturesque-desktop"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "picturesque-app",
  "picturesque-infra",
@@ -3326,7 +3326,7 @@ dependencies = [
 
 [[package]]
 name = "picturesque-devserver"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "axum",
  "futures-util",
@@ -3343,7 +3343,7 @@ dependencies = [
 
 [[package]]
 name = "picturesque-infra"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "blake3",
  "chrono",
