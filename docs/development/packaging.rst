@@ -62,7 +62,11 @@ distribution it was built on.
    * - ``.dmg``
      - macOS 15 (Apple Silicon)
      - Homebrew's libvips and LibRaw are copied into the app bundle with
-       ``dylibbundler``. Not verified yet.
+       ``dylibbundler``; :repo:`scripts/dedupe-rpaths.sh` then removes
+       rpaths it added twice, which macOS 15.4 and later refuse to load
+       (the 0.1.2 dmg stopped at launch with *duplicate LC_RPATH*). The
+       release workflow starts the app from the dmg. Not verified on a
+       real Mac yet (:issue:`52`).
    * - ``.msi``, setup ``.exe``
      - Windows 10 or later, 64-bit
      - Self-contained: the libvips, LibRaw and libheif DLLs from
