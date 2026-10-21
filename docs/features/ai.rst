@@ -22,9 +22,9 @@ In **Settings → AI acceleration**, choose where models run:
      - Runs on
    * - Automatic (default)
      - DirectML on Windows, Core ML on Apple Silicon, the CPU on Linux.
-       WebGPU is used only when chosen: on Linux it may run on a software
-       Vulkan driver, slower than the CPU, and it failed on the real models
-       there (being measured on real GPUs, :issue:`42`).
+       WebGPU is used only when chosen: on a computer without a working
+       Vulkan driver for its GPU it runs on a software driver, more than
+       ten times slower than the CPU.
    * - CPU only
      - The CPU. Always works.
    * - DirectML
@@ -32,7 +32,10 @@ In **Settings → AI acceleration**, choose where models run:
    * - Core ML
      - The Neural Engine and GPU on Apple Silicon Macs
    * - WebGPU
-     - The GPU through Vulkan on Linux, or Metal on Apple Silicon Macs
+     - The GPU through Vulkan on Linux, or Metal on Apple Silicon Macs.
+       On Linux with a supported GPU, analysis is faster and the CPU stays
+       free: on an AMD Radeon 780M about 1.4 times as fast as the CPU
+       (:doc:`/development/benchmarks`).
 
 Only the providers your build supports are offered:
 

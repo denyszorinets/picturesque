@@ -88,9 +88,9 @@ Analysis is slow or uses a lot of CPU
 "Models run on CPU" although I chose a GPU
    The chosen provider could not start and models fell back to the CPU;
    the reason is shown under **AI acceleration**. On Linux, WebGPU needs a
-   working Vulkan driver for your GPU (``vulkaninfo --summary``); without
-   one it runs on a slow software driver or fails. Choose **Automatic**
-   (the CPU on Linux) if WebGPU misbehaves.
+   working Vulkan driver for your GPU (``vulkaninfo --summary`` should list
+   your GPU, not ``llvmpipe``); without one it runs on a slow software
+   driver. Choose **Automatic** (the CPU on Linux) if WebGPU misbehaves.
 
 Text search finds nothing
    Search needs both CLIP models (image and text encoder) and the photos'

@@ -26,9 +26,8 @@ on Linux.
 Using the GPU in the devcontainer
 ---------------------------------
 
-The devcontainer does not see the GPU unless the host passes it in. On a
-Linux host, add to :repo:`.devcontainer/devcontainer.json` and rebuild the
-container:
+The devcontainer passes the host's GPU in
+(:repo:`.devcontainer/devcontainer.json`):
 
 .. code-block:: json
 
@@ -36,14 +35,22 @@ container:
 
 ``--group-add=keep-groups`` is for rootless Podman; with Docker use
 ``"--group-add=video", "--group-add=render"`` instead. Check with
-``ls /dev/dri`` (``renderD128`` should appear) and ``vulkaninfo --summary``.
+``ls /dev/dri`` (``renderD128`` should appear); on AMD,
+``/sys/class/drm/card1/device/gpu_busy_percent`` shows the GPU's load
+while a benchmark runs.
+
 Without a GPU, Mesa's software Vulkan driver runs WebGPU on the CPU.
 
 Results
 -------
 
-ONNX Runtime 1.28, Ryzen 7 PRO 7840HS (16 threads) in the devcontainer.
-Without the GPU passed in, WebGPU runs on Mesa's software Vulkan driver.
+ONNX Runtime 1.28, Ryzen 7 PRO 7840HS (16 threads) with Radeon 780M in
+the devcontainer. "Radeon 780M" rows ran with the GPU passed in and only
+Mesa's RADV driver enabled
+(``VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/radeon_icd.x86_64.json``), so
+WebGPU cannot fall back to the software driver; the GPU's load
+(``/sys/class/drm/card1/device/gpu_busy_percent``) confirmed it was
+used. "Software Vulkan" rows ran without the GPU passed in.
 
 .. list-table::
    :header-rows: 1
@@ -83,13 +90,79 @@ Without the GPU passed in, WebGPU runs on Mesa's software Vulkan driver.
      - 269 ms
      - 7 × 10⁻⁷
      - yes
-   * - Either, Radeon 780M passed in
-     - WebGPU
+   * - CLIP ViT-L/14 image encoder, again
+     - CPU
+     - 2.2 s
+     - 320 ms
+     - 351 ms
      - —
+     - yes
+   * -
+     - WebGPU, Radeon 780M
+     - 1.1 s
+     - 232 ms
+     - 236 ms
+     - 1.3 × 10⁻⁶
+     - yes
+   * - YuNet face detector (640 × 640)
+     - CPU
+     - 17 ms
+     - 3.6 ms
+     - 4.1 ms
      - —
+     - yes
+   * -
+     - WebGPU, Radeon 780M
+     - 43 ms
+     - 9.5 ms
+     - 12.4 ms
+     - 2 × 10⁻⁷
+     - yes
+   * - Face mesh (256 × 256)
+     - CPU
+     - 44 ms
+     - 9.3 ms
+     - 11.0 ms
      - —
-     - —
-     - pending (:issue:`42`)
+     - yes
+   * -
+     - WebGPU, Radeon 780M
+     - 60 ms
+     - 6.7 ms
+     - 10.2 ms
+     - 3.2 × 10⁻⁴
+     - yes
 
 With ViT-L/14 the CPU analyzes a 10,000-photo library in about an hour in
-the background, so a working GPU provider is worth having.
+the background, so a working GPU provider is worth having. On the Radeon
+780M, WebGPU is about 1.4 times as fast for CLIP; the small face detector
+is faster on the CPU.
+
+In the app
+~~~~~~~~~~
+
+Importing and fully analyzing 600 photos (technical scores, CLIP, faces
+and closed eyes) through the dev server, with **Settings → AI
+acceleration** set to each provider:
+
+.. list-table::
+   :header-rows: 1
+
+   * - Provider
+     - Time
+     - GPU load
+     - WebGPU device errors
+   * - CPU
+     - 222 s
+     - about 2 %
+     - —
+   * - WebGPU, Radeon 780M
+     - 157 s and 163 s (two runs)
+     - about 92 %
+     - none
+
+Before :issue:`42`, the WebGPU runs failed within a minute with
+*CommandEncoder is already finished* and took the server down: ONNX
+Runtime's WebGPU provider shares one device between sessions, and a
+session was created or freed while another ran. GPU sessions are now
+created, run and dropped under one lock.
