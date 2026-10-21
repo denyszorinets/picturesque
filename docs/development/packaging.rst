@@ -65,8 +65,8 @@ distribution it was built on.
        ``dylibbundler``; :repo:`scripts/dedupe-rpaths.sh` then removes
        rpaths it added twice, which macOS 15.4 and later refuse to load
        (the 0.1.2 dmg stopped at launch with *duplicate LC_RPATH*). The
-       release workflow starts the app from the dmg. Not verified on a
-       real Mac yet (:issue:`52`).
+       release workflow starts the app from the dmg. Verified on a
+       MacBook Pro (M1) with macOS 15.6 (:issue:`52`).
    * - ``.msi``, setup ``.exe``
      - Windows 10 or later, 64-bit
      - Self-contained: the libvips, LibRaw and libheif DLLs from
