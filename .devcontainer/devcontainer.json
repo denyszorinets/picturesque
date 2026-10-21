@@ -28,6 +28,7 @@
             }
         }
     },
+    "runArgs": ["--device=/dev/dri", "--group-add=keep-groups"],
     "workspaceFolder": "/app",
     "workspaceMount": "source=${localWorkspaceFolder},target=/app,type=bind",
     "mounts": [

@@ -1,6 +1,26 @@
 Troubleshooting
 ===============
 
+Starting the app
+----------------
+
+The AppImage closes right away
+   Start it from a terminal to see why, for example
+   ``./Picturesque_0.1.2_amd64.AppImage``, and include that output when
+   you report it.
+
+   - If it says *No suitable fusermount binary found* or mentions
+     ``/dev/fuse``, install FUSE (the ``fuse3`` package on most
+     distributions), or run it without mounting:
+     ``./Picturesque_0.1.2_amd64.AppImage --appimage-extract-and-run``.
+   - If the window stays blank or WebKit or EGL errors appear (seen with
+     some graphics drivers), start it with
+     ``WEBKIT_DISABLE_DMABUF_RENDERER=1``, and if that does not help, also
+     with ``WEBKIT_DISABLE_COMPOSITING_MODE=1``.
+   - On Debian, Ubuntu and Fedora, prefer the ``.deb`` or ``.rpm``: they use
+     the system's WebKitGTK and graphics libraries
+     (:doc:`/getting-started/install`).
+
 Importing
 ---------
 
@@ -88,9 +108,9 @@ Analysis is slow or uses a lot of CPU
 "Models run on CPU" although I chose a GPU
    The chosen provider could not start and models fell back to the CPU;
    the reason is shown under **AI acceleration**. On Linux, WebGPU needs a
-   working Vulkan driver for your GPU (``vulkaninfo --summary``); without
-   one it runs on a slow software driver or fails. Choose **Automatic**
-   (the CPU on Linux) if WebGPU misbehaves.
+   working Vulkan driver for your GPU (``vulkaninfo --summary`` should list
+   your GPU, not ``llvmpipe``); without one it runs on a slow software
+   driver. Choose **Automatic** (the CPU on Linux) if WebGPU misbehaves.
 
 Text search finds nothing
    Search needs both CLIP models (image and text encoder) and the photos'

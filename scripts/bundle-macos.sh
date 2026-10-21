@@ -24,6 +24,10 @@ dylibbundler -od -b \
   -p @executable_path/../Frameworks/ \
   -s target/release \
   -s "$(brew --prefix)/lib" </dev/null
+# dylibbundler can add the same rpath twice, which macOS 15.4+ refuses to
+# load (#52).
+scripts/dedupe-rpaths.sh "$app/Contents/MacOS/picturesque-desktop" \
+  "$app"/Contents/Frameworks/*.dylib
 codesign --force --deep --sign - "$app"
 mkdir -p "$out"
 hdiutil create -volname Picturesque -srcfolder "$app" -ov -format UDZO \
