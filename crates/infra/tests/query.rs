@@ -1186,3 +1186,59 @@ fn one_camera_spelled_two_ways_is_one_filter_option() {
         assert_eq!(ids(&c, q).len(), 3, "{model}");
     }
 }
+
+#[test]
+fn auto_picked_works_with_stacked_series() {
+    // #155: the filters applied to the other members of a series renamed
+    // `ap.photo_id` inside the auto-pick clause to `ap2.photo_id`.
+    use picturesque_app::ports::catalog::StoredSeries;
+    use picturesque_core::ranking::Ranked;
+
+    let c = sample();
+    let ranked = |order: &[i64]| -> Vec<Ranked> {
+        order
+            .iter()
+            .map(|id| Ranked {
+                id: PhotoId(*id),
+                score: None,
+            })
+            .collect()
+    };
+    c.replace_series(&[StoredSeries {
+        members: vec![PhotoId(2), PhotoId(1)],
+        ranking: ranked(&[1, 2]),
+        best: PhotoId(1),
+        best_chosen: false,
+    }])
+    .unwrap();
+    c.replace_scores(&[
+        PhotoScore {
+            keeper: true,
+            ..score(1, 0.9)
+        },
+        PhotoScore {
+            keeper: true,
+            ..score(2, 0.8)
+        },
+    ])
+    .unwrap();
+    let query = PhotoQuery {
+        auto_picked: Some(true),
+        collapse_series: Some(true),
+        ..Default::default()
+    };
+
+    assert_eq!(ids(&c, query.clone()), [1]);
+    assert_eq!(c.facets(Some(&query)).unwrap().total, 1);
+    // Picked, the best photo is no longer auto-picked: the other suggested
+    // member stands in for the series.
+    c.set_decision(
+        PhotoId(1),
+        Decision {
+            flag: Flag::Pick,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    assert_eq!(ids(&c, query), [2]);
+}
