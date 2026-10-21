@@ -177,18 +177,29 @@ Validation
 
 :issue:`42` measures throughput and stability of WebGPU versus CPU on the
 maintainer's integrated AMD GPU (Radeon 780M) under Linux
-(:doc:`/development/benchmarks`). First findings, without the GPU passed
-into the devcontainer:
+(:doc:`/development/benchmarks`). Findings (Ryzen 7 PRO 7840HS with
+Radeon 780M, Mesa RADV, ONNX Runtime 1.28):
 
 - The CPU runs the CLIP ViT-B/32 image encoder in 18 ms per photo and
-  ViT-L/14, which the app uses, in 283 ms (Ryzen 7 PRO 7840HS, 16
-  threads): a 10,000-photo library in about an hour.
-- WebGPU initializes on Mesa's software Vulkan driver and matches CPU
-  results (largest difference 1.3 × 10⁻⁶) over repeated runs, though far
-  slower. Running the real models (CLIP ViT-L/14 and the face mesh)
-  there produced WebGPU device errors and hung the dev server, so
-  *Automatic* uses the CPU on Linux; WebGPU must be chosen explicitly
-  until it is measured on the real iGPU.
+  ViT-L/14, which the app uses, in about 300 ms (16 threads): a
+  10,000-photo library in about an hour.
+- On the Radeon 780M, WebGPU runs ViT-L/14 in 232 ms against 320 ms on
+  the CPU, and the face mesh in 6.7 ms against 9.3 ms; the small face
+  detector is faster on the CPU (3.6 ms against 9.5 ms). Results match
+  the CPU (largest difference 1.3 × 10⁻⁶ for CLIP) and are stable over
+  repeated runs. Analyzing 600 photos in the app takes 157–163 s with
+  WebGPU and 222 s with the CPU, and the CPU stays free.
+- Running the app's models together first failed with WebGPU device
+  errors (*CommandEncoder is already finished*) and took the server down:
+  the provider shares one device between sessions, and a session was
+  created or freed while another ran. Creating, running and dropping GPU
+  sessions now all hold one lock; since then the app analyzes without
+  device errors.
+- Without a GPU driver, WebGPU initializes on Mesa's software Vulkan
+  driver and matches CPU results, but more than ten times slower (3.6 s
+  per photo for ViT-L/14). The app cannot yet tell the software driver
+  from a real GPU, so *Automatic* keeps using the CPU on Linux and WebGPU
+  is an explicit choice.
 
 References
 ----------

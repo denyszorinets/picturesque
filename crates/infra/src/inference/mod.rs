@@ -35,10 +35,10 @@ const GPU_PROVIDERS: &[Provider] = if cfg!(windows) {
     &[]
 };
 
-/// GPU providers "Automatic" tries, preferred first. WebGPU is left out:
-/// on Linux it may run on a software Vulkan driver (slower than the CPU)
-/// and failed on the real models there, so it is used only when chosen
-/// explicitly, until it is measured on real GPUs (#42).
+/// GPU providers "Automatic" tries, preferred first. WebGPU is left out: it
+/// works on real GPUs (about 1.4× the CPU's speed on a Radeon 780M, #42),
+/// but without one it silently runs on a software Vulkan driver, more than
+/// ten times slower than the CPU, so it is used only when chosen.
 const AUTO_PROVIDERS: &[Provider] = if cfg!(windows) {
     &[Provider::DirectMl]
 } else if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
@@ -49,8 +49,15 @@ const AUTO_PROVIDERS: &[Provider] = if cfg!(windows) {
 
 /// Held while creating any session.
 static CREATING: Mutex<()> = Mutex::new(());
-/// Held while running a model on a GPU provider.
+/// Held while creating, running or dropping a session on a GPU provider.
+/// ONNX Runtime's WebGPU provider shares one device between sessions and
+/// fails ("CommandEncoder is already finished") when one session uploads
+/// or frees its weights while another runs (#42).
 static GPU: Mutex<()> = Mutex::new(());
+
+fn gpu_lock(provider: Provider) -> Option<std::sync::MutexGuard<'static, ()>> {
+    (provider != Provider::Cpu).then(|| GPU.lock().unwrap_or_else(|e| e.into_inner()))
+}
 
 /// ONNX Runtime with the providers of this build.
 #[derive(Debug, Clone)]
@@ -74,6 +81,7 @@ impl OrtEngine {
 
     fn session(&self, model: ModelSource<'_>, provider: Provider) -> Result<Session, String> {
         let _creating = CREATING.lock().unwrap_or_else(|e| e.into_inner());
+        let _gpu = gpu_lock(provider);
         let mut builder = Session::builder()
             .and_then(|b| b.with_intra_threads(self.threads).map_err(Into::into))
             .map_err(|e| e.to_string())?;
@@ -137,7 +145,7 @@ impl InferenceEngine for OrtEngine {
             match self.session(model, provider) {
                 Ok(session) => {
                     return Ok(Box::new(OrtModel {
-                        session: Mutex::new(session),
+                        session: Mutex::new(Some(session)),
                         provider,
                         fallback: (!failures.is_empty()).then(|| failures.join("; ")),
                     }));
@@ -168,9 +176,19 @@ impl InferenceEngine for OrtEngine {
 /// A loaded ONNX model. ONNX Runtime sessions run one call at a time here.
 #[derive(Debug)]
 struct OrtModel {
-    session: Mutex<Session>,
+    /// `None` only while dropping.
+    session: Mutex<Option<Session>>,
     provider: Provider,
     fallback: Option<String>,
+}
+
+impl Drop for OrtModel {
+    /// Frees the session's GPU memory while no other session uses the device.
+    fn drop(&mut self) {
+        let _gpu = gpu_lock(self.provider);
+        let session = self.session.get_mut().unwrap_or_else(|e| e.into_inner());
+        drop(session.take());
+    }
 }
 
 fn error(e: impl std::fmt::Display) -> InferenceError {
@@ -207,9 +225,9 @@ impl Model for OrtModel {
             .into_iter()
             .map(to_value)
             .collect::<Result<Vec<_>, _>>()?;
-        let _gpu =
-            (self.provider != Provider::Cpu).then(|| GPU.lock().unwrap_or_else(|e| e.into_inner()));
+        let _gpu = gpu_lock(self.provider);
         let mut session = self.session.lock().expect("session lock");
+        let session = session.as_mut().expect("a session until dropped");
         let outputs = session.run(inputs).map_err(error)?;
         outputs
             .iter()
