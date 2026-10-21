@@ -26,7 +26,9 @@ In **Settings → AI acceleration**, choose where models run:
        Vulkan driver for its GPU it runs on a software driver, more than
        ten times slower than the CPU.
    * - CPU only
-     - The CPU. Always works.
+     - The CPU. Works on every processor with AVX2 (2013 and later); on
+       older ones AI is unavailable and Settings says why
+       (:doc:`/architecture/decisions/0015-onnx-runtime-loaded-at-first-use`).
    * - DirectML
      - The GPU on Windows (DirectX 12)
    * - Core ML

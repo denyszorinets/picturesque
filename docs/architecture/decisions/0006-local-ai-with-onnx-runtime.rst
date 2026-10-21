@@ -170,6 +170,9 @@ non-commercially (CC BY-NC-ND) and could not be used.
 Follow-up
 ~~~~~~~~~
 
+- On Linux x86-64, the runtime is loaded at first use after a processor
+  check, so the app starts on processors without AVX2
+  (:doc:`ADR-0015 <0015-onnx-runtime-loaded-at-first-use>`, :issue:`154`).
 - Benchmark WebGPU against CPU on an integrated AMD GPU (:issue:`42`).
 
 Validation

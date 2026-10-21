@@ -1,4 +1,4 @@
-.PHONY: dist dist-deb dist-rpm dist-appimage dist-linux dist-macos dist-windows smoke help format format-check test lint build doc check clean ui-deps ui-check e2e bindings-check dev-web app-dev docs docs-serve docs-check
+.PHONY: ort-dylib dist dist-deb dist-rpm dist-appimage dist-linux dist-macos dist-windows smoke help format format-check test lint build doc check clean ui-deps ui-check e2e bindings-check dev-web app-dev docs docs-serve docs-check
 
 DOCS_DIR := docs
 SPHINX := uv run --project $(DOCS_DIR) --frozen
@@ -15,6 +15,7 @@ help:
 	@echo "  doc           Build Rust API docs with warnings as errors"
 	@echo "  check         format-check + lint + test + build + ui-check"
 	@echo "  ui-deps       Install front-end dependencies and the Playwright browser"
+	@echo "  ort-dylib     Make ONNX Runtime's shared library (Linux x86-64; ORT_PROFILE=release)"
 	@echo "  ui-check      Front-end type check, lint, format check and tests"
 	@echo "  e2e           Browser end-to-end tests against the dev server (Playwright)"
 	@echo "  bindings-check Fail if generated TypeScript API types are out of date"
@@ -40,14 +41,20 @@ format:
 format-check:
 	cargo fmt --all --check
 
-test:
+# ONNX Runtime as a shared library, loaded at first use on Linux x86-64
+# (ADR-0015); a no-op elsewhere. ORT_PROFILE is debug or release.
+ORT_PROFILE ?= debug
+ort-dylib:
+	scripts/ort-dylib.sh $(ORT_PROFILE)
+
+test: ort-dylib
 	cargo test --workspace --all-targets $(CARGO_FLAGS)
 	cargo test --workspace --doc $(CARGO_FLAGS)
 
 lint:
 	cargo clippy --workspace --all-targets --all-features $(CARGO_FLAGS) -- -D warnings
 
-build:
+build: ort-dylib
 	cargo build --workspace --all-targets $(CARGO_FLAGS)
 
 doc:
@@ -64,7 +71,7 @@ ui-check:
 	npm run lint -w ui
 	npm run test -w ui
 
-e2e:
+e2e: ort-dylib
 	npm run e2e -w ui
 
 # ts-rs regenerates ui/src/lib/api/generated when tests run.
@@ -73,7 +80,7 @@ bindings-check: test
 	@test -z "$$(git ls-files --others --exclude-standard -- ui/src/lib/api/generated)" || \
 		(echo "untracked generated bindings; commit them" && exit 1)
 
-dev-web:
+dev-web: ort-dylib
 	cargo build -p picturesque-devserver
 	trap 'kill 0' EXIT INT TERM; \
 		cargo run --quiet -p picturesque-devserver & \
@@ -82,6 +89,7 @@ dev-web:
 # The real app on a virtual display; WAYLAND_DISPLAY is cleared so no
 # window reaches a real screen.
 smoke:
+	scripts/ort-dylib.sh release
 	npx tauri build --no-bundle
 	@# Start Xvfb unless one is running (a socket alone may be stale).
 	@if ! { [ -e /tmp/.X99-lock ] && kill -0 $$(tr -d ' ' < /tmp/.X99-lock) 2>/dev/null; }; then \
@@ -91,7 +99,7 @@ smoke:
 	env -u WAYLAND_DISPLAY DISPLAY=:99 GDK_BACKEND=x11 \
 		node ui/smoke/app-smoke.mjs target/release/picturesque-desktop target/smoke-results
 
-app-dev:
+app-dev: ort-dylib
 	npx tauri dev
 
 # Installers (docs/development/packaging.rst). Each must be built on the OS
@@ -117,23 +125,24 @@ endif
 
 dist-deb:
 	$(call require-os,Linux)
+	scripts/ort-dylib.sh release
 	npx tauri build --bundles deb
 
 dist-rpm:
 	$(call require-os,Linux)
+	scripts/ort-dylib.sh release
 	npx tauri build --bundles rpm
 
-# linuxdeploy must find libwebgpu_dawn.so next to the binary; it runs
-# extracted so no FUSE is needed.
+# linuxdeploy runs extracted so no FUSE is needed.
 dist-appimage:
 	$(call require-os,Linux)
-	LD_LIBRARY_PATH=$(CURDIR)/target/release APPIMAGE_EXTRACT_AND_RUN=1 \
-		npx tauri build --bundles appimage
+	scripts/ort-dylib.sh release
+	APPIMAGE_EXTRACT_AND_RUN=1 npx tauri build --bundles appimage
 
 dist-linux:
 	$(call require-os,Linux)
-	LD_LIBRARY_PATH=$(CURDIR)/target/release APPIMAGE_EXTRACT_AND_RUN=1 \
-		npx tauri build --bundles deb,rpm,appimage
+	scripts/ort-dylib.sh release
+	APPIMAGE_EXTRACT_AND_RUN=1 npx tauri build --bundles deb,rpm,appimage
 
 dist-macos:
 	$(call require-os,Darwin)

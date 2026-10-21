@@ -21,3 +21,4 @@ reused; superseded decisions stay in place and link to their replacement.
    0012-continuous-import-pipeline
    0013-folder-sessions
    0014-optional-source-deletion
+   0015-onnx-runtime-loaded-at-first-use

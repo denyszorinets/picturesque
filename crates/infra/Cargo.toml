@@ -29,9 +29,11 @@ fs4.workspace = true
 notify.workspace = true
 
 # Execution providers available as prebuilt ONNX Runtime binaries per target
-# (ADR-0006). Intel macOS has no prebuilt binaries.
+# (ADR-0006). Intel macOS has no prebuilt binaries. On Linux x86-64 the
+# runtime is loaded at first use from libonnxruntime.so, made by
+# scripts/ort-dylib.sh (ADR-0015).
 [target.'cfg(all(target_os = "linux", target_arch = "x86_64"))'.dependencies]
-ort = { workspace = true, features = ["webgpu"] }
+ort = { workspace = true, features = ["webgpu", "load-dynamic"] }
 
 [target.'cfg(windows)'.dependencies]
 ort = { workspace = true, features = ["directml"] }

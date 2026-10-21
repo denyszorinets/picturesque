@@ -99,6 +99,15 @@ A model download fails
    match its checksum is discarded with "download was corrupt"; press
    **Retry**. Files already complete are kept.
 
+"AI analysis unavailable" or "AI features need a processor with AVX2"
+   The AI runtime is built for processors from 2013 on (Intel Haswell, AMD
+   Excavator and later), and this one lacks some of their instructions;
+   Settings → **AI acceleration** lists which. Picturesque starts and
+   works without AI: technical scores, series, culling and export are not
+   affected (:doc:`/architecture/decisions/0015-onnx-runtime-loaded-at-first-use`).
+   If the message says the library is missing instead, reinstall the
+   package.
+
 Analysis is slow or uses a lot of CPU
    Analysis uses half the cores so the app stays responsive; with the
    CLIP model a photo takes about a third of a second on a laptop CPU.

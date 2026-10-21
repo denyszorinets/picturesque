@@ -111,6 +111,9 @@ impl TextSearch {
                 "`limit` must be 1-{MAX_LIMIT}."
             )));
         }
+        if let Some(reason) = self.model.unavailable() {
+            return Err(SearchError::ModelMissing(reason));
+        }
         if !self.model.available() {
             return Err(missing_text_model());
         }

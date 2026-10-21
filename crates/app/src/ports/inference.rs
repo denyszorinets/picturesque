@@ -168,6 +168,11 @@ pub trait InferenceEngine: Send + Sync + fmt::Debug {
     /// Loads and runs a tiny built-in model with `choice`, to find out
     /// which provider really works on this machine.
     fn probe(&self, choice: ProviderChoice) -> Result<Probe, InferenceError>;
+    /// Why no model can run on this machine at all (for example, the
+    /// processor lacks instructions the runtime needs), or `None`.
+    fn unavailable(&self) -> Option<String> {
+        None
+    }
 }
 
 #[cfg(test)]
