@@ -16,12 +16,21 @@ rpaths() {
   "$otool" -l "$1" | awk '/cmd LC_RPATH/ { getline; getline; print $2 }'
 }
 
+# How often `file` lists `rpath`. Reads the whole list: `grep -q` would stop
+# at the first match and, under pipefail, fail the pipeline when awk loses
+# its reader.
+count() {
+  local list
+  list=$(rpaths "$1")
+  grep -cxF -- "$2" <<<"$list" || true
+}
+
 status=0
 for file in "$@"; do
   while read -r rpath; do
     [ -n "$rpath" ] || continue
     # Delete every copy, then add it back once.
-    while rpaths "$file" | grep -qxF "$rpath"; do
+    while [ "$(count "$file" "$rpath")" -gt 0 ]; do
       "$install_name_tool" -delete_rpath "$rpath" "$file"
     done
     "$install_name_tool" -add_rpath "$rpath" "$file"
