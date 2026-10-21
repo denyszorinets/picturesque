@@ -117,12 +117,10 @@ jobs:
           if-no-files-found: error
 
   macos:
-    name: dmg (macOS 15, experimental)
+    name: dmg (macOS 15)
     needs: version
     runs-on: macos-15
     timeout-minutes: 60
-    # Not verified yet (#52): does not hold back a release.
-    continue-on-error: true
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 

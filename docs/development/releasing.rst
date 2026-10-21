@@ -62,7 +62,7 @@ What the workflow builds
    * - macOS 15
      - ``.dmg`` with Homebrew's libraries bundled (``dylibbundler``),
        ad-hoc signed; the job starts the app from the dmg
-     - no (experimental until verified, :issue:`52`)
+     - yes
    * - Windows Server 2025
      - ``.msi`` and the NSIS setup ``.exe``; the job installs the setup
        silently and checks that the app starts and opens its catalog

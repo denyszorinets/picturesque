@@ -154,7 +154,8 @@ Follow-up
   the thumbnail cache (:issue:`22`).
 - Add the HEVC decoder to the devcontainer.
 - Bundle libvips (built with libde265), LibRaw and libheif in installers
-  (:issue:`52`); verify macOS dylib bundling.
+  (:issue:`52`). Done; macOS dylib bundling is verified on a real Mac, and
+  Windows ships without an HEVC decoder (:issue:`135`).
 
 Validation
 ----------
