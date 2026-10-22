@@ -7,6 +7,11 @@ The **Statistics** tab shows which cameras and lenses give you keepers,
 and which focal lengths you use on each camera. It covers the whole
 library and is updated each time you open the tab.
 
+.. figure:: /images/screenshots/stats.webp
+   :alt: Statistics: five cameras and their lenses ranked by the share of their photos that are keepers, picked, auto-picked and rejected counts, and each camera's most used focal length.
+
+   Cameras and lenses ranked by keeper rate.
+
 Keepers
 -------
 
