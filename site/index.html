@@ -590,7 +590,7 @@
                 src="assets/library-light.webp"
                 width="2400"
                 height="1500"
-                alt="The Picturesque library: a day in Banff with bursts of the northern lights, a lake and a fox framed as series, the best frame of each marked with a star, picks and rejects."
+                alt="The Picturesque library: a day in the Dolomites, bursts of a misty forest and two mountain lakes framed as series, the best frame of each picked and marked with a star, the weakest frames rejected and dimmed."
               />
             </picture>
           </div>
@@ -634,9 +634,9 @@
               </div>
               <h3>Fits your workflow</h3>
               <p>
-                Picks, rejects and ratings go into standard XMP sidecars that
-                darktable and digiKam read (Lightroom reads the ratings).
-                Originals are never modified.
+                Picks, rejects, ratings and colour labels go into standard XMP
+                sidecars that darktable and digiKam read (Lightroom reads the
+                ratings). Originals are never modified.
               </p>
             </div>
           </div>
@@ -668,7 +668,7 @@
                   width="2400"
                   height="1500"
                   loading="lazy"
-                  alt="Compare view: three frames of a northern-lights burst side by side, the sharp one picked as best and the two blurred ones rejected."
+                  alt="Compare view: four frames of a fox burst side by side, each with its score; the sharpest one is marked Best."
                 />
               </picture>
             </div>
@@ -697,7 +697,7 @@
                   width="2400"
                   height="1500"
                   loading="lazy"
-                  alt="The photo view: a red fox, picked with five stars, and the info panel with camera, exposure, place and why the photo scored 100%."
+                  alt="The photo view: a portrait rated five stars and suggested as a keeper, with the info panel: camera, lens, exposure, place, and why it scored 86%: best of its series of 6, eyes open, face in focus, sharp, well exposed, looks appealing."
                 />
               </picture>
             </div>
@@ -719,10 +719,69 @@
                 <source srcset="assets/stats-dark.webp" media="(prefers-color-scheme: dark)" />
                 <img
                   src="assets/stats-light.webp"
-                  width="2000"
-                  height="1780"
+                  width="2400"
+                  height="1500"
                   loading="lazy"
-                  alt="Statistics: cameras and lenses ranked by keeper rate, and each camera's most used focal lengths."
+                  alt="Statistics: five cameras and their lenses ranked by the share of their photos that are keepers, and each camera's most used focal length."
+                />
+              </picture>
+            </div>
+          </div>
+          <div class="feature flip">
+            <div class="copy">
+              <p class="eyebrow">Cull in place</p>
+              <h3>Use darktable? Cull the folder where it is.</h3>
+              <p>
+                <strong>Open folder…</strong> culls a folder without copying it
+                into a library: a darktable collection, a dump folder, a memory
+                card. Picks, rejects, ratings and colour labels are written to
+                XMP sidecars next to every file, RAW and JPEG, as you decide.
+              </p>
+              <p>
+                darktable has no pick flag, so picks and suggested keepers show
+                there by colour. <strong>Finish folder…</strong> labels the
+                suggestions and writes every sidecar.
+                <a href="docs/getting-started/darktable.html">How it works with darktable</a>.
+              </p>
+            </div>
+            <div class="shot">
+              <picture>
+                <source srcset="assets/folder-dark.webp" media="(prefers-color-scheme: dark)" />
+                <img
+                  src="assets/folder-light.webp"
+                  width="2400"
+                  height="1500"
+                  loading="lazy"
+                  alt="A folder culled in place: the darktable note, fox bursts framed as series with the suggested keepers ringed, and the folder actions Copy keepers, Finish folder and Clear folder."
+                />
+              </picture>
+            </div>
+          </div>
+
+          <div class="feature">
+            <div class="copy">
+              <p class="eyebrow">Offload a card</p>
+              <h3>Keep the keepers. Clear the card.</h3>
+              <p>
+                <strong>Copy keepers…</strong> copies your picks and the
+                suggested keepers off a card to the folder you choose, each
+                copy verified and with its sidecar.
+              </p>
+              <p>
+                <strong>Clear folder…</strong> then deletes only the originals
+                that have a verified copy, checking each copy again first, and
+                always asks. Prefer to delete nothing? One setting turns it off.
+              </p>
+            </div>
+            <div class="shot">
+              <picture>
+                <source srcset="assets/copy-keepers-dark.webp" media="(prefers-color-scheme: dark)" />
+                <img
+                  src="assets/copy-keepers-light.webp"
+                  width="2400"
+                  height="1500"
+                  loading="lazy"
+                  alt="The Copy keepers dialog: keepers (picks and auto-picked) selected, original files with RAW and XMP sidecars, copied under their original names."
                 />
               </picture>
             </div>
@@ -794,7 +853,7 @@
                 </tr>
                 <tr>
                   <th scope="row">Decisions readable by other apps</th>
-                  <td class="us"><span class="yes"></span>XMP sidecars</td>
+                  <td class="us"><span class="yes"></span>XMP sidecars, next to the originals or in the library</td>
                   <td>Exported to Lightroom and others</td>
                   <td><span class="yes"></span>XMP</td>
                   <td><span class="yes"></span>XMP</td>
@@ -841,15 +900,15 @@
               <h3>RAW, JPEG and HEIC</h3>
               <p>
                 RAW files from Canon, Nikon, Sony, Fujifilm and many more, with
-                RAW+JPEG pairs kept together as one photo. (HEIC on Windows
-                is coming.)
+                RAW+JPEG pairs kept together as one photo. (On Windows, HEIC
+                photos are imported but not shown.)
               </p>
             </div>
             <div>
               <h3>Search by describing</h3>
               <p>
                 Type “dog on a beach” and find it. The search model runs
-                locally, with your GPU when there is one.
+                locally, like every other model.
               </p>
             </div>
             <div>
@@ -874,6 +933,14 @@
               </p>
             </div>
             <div>
+              <h3>Uses your GPU</h3>
+              <p>
+                AI analysis runs on DirectML on Windows and Core ML on Apple
+                Silicon, and on Linux with WebGPU when you choose it: about
+                1.4 times as fast as the CPU on an AMD Radeon 780M.
+              </p>
+            </div>
+            <div>
               <h3>Fast on big libraries</h3>
               <p>
                 A virtualized timeline and indexed filters stay quick with tens
@@ -884,7 +951,7 @@
               <h3>Safe by default</h3>
               <p>
                 Originals are never changed, every decision can be undone, and
-                rejects are only moved to a folder after you confirm.
+                nothing is moved or deleted until you confirm.
               </p>
             </div>
           </div>
@@ -894,11 +961,12 @@
       <section id="download" class="download">
         <div class="wrap">
           <p class="eyebrow">Download</p>
-          <h2>Get Picturesque 0.1</h2>
+          <h2>Get Picturesque</h2>
           <p class="intro">
-            This is the first release: it is young, and your feedback shapes
-            what comes next. Installers are not code-signed yet, so your system
-            may ask you to confirm the first start.
+            Picturesque is young, and your feedback shapes what comes next.
+            Installers are not code-signed yet, so your system may ask you to
+            confirm the first start. The AI features need a processor from
+            2013 or later (AVX2; every Apple Silicon Mac).
           </p>
           <div class="systems">
             <div class="system">
@@ -939,9 +1007,13 @@
           <a href="https://github.com/denyszorinets/picturesque/releases">Releases</a>
         </p>
         <p>
-          Photos in the screenshots: northern lights by HyunKuk Kim, forest by
-          Emily Morter, lake by Matheus Bandoch, fox by Jiri Sifalda (CC0, via
-          <a href="https://commons.wikimedia.org/wiki/Category:Photographs_from_Unsplash">Wikimedia Commons</a>).
+          Photos in the screenshots: Matheus Bandoch, Ales Krivec and Emily
+          Morter (Dolomites), Jiri Sifalda and Jonatan Pie (foxes), Christopher
+          Campbell (portrait), and, in the demo library, HyunKuk Kim, Alan
+          Labisch, Foto Sushi, Jeremy Bishop, REASONS ART, Patrick Tomasso and
+          Davidson Luna. All CC0, via
+          <a href="https://commons.wikimedia.org/wiki/Category:Photographs_from_Unsplash">Wikimedia Commons</a>
+          (<a href="docs/reference/third-party-data.html#images">list</a>).
         </p>
       </div>
     </footer>
