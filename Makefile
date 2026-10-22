@@ -1,4 +1,4 @@
-.PHONY: ort-dylib dist dist-deb dist-rpm dist-appimage dist-linux dist-macos dist-windows smoke help format format-check test lint build doc check clean ui-deps ui-check e2e bindings-check dev-web app-dev docs docs-serve docs-check
+.PHONY: ort-dylib screenshots dist dist-deb dist-rpm dist-appimage dist-linux dist-macos dist-windows smoke help format format-check test lint build doc check clean ui-deps ui-check e2e bindings-check dev-web app-dev docs docs-serve docs-check
 
 DOCS_DIR := docs
 SPHINX := uv run --project $(DOCS_DIR) --frozen
@@ -20,6 +20,7 @@ help:
 	@echo "  e2e           Browser end-to-end tests against the dev server (Playwright)"
 	@echo "  bindings-check Fail if generated TypeScript API types are out of date"
 	@echo "  dev-web       Run the UI in a browser against the dev server (no display needed)"
+	@echo "  screenshots   Rebuild the website and docs screenshots from a CC0 demo library"
 	@echo "  app-dev       Run the desktop app with hot reload (needs a display)"
 	@echo "  smoke         Build the desktop app and smoke-test it on Xvfb (tauri-driver)"
 	@echo "  dist          Build the installers for this OS into target/release/bundle"
@@ -85,6 +86,25 @@ dev-web: ort-dylib
 	trap 'kill 0' EXIT INT TERM; \
 		cargo run --quiet -p picturesque-devserver & \
 		npm run dev -w ui
+
+# Screenshots for the website and docs (docs/development/website.rst): a
+# demo card from CC0 photos, imported into an empty dev server whose models
+# are kept between runs.
+SHOTS := target/screenshots
+screenshots:
+	scripts/ort-dylib.sh release
+	cargo build --release -p picturesque-devserver
+	python3 scripts/screenshots/build-demo.py $(SHOTS)/card
+	rm -rf $(SHOTS)/data/catalog.sqlite* $(SHOTS)/data/cache $(SHOTS)/library $(SHOTS)/Iceland
+	mkdir -p $(SHOTS)/data $(SHOTS)/library
+	@# Stops only the two servers it started (kill 0 would also stop the
+	@# caller, such as CI).
+	PICTURESQUE_DATA_DIR=$(SHOTS)/data target/release/picturesque-devserver & dev=$$!; \
+		(cd ui && exec node ../node_modules/vite/bin/vite.js >/dev/null) & vite=$$!; \
+		trap 'kill $$dev $$vite 2>/dev/null' EXIT INT TERM; \
+		until curl -sf http://127.0.0.1:5174/api/health >/dev/null && \
+			curl -sf http://127.0.0.1:5173 >/dev/null; do sleep 1; done; \
+		node scripts/screenshots/capture.mjs $(SHOTS)/card $(SHOTS)/library $(SHOTS)/Iceland
 
 # The real app on a virtual display; WAYLAND_DISPLAY is cleared so no
 # window reaches a real screen.

@@ -1,0 +1,155 @@
+{
+  "about": "CC0 photos from Wikimedia Commons for the demo library (build-demo.py checks each licence). Each trip is one shoot: its photos get that camera, lens, place and day; each photo becomes a burst of `frames` shots. Every trip has at least 20, so Statistics ranks the cameras and lenses.",
+  "trips": [
+    {
+      "name": "Lapland",
+      "camera": [
+        "FUJIFILM",
+        "X-T5"
+      ],
+      "lens": "XF16-55mmF2.8 R LM WR",
+      "focal": 16,
+      "gps": [
+        68.3495,
+        18.8312
+      ],
+      "start": "2026-10-07T21:40:00",
+      "photos": [
+        {
+          "file": "Green northern lights (Unsplash).jpg",
+          "author": "HyunKuk Kim",
+          "frames": 11
+        },
+        {
+          "file": "Colorful aurora borealis (Unsplash).jpg",
+          "author": "Alan Labisch",
+          "frames": 10
+        }
+      ]
+    },
+    {
+      "name": "Dolomites",
+      "camera": [
+        "SONY",
+        "ILCE-7M4"
+      ],
+      "lens": "FE 24-70mm F2.8 GM II",
+      "focal": 35,
+      "gps": [
+        46.5405,
+        12.1357
+      ],
+      "start": "2026-10-10T07:12:00",
+      "photos": [
+        {
+          "file": "Kayaks on a mountain lake (Unsplash).jpg",
+          "author": "Matheus Bandoch",
+          "frames": 8
+        },
+        {
+          "file": "Clouds mirrored in a mountain lake (Unsplash).jpg",
+          "author": "Ales Krivec",
+          "frames": 6
+        },
+        {
+          "file": "Fog covered mountain forest (Unsplash).jpg",
+          "author": "Emily Morter",
+          "frames": 7
+        }
+      ]
+    },
+    {
+      "name": "Wildlife",
+      "camera": [
+        "SONY",
+        "ILCE-1"
+      ],
+      "lens": "FE 200-600mm F5.6-6.3 G OSS",
+      "focal": 600,
+      "gps": [
+        64.2559,
+        -21.1295
+      ],
+      "start": "2026-05-19T06:05:00",
+      "photos": [
+        {
+          "file": "Country Wildlife (Unsplash).jpg",
+          "author": "Jiri Sifalda",
+          "frames": 8
+        },
+        {
+          "file": "Arctic Fox, Iceland 1 (Unsplash).jpg",
+          "author": "Jonatan Pie",
+          "frames": 7
+        },
+        {
+          "file": "Sitting fox (Unsplash).jpg",
+          "author": "Jonatan Pie",
+          "frames": 6
+        }
+      ]
+    },
+    {
+      "name": "Portraits",
+      "camera": [
+        "Canon",
+        "Canon EOS R6m2"
+      ],
+      "lens": "RF85mm F1.2 L USM",
+      "focal": 85,
+      "gps": [
+        38.7139,
+        -9.1394
+      ],
+      "start": "2026-09-27T17:30:00",
+      "photos": [
+        {
+          "file": "Brunette woman portrait (Unsplash).jpg",
+          "author": "Christopher Campbell",
+          "frames": 6
+        },
+        {
+          "file": "Gray-haired man portrait (Unsplash).jpg",
+          "author": "Foto Sushi",
+          "frames": 5
+        },
+        {
+          "file": "Curly hair and freckles man (Unsplash).jpg",
+          "author": "Jeremy Bishop",
+          "frames": 5
+        },
+        {
+          "file": "Smiling woman in blanket (Unsplash).jpg",
+          "author": "REASONS ART",
+          "frames": 5
+        }
+      ]
+    },
+    {
+      "name": "Dogs",
+      "camera": [
+        "NIKON CORPORATION",
+        "NIKON Z 6_3"
+      ],
+      "lens": "NIKKOR Z 24-120mm f/4 S",
+      "focal": 70,
+      "gps": [
+        52.5163,
+        13.3777
+      ],
+      "start": "2026-10-04T15:20:00",
+      "photos": [
+        {
+          "file": "Dog on a snowy plain (Unsplash).jpg",
+          "author": "Patrick Tomasso",
+          "frames": 11
+        },
+        {
+          "file": "Walking with my dog (Unsplash).jpg",
+          "author": "Davidson Luna",
+          "frames": 10
+        }
+      ]
+    }
+  ]
+}
