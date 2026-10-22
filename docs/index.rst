@@ -8,7 +8,7 @@ analysis and on-device AI.
 
 .. note::
 
-   Picturesque is young: 0.1 is its first release. Download it from the
+   Picturesque is young, and still at 0.1. Download it from the
    `releases page <https://github.com/denyszorinets/picturesque/releases>`_
    (:doc:`getting-started/install`), and see what comes next on the
    `milestones page <https://github.com/denyszorinets/picturesque/milestones>`_.

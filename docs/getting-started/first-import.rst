@@ -59,6 +59,11 @@ fixed.
 The **Log** next to it records what happened and when, with warnings and
 errors highlighted; choose **Errors** to see only problems.
 
+.. figure:: /images/screenshots/activity.webp
+   :alt: Activity: the import folder, every photo with its steps from Found to Analyzed as green dots, and the log of photos imported into dated folders.
+
+   **Activity**: each photo's steps, and the log.
+
 5. Keep importing
 -----------------
 
