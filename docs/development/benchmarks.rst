@@ -14,14 +14,15 @@ runs it repeatedly on fixed pseudo-random inputs and reports:
 
 .. code-block:: bash
 
+   make ort-dylib ORT_PROFILE=release
    cargo build --release -p picturesque-infra --example bench_inference
-   LD_LIBRARY_PATH=target/release target/release/examples/bench_inference \
+   target/release/examples/bench_inference \
        ~/.local/share/io.github.denyszorinets.picturesque/models/clip-image/v1/visual/model.onnx 50
 
 Arguments: the model, the number of runs (default 50), the input name
 (default ``image``) and its shape (default ``1x3x224x224``, the CLIP image
-encoder). ``LD_LIBRARY_PATH`` lets the example find ``libwebgpu_dawn.so``
-on Linux.
+encoder). On Linux the example loads ``target/release/libonnxruntime.so``
+(:doc:`/architecture/decisions/0015-onnx-runtime-loaded-at-first-use`).
 
 Using the GPU in the devcontainer
 ---------------------------------

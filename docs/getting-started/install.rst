@@ -34,9 +34,13 @@ What you need
 - For the AI features, room for the models (about 1.7 GB for all of
   them) and, on first use, an internet connection to download them. Every
   other feature works offline from the start.
-- Any recent CPU. AI analysis of a 10,000-photo library takes about an
-  hour on a laptop CPU in the background; a supported GPU is faster
-  (:doc:`/features/ai`).
+- A 64-bit CPU. The AI features need one with AVX2: Intel Haswell, AMD
+  Excavator or newer (2013 and later; every Apple Silicon Mac). On Linux,
+  an older processor runs everything else and Settings says why AI is
+  unavailable; on Windows, older processors have not been checked yet.
+  AI analysis of a 10,000-photo
+  library takes about an hour on a laptop CPU in the background; a
+  supported GPU is faster (:doc:`/features/ai`).
 
 Where Picturesque keeps its data
 --------------------------------

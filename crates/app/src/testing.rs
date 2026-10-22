@@ -1101,6 +1101,8 @@ impl crate::ports::pixels::PixelLoader for FakePixels {
 pub struct FakeInference {
     gpus: Vec<crate::ports::inference::Provider>,
     broken: bool,
+    /// Why no model can run here (an unsupported processor), if set.
+    unsupported: Option<String>,
     probes: Mutex<usize>,
 }
 
@@ -1116,6 +1118,14 @@ impl FakeInference {
     pub fn broken() -> Self {
         Self {
             broken: true,
+            ..Default::default()
+        }
+    }
+
+    /// No model can run on this machine, for `reason`.
+    pub fn unsupported(reason: &str) -> Self {
+        Self {
+            unsupported: Some(reason.into()),
             ..Default::default()
         }
     }
@@ -1165,6 +1175,10 @@ impl crate::ports::inference::Model for EchoModel {
 }
 
 impl crate::ports::inference::InferenceEngine for FakeInference {
+    fn unavailable(&self) -> Option<String> {
+        self.unsupported.clone()
+    }
+
     fn available(&self) -> Vec<crate::ports::inference::Provider> {
         let mut all = self.gpus.clone();
         all.push(crate::ports::inference::Provider::Cpu);
@@ -1178,6 +1192,9 @@ impl crate::ports::inference::InferenceEngine for FakeInference {
     ) -> Result<Box<dyn crate::ports::inference::Model>, crate::ports::inference::InferenceError>
     {
         use crate::ports::inference::{InferenceError, Provider};
+        if let Some(reason) = &self.unsupported {
+            return Err(InferenceError(reason.clone()));
+        }
         if self.broken {
             return Err(InferenceError("CPU: runtime missing".into()));
         }

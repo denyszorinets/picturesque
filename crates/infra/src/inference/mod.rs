@@ -1,13 +1,17 @@
 //! Model inference with ONNX Runtime through `ort` (ADR-0006).
 //!
-//! The prebuilt runtime is linked statically; which execution providers it
-//! has depends on the target (see `Cargo.toml`). Sessions are created per
-//! model with the user's provider choice and fall back to CPU.
+//! The prebuilt runtime is linked statically, except on Linux x86-64, where
+//! it is a shared library loaded at first use (`runtime`, #154); which
+//! execution providers it has depends on the target (see `Cargo.toml`).
+//! Sessions are created per model with the user's provider choice and fall
+//! back to CPU.
 //!
 //! GPU stacks (Dawn and Vulkan drivers) are not reliably thread-safe while
 //! devices are created: creating two sessions at once crashed or hung in
 //! tests. Sessions are therefore created one at a time, and models on GPU
 //! providers run one at a time (the GPU is shared anyway).
+
+mod runtime;
 
 use std::sync::Mutex;
 
@@ -80,6 +84,8 @@ impl OrtEngine {
     }
 
     fn session(&self, model: ModelSource<'_>, provider: Provider) -> Result<Session, String> {
+        // Nothing of ONNX Runtime runs before this.
+        runtime::ensure()?;
         let _creating = CREATING.lock().unwrap_or_else(|e| e.into_inner());
         let _gpu = gpu_lock(provider);
         let mut builder = Session::builder()
@@ -133,6 +139,8 @@ impl InferenceEngine for OrtEngine {
         model: ModelSource<'_>,
         choice: ProviderChoice,
     ) -> Result<Box<dyn Model>, InferenceError> {
+        // When no provider can run (#154), say why once.
+        runtime::ensure().map_err(InferenceError)?;
         let mut failures = Vec::new();
         for provider in choice.candidates(AUTO_PROVIDERS) {
             if provider != Provider::Cpu && !GPU_PROVIDERS.contains(&provider) {
@@ -154,6 +162,10 @@ impl InferenceEngine for OrtEngine {
             }
         }
         Err(InferenceError(failures.join("; ")))
+    }
+
+    fn unavailable(&self) -> Option<String> {
+        runtime::ensure().err()
     }
 
     fn probe(&self, choice: ProviderChoice) -> Result<Probe, InferenceError> {

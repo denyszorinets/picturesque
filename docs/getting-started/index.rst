@@ -8,3 +8,4 @@ Getting Started
    first-import
    first-cull
    darktable
+   offload-card

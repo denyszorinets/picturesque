@@ -49,16 +49,31 @@ The landing page
 Screenshots
 ~~~~~~~~~~~
 
-The screenshots show the real app (the web UI against the development
-server, :doc:`building`) with a demo library made from CC0 photos from
-Wikimedia Commons:
+The screenshots of the landing page (``site/assets/*-light.webp`` and
+``*-dark.webp``) and of these docs (``docs/images/screenshots``) show the
+real app, the web UI against the development server (:doc:`building`),
+with a demo library made from CC0 photos. One command rebuilds them all::
 
-1. Download photos and note their authors (the page credits the ones on
-   screen).
-2. Make bursts from them: crops of each photo, all but one blurred, a
-   second apart, with camera, lens, focal length, capture time and GPS
-   written to their EXIF.
-3. Import them into a fresh library (``PICTURESQUE_DATA_DIR`` pointing to
-   an empty folder), let analysis finish, and make some decisions.
-4. Capture at 1600 × 1000 with a device scale factor of 2, in light and
-   dark mode, and save as WebP (quality 80, 2400 pixels wide).
+   make screenshots
+
+It runs three steps (:repo:`scripts/screenshots`):
+
+1. ``build-demo.py`` downloads the photos listed in ``photos.json`` from
+   Wikimedia Commons (cached in ``target/screenshots/originals``),
+   refusing any whose licence on Commons is not CC0 or whose author is not
+   the one listed, and makes a demo memory card: each photo becomes a burst
+   of shifted crops a second apart, all but one blurred, with its trip's
+   camera, lens, focal length, time and GPS position in the EXIF.
+2. It starts the dev server with an empty catalog
+   (``target/screenshots/data``; downloaded AI models are kept between
+   runs) and Vite.
+3. ``capture.mjs`` imports the card, waits for analysis, makes some
+   decisions, and captures the library, the loupe, Compare, Statistics and
+   Activity, then a folder session (the darktable note and **Copy
+   keepers…**), each at 1600 × 1000 with a device scale factor of 2, in
+   light and dark mode, saved as WebP (quality 80).
+
+To change what the screenshots show, edit ``photos.json`` (add only CC0
+photos) or the decisions and screens in ``capture.mjs``. The landing page
+credits the authors of the photos on screen; ``photos.json`` lists all of
+them.

@@ -23,8 +23,13 @@ The simplest way, because darktable reads sidecars when it imports.
    stars. Filter by colour label in darktable's collections module to
    see only the picks.
 
-To copy only the keepers somewhere else first, use **Export…** with
-**XMP sidecars** (:doc:`/features/export`).
+.. figure:: /images/screenshots/folder.webp
+   :alt: A folder culled in place: the "Using darktable?" note, bursts framed as series with the suggested keepers ringed, and the folder actions in the toolbar.
+
+   A folder culled in place, with the note for darktable users.
+
+To copy only the keepers somewhere else first (for example off a memory
+card), use **Copy keepers…**: :doc:`offload-card`.
 
 Photos darktable already knows
 ------------------------------

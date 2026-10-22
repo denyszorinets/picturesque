@@ -20,4 +20,8 @@ paused: string | null,
  * What is not analyzed until its model is downloaded (for example
  * "faces and closed eyes").
  */
-waiting_for_models: Array<string>, };
+waiting_for_models: Array<string>, 
+/**
+ * Why AI analysis cannot run on this machine, or `null`.
+ */
+ai_unavailable: string | null, };

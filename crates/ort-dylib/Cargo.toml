@@ -1,0 +1,19 @@
+[package]
+name = "picturesque-ort-dylib"
+description = "Fetches pyke's ONNX Runtime build for scripts/ort-dylib.sh (not shipped)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+# Built on its own (`cargo build -p picturesque-ort-dylib`), ort-sys downloads
+# and verifies pyke's static ONNX Runtime with Dawn; the script links it into
+# libonnxruntime.so, which the app loads at first use (ADR-0015). In a
+# workspace build, the app's `load-dynamic` turns this download off.
+[target.'cfg(all(target_os = "linux", target_arch = "x86_64"))'.dependencies]
+ort-sys = { version = "=2.0.0-rc.13", default-features = false, features = ["std", "api-24", "download-binaries", "tls-rustls", "webgpu"] }
+
+[lints]
+workspace = true

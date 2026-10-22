@@ -62,6 +62,12 @@ pub trait Analyzer: Send + Sync {
     fn purpose(&self) -> &'static str {
         self.id().name
     }
+
+    /// Why the analyzer cannot run on this machine at all (AI analyzers on a
+    /// processor the AI runtime does not support), or `None`.
+    fn unavailable(&self) -> Option<String> {
+        None
+    }
 }
 
 /// Analysis progress, sent as an event and returned by `analysis_status`.
@@ -78,6 +84,8 @@ pub struct AnalysisStatus {
     /// What is not analyzed until its model is downloaded (for example
     /// "faces and closed eyes").
     pub waiting_for_models: Vec<String>,
+    /// Why AI analysis cannot run on this machine, or `null`.
+    pub ai_unavailable: Option<String>,
 }
 
 /// Arguments of `prioritize_analysis`.
@@ -193,7 +201,7 @@ impl AnalysisService {
     pub fn waiting_for_models(&self) -> Vec<String> {
         self.analyzers
             .iter()
-            .filter(|a| !a.ready())
+            .filter(|a| !a.ready() && a.unavailable().is_none())
             .map(|a| a.purpose().to_owned())
             .collect()
     }
@@ -210,6 +218,7 @@ impl AnalysisService {
             running: q.busy > 0,
             paused: q.paused.clone(),
             waiting_for_models: self.waiting_for_models(),
+            ai_unavailable: self.analyzers.iter().find_map(|a| a.unavailable()),
         }
     }
 

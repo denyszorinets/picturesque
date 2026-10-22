@@ -73,12 +73,22 @@ jobs:
 
       - run: npm ci
 
+      - name: ONNX Runtime library
+        run: scripts/ort-dylib.sh release
+
       - name: Build deb and AppImage
         env:
-          # linuxdeploy must find libwebgpu_dawn.so (docs/development/packaging.rst).
-          LD_LIBRARY_PATH: ${{ github.workspace }}/target/release
           APPIMAGE_EXTRACT_AND_RUN: "1"
         run: npx tauri build --bundles deb,appimage
+
+      - name: No load-time ONNX Runtime or Dawn
+        # Loaded at first use, after a processor check (ADR-0015): linked at
+        # load time, they would end the app on older CPUs (#154).
+        run: |
+          if readelf -d target/release/picturesque-desktop | grep -E 'onnxruntime|webgpu_dawn'; then
+            echo "picturesque-desktop must not link ONNX Runtime or Dawn" >&2
+            exit 1
+          fi
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -107,8 +117,20 @@ jobs:
 
       - run: npm ci
 
+      - name: ONNX Runtime library
+        run: scripts/ort-dylib.sh release
+
       - name: Build rpm
         run: npx tauri build --bundles rpm
+
+      - name: No load-time ONNX Runtime or Dawn
+        # Loaded at first use, after a processor check (ADR-0015): linked at
+        # load time, they would end the app on older CPUs (#154).
+        run: |
+          if readelf -d target/release/picturesque-desktop | grep -E 'onnxruntime|webgpu_dawn'; then
+            echo "picturesque-desktop must not link ONNX Runtime or Dawn" >&2
+            exit 1
+          fi
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -117,12 +139,10 @@ jobs:
           if-no-files-found: error
 
   macos:
-    name: dmg (macOS 15, experimental)
+    name: dmg (macOS 15)
     needs: version
     runs-on: macos-15
     timeout-minutes: 60
-    # Not verified yet (#52): does not hold back a release.
-    continue-on-error: true
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 

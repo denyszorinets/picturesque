@@ -166,9 +166,14 @@ impl LoadedModel {
         }
     }
 
-    /// Whether the model is downloaded.
+    /// Whether the model is downloaded and this machine can run models.
     pub fn available(&self) -> bool {
-        self.models.files(self.id).is_some()
+        self.models.files(self.id).is_some() && self.unavailable().is_none()
+    }
+
+    /// Why no model can run on this machine, or `None`.
+    pub fn unavailable(&self) -> Option<String> {
+        self.engine.unavailable()
     }
 
     /// The paths of the model's files, if downloaded.

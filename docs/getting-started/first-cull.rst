@@ -22,6 +22,12 @@ border and ★ mark the best photo of each series (:doc:`/features/series`).
 **Stack series** shows only the best of each, to see the shoot at a
 glance.
 
+.. figure:: /images/screenshots/library.webp
+   :alt: The library: a day in the Dolomites, bursts of a misty forest and two mountain lakes framed as series, the best frame of each picked and starred, the weakest frames rejected and dimmed, and the filters on the left.
+
+   The timeline with series, picks (green), rejects (dimmed) and the
+   filters.
+
 2. Let the AI help (optional)
 -----------------------------
 
@@ -45,6 +51,11 @@ signals, and **Best quality first** sorts the whole library by score.
 Decisions are saved right away, and written to XMP sidecars so
 Lightroom, darktable and digiKam see them.
 
+.. figure:: /images/screenshots/loupe.webp
+   :alt: The loupe: a portrait rated five stars, with the pick, reject and star controls on top and the info panel explaining its score: best of its series of 6, eyes open, face in focus, sharp, well exposed, looks appealing.
+
+   The loupe, with the info panel (**I**) explaining the score.
+
 4. Compare close calls
 ----------------------
 
@@ -53,6 +64,11 @@ best-ranked first (:doc:`/features/compare`). **Z** zooms every photo to
 the same spot, **Shift+arrows** pan them together; pick the keeper with
 **P**, reject the rest with **X**, or press **B** to make another photo the
 series' best.
+
+.. figure:: /images/screenshots/compare.webp
+   :alt: Compare: four frames of a fox burst side by side, each with its score, the sharpest marked Best.
+
+   Compare: four frames of a series, best-ranked first.
 
 5. Narrow down
 --------------
