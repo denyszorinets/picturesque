@@ -178,6 +178,10 @@ impl Analyzer for FaceAnalyzer {
         self.detector.available()
     }
 
+    fn unavailable(&self) -> Option<String> {
+        self.detector.unavailable()
+    }
+
     fn purpose(&self) -> &'static str {
         "faces and closed eyes"
     }

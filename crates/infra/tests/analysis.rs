@@ -117,6 +117,7 @@ fn scores_separate_sharp_from_blurred_photos() {
             "analyzed": 2, "total": 2, "running": false, "paused": null,
             // No AI model is downloaded here.
             "waiting_for_models": ["AI scores and similar photos", "faces and closed eyes"],
+            "ai_unavailable": null,
         })
     );
 }

@@ -109,6 +109,10 @@ impl Analyzer for ClipAnalyzer {
         self.model.available()
     }
 
+    fn unavailable(&self) -> Option<String> {
+        self.model.unavailable()
+    }
+
     fn purpose(&self) -> &'static str {
         "AI scores and similar photos"
     }

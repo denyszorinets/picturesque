@@ -27,9 +27,18 @@ needed. Outside it you need:
 
 - Network access on the first build: ``ort`` downloads a prebuilt ONNX
   Runtime for the target from ``cdn.pyke.io`` (checksummed) and caches it in
-  ``~/.cache/ort.pyke.io``. On Linux it brings ``libwebgpu_dawn.so``, which
-  Cargo copies next to the binaries; they find it there (``$ORIGIN``
-  run path). There are no prebuilt binaries for Intel macOS.
+  ``~/.cache/ort.pyke.io``. There are no prebuilt binaries for Intel macOS.
+
+- On Linux x86-64, ONNX Runtime is loaded at first use from
+  ``libonnxruntime.so``
+  (:doc:`/architecture/decisions/0015-onnx-runtime-loaded-at-first-use`):
+  ``make ort-dylib`` (``scripts/ort-dylib.sh``) links it from pyke's build
+  into ``target/debug``, with ``libwebgpu_dawn.so`` (the WebGPU provider)
+  beside it; ``ORT_PROFILE=release`` makes it for ``target/release``. The
+  Make targets that need it (``test``, ``build``, ``e2e``, ``dev-web``,
+  ``smoke`` and the Linux ``dist-*``) run it first; with plain ``cargo``,
+  run it once yourself. Without it, AI features say the library is
+  missing.
 
 - On Windows (Git Bash, with the Visual Studio C++ build tools): run
   ``scripts/setup-windows-libvips.sh`` once. It downloads the official

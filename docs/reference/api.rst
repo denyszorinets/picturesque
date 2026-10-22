@@ -270,12 +270,14 @@ Commands
 
 ``analysis_status``
    No arguments. ``{ "analyzed": 120, "total": 300, "running": true,
-   "paused": null, "waiting_for_models": ["AI scores and similar photos"]
-   }``: photos with every analysis done, all photos, whether workers are
-   busy, why analysis waits (a full disk), if it does
-   (:doc:`/architecture/decisions/0011-resumable-background-analysis`),
-   and what is not analyzed until its AI model is downloaded (empty with
-   every model downloaded).
+   "paused": null, "waiting_for_models": ["AI scores and similar photos"],
+   "ai_unavailable": null }``: photos with every analysis done, all
+   photos, whether workers are busy, why analysis waits (a full disk), if
+   it does (:doc:`/architecture/decisions/0011-resumable-background-analysis`),
+   what is not analyzed until its AI model is downloaded (empty with every
+   model downloaded), and why AI analysis cannot run on this computer at
+   all, if so (a processor without AVX2,
+   :doc:`/architecture/decisions/0015-onnx-runtime-loaded-at-first-use`).
 
 ``prioritize_analysis``
    ``{ "photo_ids": [7, 8, 9] }``. Analyzes these photos next; the library

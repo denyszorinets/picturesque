@@ -647,7 +647,16 @@
             >
           {/if}
         {/if}
-        {#if analysis.status && analysis.status.waiting_for_models.length > 0}
+        {#if analysis.status?.ai_unavailable}
+          <!-- #154: the AI runtime cannot run on this processor. -->
+          <button
+            class="link warn"
+            onclick={() => onsettings?.()}
+            title={analysis.status.ai_unavailable}
+            data-testid="analysis-ai-unavailable"
+            ><Icon name="exclamation-triangle" /> AI analysis unavailable</button
+          >
+        {:else if analysis.status && analysis.status.waiting_for_models.length > 0}
           <button
             class="link warn"
             onclick={() => onsettings?.()}

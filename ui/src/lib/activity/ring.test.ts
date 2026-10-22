@@ -19,6 +19,7 @@ function analysis(analyzed: number, total = 40): AnalysisStatus {
     running: analyzed < total,
     paused: null,
     waiting_for_models: [],
+    ai_unavailable: null,
   };
 }
 

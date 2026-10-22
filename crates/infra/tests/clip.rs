@@ -198,6 +198,7 @@ fn ranks_like_colours_together(model: &Path) {
             "analyzed": 3, "total": 3, "running": false, "paused": null,
             // CLIP is downloaded, the face models are not.
             "waiting_for_models": ["faces and closed eyes"],
+            "ai_unavailable": null,
         })
     );
 }

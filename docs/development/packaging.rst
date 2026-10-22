@@ -48,15 +48,17 @@ distribution it was built on.
    * - ``.rpm``
      - Fedora 44
      - Declares ``vips``, ``LibRaw`` and ``libheif`` as dependencies;
-       ``libwebgpu_dawn.so`` goes to ``/usr/lib/picturesque``.
+       ``libonnxruntime.so`` and ``libwebgpu_dawn.so`` go to
+       ``/usr/lib/picturesque``.
    * - ``.deb``
      - Ubuntu 24.04
      - Declares ``libvips42t64``, ``libraw23t64`` and ``libheif1`` (with
        the pre-``t64`` names as alternatives).
    * - ``.AppImage``
      - Ubuntu 24.04
-     - Self-contained: linuxdeploy copies libvips, LibRaw, Dawn and their
-       dependencies. HEIC support depends on how the build host's libvips
+     - Self-contained: linuxdeploy copies libvips, LibRaw and their
+       dependencies; ``libonnxruntime.so`` and Dawn go to
+       ``usr/lib/picturesque``. HEIC support depends on how the build host's libvips
        reads HEIF (Fedora loads it from a separate module that is not
        bundled), so the deb or rpm is the better choice where available.
    * - ``.dmg``
@@ -90,14 +92,17 @@ Linux
    make dist-deb        # on Ubuntu
    make dist-appimage
 
-The AppImage build points ``LD_LIBRARY_PATH`` at ``target/release`` so
-linuxdeploy finds ``libwebgpu_dawn.so``, and runs linuxdeploy extracted
+Each target first makes ``libonnxruntime.so`` (``scripts/ort-dylib.sh
+release``). The AppImage build runs linuxdeploy extracted
 (``APPIMAGE_EXTRACT_AND_RUN=1``) so no FUSE is needed.
 
-The executable finds ``libwebgpu_dawn.so`` (ONNX Runtime's WebGPU provider)
-through its run path: next to itself in development builds and AppImages,
-in ``../lib/picturesque`` in deb and rpm packages
-(:repo:`src-tauri/build.rs`).
+The executable does not link ONNX Runtime or Dawn: it loads
+``libonnxruntime.so`` the first time a model is needed, after checking that
+the processor has the instructions pyke's build uses
+(:doc:`/architecture/decisions/0015-onnx-runtime-loaded-at-first-use`). It
+looks next to itself (development builds) and in ``../lib/picturesque``
+(deb, rpm and AppImage); ``libonnxruntime.so`` finds Dawn beside it. The
+release workflow fails if the executable links either at load time.
 
 .. _development-packaging-check:
 

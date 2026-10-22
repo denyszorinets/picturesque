@@ -147,6 +147,7 @@ fn analyzes_every_photo_once_from_its_preview() {
             running: false,
             paused: None,
             waiting_for_models: Vec::new(),
+            ai_unavailable: None,
         }
     );
 
@@ -315,6 +316,7 @@ fn api_reports_status_and_accepts_priorities() {
         json!({
             "analyzed": 0, "total": 2, "running": false, "paused": null,
             "waiting_for_models": ["AI scores and similar photos", "faces and closed eyes"],
+            "ai_unavailable": null,
         })
     );
     api.call("prioritize_analysis", json!({ "photo_ids": [ids[1].0] }))
@@ -325,6 +327,7 @@ fn api_reports_status_and_accepts_priorities() {
         json!({
             "analyzed": 2, "total": 2, "running": false, "paused": null,
             "waiting_for_models": ["AI scores and similar photos", "faces and closed eyes"],
+            "ai_unavailable": null,
         })
     );
 
@@ -358,6 +361,37 @@ mod clip {
     fn install(store: &MemoryModelStore) {
         let spec = catalog().into_iter().find(|m| m.id == CLIP_IMAGE).unwrap();
         store.install(&spec, &[]);
+    }
+
+    #[test]
+    fn says_why_ai_cannot_run_on_an_unsupported_processor() {
+        // #154: the runtime needs instructions this processor lacks.
+        let (world, ids) = world(2);
+        let store = Arc::new(MemoryModelStore::default());
+        let models = Arc::new(ModelService::new(
+            catalog(),
+            store.clone(),
+            world.events.clone(),
+        ));
+        install(&store);
+        let clip = Arc::new(ClipAnalyzer::new(
+            Arc::clone(&models),
+            Arc::new(FakeInference::unsupported("this processor lacks AVX2")),
+            world.settings.clone(),
+        ));
+        let analysis = service(&world, vec![Arc::new(TechnicalAnalyzer), clip.clone()]);
+
+        // Downloaded, but not ready: photos do not wait for it and get no
+        // error results; the status says why instead of asking for models.
+        assert!(!crate::analysis::Analyzer::ready(clip.as_ref()));
+        assert_eq!(analysis.run_until_idle(), 2);
+        assert_eq!(analysis.status().analyzed, 2);
+        assert!(result(&world, ids[0], "clip").is_none());
+        assert!(analysis.status().waiting_for_models.is_empty());
+        assert_eq!(
+            analysis.status().ai_unavailable.as_deref(),
+            Some("this processor lacks AVX2")
+        );
     }
 
     #[test]
