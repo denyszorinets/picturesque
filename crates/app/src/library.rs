@@ -164,6 +164,9 @@ pub struct PhotoSummary {
     pub width: Option<u32>,
     pub height: Option<u32>,
     pub has_raw: bool,
+    /// Whether the photo has a rendered image (a JPEG); with `has_raw`, it
+    /// is a RAW+JPEG pair.
+    pub has_image: bool,
     /// The file the grid shows, relative to the library folder.
     pub file_name: String,
     /// The series the photo is in (its first photo's id), if any.

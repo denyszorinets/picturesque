@@ -1,6 +1,6 @@
 //! The `picturesque://` protocol: serves cached photo images to the web view.
 //!
-//! The UI builds URLs with `convertFileSrc("{size}/{photo_id}", "picturesque")`,
+//! The UI builds URLs with `convertFileSrc("{size}/{photo_id}[/{view}]", "picturesque")`,
 //! which percent-encodes the path (and uses `http://picturesque.localhost/`
 //! on Windows).
 

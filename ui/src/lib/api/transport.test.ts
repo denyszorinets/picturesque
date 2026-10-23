@@ -128,6 +128,15 @@ describe("imageUrl", () => {
       "http://x/api/images/preview/3",
     );
   });
+
+  it("adds the file of a RAW+JPEG pair when one is chosen", () => {
+    expect(httpTransport(fetch, "").imageUrl(12, "full", "raw")).toBe(
+      "/api/images/full/12/raw",
+    );
+    expect(httpTransport(fetch, "").imageUrl(12, "grid", "image")).toBe(
+      "/api/images/grid/12/image",
+    );
+  });
 });
 
 describe("selectTransport", () => {

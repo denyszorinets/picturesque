@@ -20,6 +20,7 @@ function photo(over: Partial<PhotoSummary> = {}): PhotoSummary {
     width: null,
     height: null,
     has_raw: false,
+    has_image: true,
     file_name: "a.jpg",
     series_id: null,
     best_in_series: false,

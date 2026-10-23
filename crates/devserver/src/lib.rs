@@ -97,14 +97,15 @@ struct AppState {
 ///   returns an [`ApiError`] with a matching status code.
 /// - `GET /api/events` streams backend events as server-sent events, one
 ///   JSON [`AppEvent`] per `data:` line.
-/// - `GET /api/images/{size}/{photo_id}` returns a photo's cached JPEG
-///   (`size` is `grid` or `preview`), with an `ETag` for revalidation.
+/// - `GET /api/images/{size}/{photo_id}[/{view}]` returns a photo's cached
+///   JPEG (`size` is `grid`, `preview` or `full`; `view` is `image` or
+///   `raw`), with an `ETag` for revalidation.
 pub fn router(api: Arc<dyn Backend>, events: EventBus) -> Router {
     Router::new()
         .route("/api/health", get(|| async { "ok" }))
         .route("/api/commands/{name}", post(command))
         .route("/api/events", get(events_stream))
-        .route("/api/images/{size}/{id}", get(image))
+        .route("/api/images/{*path}", get(image))
         .with_state(AppState { api, events })
 }
 
@@ -136,11 +137,10 @@ async fn command(State(state): State<AppState>, Path(name): Path<String>, body: 
 
 async fn image(
     State(state): State<AppState>,
-    Path((size, id)): Path<(String, String)>,
+    Path(path): Path<String>,
     headers: HeaderMap,
 ) -> Response {
     let api = state.api;
-    let path = format!("{size}/{id}");
     let result = tokio::task::spawn_blocking(move || {
         let file = api.image_request(&path)?;
         let bytes = std::fs::read(&file)

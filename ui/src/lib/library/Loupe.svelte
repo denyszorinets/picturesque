@@ -4,10 +4,11 @@
     ApiError,
     canReveal,
     getPhoto,
-    imageUrl,
     revealInFolder,
+    type PairView,
     type PhotoDetail,
   } from "../api";
+  import { isPair, pairSetting, photoUrl, viewLabel } from "./pair-view.svelte";
   import { joinPath } from "./sidecars.svelte";
   import type { LibraryStore } from "./store.svelte";
 
@@ -56,6 +57,14 @@
   let drag: { x: number; y: number; left: number; top: number } | null = null;
 
   const photo = $derived(store.photos[index]);
+  const PAIR_BUTTONS: [PairView, string][] = [
+    ["image", "Show the camera's JPEG (R)"],
+    ["raw", "Show the RAW (R)"],
+  ];
+  /** The file of a RAW+JPEG pair shown; kept while moving through photos. */
+  let view = $derived<PairView>(pairSetting.view);
+  /** The shown file could not be rendered. */
+  let broken = $state(false);
 
   $effect(() => {
     void store.ensureLoaded(Math.min(store.total - 1, index + 1));
@@ -81,11 +90,16 @@
     fullLoaded = false;
   });
 
+  $effect(() => {
+    void [index, view];
+    broken = false;
+  });
+
   // Preload neighbours so moving through photos feels instant.
   $effect(() => {
     for (const i of [index - 1, index + 1]) {
       const neighbour = store.photos[i];
-      if (neighbour) new Image().src = imageUrl(neighbour.id, "preview");
+      if (neighbour) new Image().src = photoUrl(neighbour, "preview", view);
     }
   });
 
@@ -99,6 +113,22 @@
   function toggleZoom(point?: { x: number; y: number }) {
     focusPoint = point ?? { x: 0.5, y: 0.5 };
     zoomed = !zoomed;
+  }
+
+  /** Shows the other file of a pair; while zoomed, the same spot stays in view. */
+  function toggleView() {
+    if (!photo || !isPair(photo)) return;
+    if (zoomed && fullLoaded && scroller && scroller.scrollWidth > 0) {
+      focusPoint = {
+        x:
+          (scroller.scrollLeft + scroller.clientWidth / 2) /
+          scroller.scrollWidth,
+        y:
+          (scroller.scrollTop + scroller.clientHeight / 2) /
+          scroller.scrollHeight,
+      };
+    }
+    view = view === "raw" ? "image" : "raw";
   }
 
   function onFullLoad(e: Event) {
@@ -154,6 +184,8 @@
       Z: () => toggleZoom(),
       i: () => (showInfo = !showInfo),
       I: () => (showInfo = !showInfo),
+      r: toggleView,
+      R: toggleView,
     };
     const action = actions[e.key];
     if (action) {
@@ -198,7 +230,7 @@
             <img
               class="full"
               class:hidden={!fullLoaded}
-              src={imageUrl(photo.id, "full")}
+              src={photoUrl(photo, "full", view)}
               alt={photo.file_name}
               draggable="false"
               onload={onFullLoad}
@@ -208,12 +240,21 @@
           <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
           <img
             class="fitted"
-            src={imageUrl(photo.id, "preview")}
+            class:gone={broken}
+            src={photoUrl(photo, "preview", view)}
             alt={photo.file_name}
             draggable="false"
             onclick={clickFitted}
+            onerror={() => (broken = true)}
             data-testid="loupe-image"
           />
+          {#if broken}
+            <p class="loading" data-testid="loupe-broken">
+              Can't show the {viewLabel(photo, view)}{isPair(photo)
+                ? `. Press R for the ${viewLabel(photo, view === "raw" ? "image" : "raw")}.`
+                : "."}
+            </p>
+          {/if}
         {/if}
       {/key}
     {:else}
@@ -238,6 +279,29 @@
       <button onclick={() => (showInfo = !showInfo)} aria-pressed={showInfo}
         ><Icon name="information-circle" /> Info</button
       >
+      {#if photo && isPair(photo)}
+        <span
+          class="pair"
+          role="group"
+          aria-label="File shown"
+          data-testid="loupe-pair"
+        >
+          {#each PAIR_BUTTONS as [v, title] (v)}
+            <button
+              aria-pressed={view === v}
+              {title}
+              onclick={(e) => act(e, () => view !== v && toggleView())}
+              data-testid={`loupe-show-${v}`}>{viewLabel(photo, v)}</button
+            >
+          {/each}
+        </span>
+      {:else if photo}
+        <span
+          class="format"
+          title="This photo has only this file"
+          data-testid="loupe-format">{viewLabel(photo, view)}</span
+        >
+      {/if}
       <button onclick={onclose} aria-label="Close"
         ><Icon name="x-mark" /></button
       >
@@ -424,7 +488,9 @@
       {/if}
       <p class="keys muted">
         ← → move · P or ↑ pick · X or ↓ reject · U unflag · 0–5 stars ·
-        Shift+key decides and moves on · Z zoom · I info · Esc close
+        Shift+key decides and moves on · Z zoom · I info{photo && isPair(photo)
+          ? " · R RAW or JPEG"
+          : ""} · Esc close
       </p>
     </aside>
   {/if}
@@ -475,6 +541,10 @@
     user-select: none;
   }
 
+  .fitted.gone {
+    display: none;
+  }
+
   .full.hidden {
     visibility: hidden;
     position: absolute;
@@ -507,6 +577,33 @@
 
   .toolbar button[aria-pressed="true"] {
     background: #3a3a36;
+  }
+
+  .pair {
+    display: flex;
+  }
+
+  .pair button {
+    font-size: 0.8rem;
+    font-weight: 700;
+  }
+
+  .pair button:first-child {
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+  }
+
+  .pair button:last-child {
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
+    border-left: none;
+  }
+
+  .format {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: #b5b5ae;
+    padding: 0 0.3rem;
   }
 
   .toolbar.cull {

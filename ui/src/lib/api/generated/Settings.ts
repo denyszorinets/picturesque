@@ -68,4 +68,8 @@ labels: LabelSettings,
 /**
  * What clearing a folder after copying may delete (ADR-0014).
  */
-delete_after_copy: DeleteAfterCopy, };
+delete_after_copy: DeleteAfterCopy, 
+/**
+ * Which file of a RAW+JPEG pair the grid and loupe show.
+ */
+pair_view: "image" | "raw", };

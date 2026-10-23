@@ -37,6 +37,23 @@ with values from each photo.
    tokens and rules. An invalid template is rejected with a message naming
    the problem.
 
+.. _reference-settings-pair-view:
+
+``pair_view``
+-------------
+
+Which file of a RAW+JPEG pair the grid, loupe and compare show
+(:ref:`features-library-raw-jpeg`). In the Settings tab: **RAW+JPEG pairs**.
+
+:Type: ``image`` or ``raw``
+:Default: ``image``
+:Values: ``image`` shows the camera's JPEG (or other rendered image, such as
+   HEIC); ``raw`` shows the RAW through its embedded preview. Photos with
+   only one of the two show that one either way. The loupe can switch to the
+   other file at any time (**R**). Analysis always uses the JPEG of a pair,
+   so scores do not change with this setting. Applies right away; grid
+   images of the newly chosen files are made as they come into view.
+
 .. _reference-settings-sidecar-naming:
 
 ``sidecar_naming``
@@ -193,7 +210,7 @@ API
         "onboarding": { "tour_done": false },
         "open_folder": null, "recent_folders": [],
         "labels": { "pick": "green", "auto_pick": "yellow" },
-        "delete_after_copy": "verified" }
+        "delete_after_copy": "verified", "pair_view": "image" }
 
 ``update_settings``
    Arguments: any subset of the settings. Unknown fields are rejected.

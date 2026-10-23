@@ -12,4 +12,4 @@ import type { SidecarNaming } from "./SidecarNaming";
 /**
  * A change to some settings; absent fields are left as they are.
  */
-export type SettingsUpdate = { library_root?: string | null, path_template?: string, sidecar_naming?: SidecarNaming, series?: SeriesSettings, ranking?: RankingSettings, ai?: AiSettings, import?: ImportSettings, auto_pick?: AutoPickSettings, onboarding?: OnboardingSettings, labels?: LabelSettings, delete_after_copy?: DeleteAfterCopy, };
+export type SettingsUpdate = { library_root?: string | null, path_template?: string, sidecar_naming?: SidecarNaming, series?: SeriesSettings, ranking?: RankingSettings, ai?: AiSettings, import?: ImportSettings, auto_pick?: AutoPickSettings, onboarding?: OnboardingSettings, labels?: LabelSettings, delete_after_copy?: DeleteAfterCopy, pair_view?: "image" | "raw", };

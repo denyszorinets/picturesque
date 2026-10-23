@@ -17,6 +17,7 @@ const SETTINGS: Settings = {
   recent_folders: [],
   labels: { pick: "green", auto_pick: "yellow" },
   delete_after_copy: "verified",
+  pair_view: "image",
 };
 
 const getSettings = vi.fn<() => Promise<Settings>>();

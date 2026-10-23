@@ -18,7 +18,7 @@
   import ModelList from "../ai/ModelList.svelte";
   import Reanalyze from "../analysis/Reanalyze.svelte";
   import PathInput from "../components/PathInput.svelte";
-  import type { ColorLabel, DeleteAfterCopy } from "../api";
+  import type { ColorLabel, DeleteAfterCopy, PairView } from "../api";
 
   const LABELS: { value: ColorLabel | ""; label: string }[] = [
     { value: "", label: "No label" },
@@ -50,6 +50,7 @@
   let pickLabel = $state<ColorLabel | null>("green");
   let autoLabel = $state<ColorLabel | null>("yellow");
   let deleteAfterCopy = $state<DeleteAfterCopy>("verified");
+  let pairView = $state<PairView>("image");
   let maxGap = $state(30);
   let maxDistance = $state(16);
   let rescanMinutes = $state(5);
@@ -110,6 +111,7 @@
         pickLabel !== saved.labels.pick ||
         autoLabel !== saved.labels.auto_pick ||
         deleteAfterCopy !== saved.delete_after_copy ||
+        pairView !== saved.pair_view ||
         seriesChanged ||
         rankingChanged ||
         rescanMinutes !== saved.import.rescan_minutes ||
@@ -154,6 +156,7 @@
     pickLabel = settings.labels.pick;
     autoLabel = settings.labels.auto_pick;
     deleteAfterCopy = settings.delete_after_copy;
+    pairView = settings.pair_view;
     maxGap = settings.series.max_gap_seconds;
     maxDistance = settings.series.max_distance;
     rescanMinutes = settings.import.rescan_minutes;
@@ -197,6 +200,7 @@
         update.labels = { pick: pickLabel, auto_pick: autoLabel };
       if (deleteAfterCopy !== saved.delete_after_copy)
         update.delete_after_copy = deleteAfterCopy;
+      if (pairView !== saved.pair_view) update.pair_view = pairView;
       if (libraryRoot.trim() !== (saved.library_root ?? ""))
         update.library_root = libraryRoot.trim();
       if (template.trim() !== saved.path_template)
@@ -302,6 +306,18 @@
     <p class="hint muted">
       Folders also report new photos as they arrive; this catches what they
       miss, such as network shares. 0 checks only on changes and at start.
+    </p>
+  </div>
+
+  <div class="field">
+    <label class="label" for="pair-view">RAW+JPEG pairs</label>
+    <select id="pair-view" bind:value={pairView} data-testid="pair-view">
+      <option value="image">Show the camera's JPEG</option>
+      <option value="raw">Show the RAW</option>
+    </select>
+    <p class="hint muted">
+      When a camera saves a RAW and a JPEG of each photo, the grid, loupe and
+      compare show this one. In the loupe, <kbd>R</kbd> switches to the other file.
     </p>
   </div>
 

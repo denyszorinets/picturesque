@@ -17,6 +17,11 @@ day: string | null, camera: string | null, lens: string | null, city: string | n
  */
 width: number | null, height: number | null, has_raw: boolean, 
 /**
+ * Whether the photo has a rendered image (a JPEG); with `has_raw`, it
+ * is a RAW+JPEG pair.
+ */
+has_image: boolean, 
+/**
  * The file the grid shows, relative to the library folder.
  */
 file_name: string, 
