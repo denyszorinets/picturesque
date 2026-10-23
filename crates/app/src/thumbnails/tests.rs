@@ -4,7 +4,7 @@ use std::time::{Duration, Instant};
 
 use picturesque_core::media::MediaFormat;
 use picturesque_core::metadata::{CaptureMetadata, Orientation};
-use picturesque_core::photo::{Asset, NewPhoto, PhotoAssets, PhotoId};
+use picturesque_core::photo::{Asset, NewPhoto, PairView, PhotoAssets, PhotoId};
 use serde_json::json;
 
 use super::{ImageSize, ThumbnailError, ThumbnailService};
@@ -72,8 +72,8 @@ fn renders_the_display_file_once_and_reuses_the_cache() {
     );
     let thumbs = service(&world);
 
-    let first = thumbs.image(id, ImageSize::Grid).unwrap();
-    let second = thumbs.image(id, ImageSize::Grid).unwrap();
+    let first = thumbs.image(id, ImageSize::Grid, PairView::Image).unwrap();
+    let second = thumbs.image(id, ImageSize::Grid, PairView::Image).unwrap();
 
     assert_eq!(first, second);
     let hex = fake_hash(b"jpg").to_hex();
@@ -91,6 +91,99 @@ fn renders_the_display_file_once_and_reuses_the_cache() {
     );
 }
 
+fn pair(world: &TestWorld) -> PhotoId {
+    add(
+        world,
+        CaptureMetadata::default(),
+        vec![
+            asset("2026/IMG_1.CR3", b"raw"),
+            asset("2026/IMG_1.JPG", b"jpg"),
+        ],
+    )
+}
+
+fn show_pairs_as(world: &TestWorld, view: PairView) {
+    let mut settings = world.settings.load_settings().unwrap();
+    settings.pair_view = view;
+    world.settings.save_settings(&settings).unwrap();
+}
+
+#[test]
+fn either_file_of_a_pair_is_rendered_and_cached_on_its_own() {
+    let world = world(FakeDecoder::default());
+    let id = pair(&world);
+    let thumbs = service(&world);
+
+    let jpeg = thumbs
+        .image(id, ImageSize::Preview, PairView::Image)
+        .unwrap();
+    let raw = thumbs.image(id, ImageSize::Preview, PairView::Raw).unwrap();
+
+    assert_ne!(jpeg, raw);
+    assert_eq!(
+        raw,
+        thumbs.cache_path(&fake_hash(b"raw"), ImageSize::Preview)
+    );
+    assert_eq!(
+        *world.decoder.calls.lock().unwrap(),
+        [
+            (PathBuf::from("/lib/2026/IMG_1.JPG"), 2048),
+            (PathBuf::from("/lib/2026/IMG_1.CR3"), 2048)
+        ]
+    );
+}
+
+#[test]
+fn prefill_and_has_grid_follow_the_pair_setting() {
+    let world = world(FakeDecoder::default());
+    let id = pair(&world);
+    show_pairs_as(&world, PairView::Raw);
+    let thumbs = service(&world);
+
+    assert_eq!(thumbs.prefill(), 1);
+
+    assert_eq!(
+        *world.decoder.calls.lock().unwrap(),
+        [(PathBuf::from("/lib/2026/IMG_1.CR3"), 512)]
+    );
+    let photo = world.catalog.photo(id).unwrap().unwrap();
+    assert!(thumbs.has_grid(&photo, PairView::Raw));
+    assert!(!thumbs.has_grid(&photo, PairView::Image));
+}
+
+#[test]
+fn image_requests_choose_the_file_of_a_pair() {
+    let world = world(FakeDecoder::default());
+    let id = pair(&world);
+    let api = Api::new(world.context()).unwrap();
+    let thumbs = service(&world);
+    let jpeg = thumbs.cache_path(&fake_hash(b"jpg"), ImageSize::Grid);
+    let raw = thumbs.cache_path(&fake_hash(b"raw"), ImageSize::Grid);
+
+    assert_eq!(api.image_request(&format!("grid/{}", id.0)).unwrap(), jpeg);
+    assert_eq!(
+        api.image_request(&format!("grid/{}/raw", id.0)).unwrap(),
+        raw
+    );
+    assert_eq!(
+        api.image_request(&format!("grid/{}/image", id.0)).unwrap(),
+        jpeg
+    );
+
+    // Without a view, the setting decides.
+    show_pairs_as(&world, PairView::Raw);
+    assert_eq!(api.image_request(&format!("grid/{}", id.0)).unwrap(), raw);
+
+    use crate::api::ApiErrorCode::*;
+    for bad in ["grid/1/jpeg", "grid/1/raw/extra"] {
+        assert_eq!(
+            api.image_request(bad).unwrap_err().code,
+            InvalidArguments,
+            "{bad}"
+        );
+    }
+}
+
 #[test]
 fn sizes_are_cached_separately() {
     let world = world(FakeDecoder::default());
@@ -101,8 +194,10 @@ fn sizes_are_cached_separately() {
     );
     let thumbs = service(&world);
 
-    let grid = thumbs.image(id, ImageSize::Grid).unwrap();
-    let preview = thumbs.image(id, ImageSize::Preview).unwrap();
+    let grid = thumbs.image(id, ImageSize::Grid, PairView::Image).unwrap();
+    let preview = thumbs
+        .image(id, ImageSize::Preview, PairView::Image)
+        .unwrap();
 
     assert_ne!(grid, preview);
     assert_eq!(world.fs.read(&preview).unwrap(), b"jpeg 2048");
@@ -120,7 +215,9 @@ fn fills_missing_dimensions_before_orientation() {
     };
     let id = add(&world, metadata, vec![asset("2026/IMG_2.CR3", b"raw-2")]);
 
-    service(&world).image(id, ImageSize::Preview).unwrap();
+    service(&world)
+        .image(id, ImageSize::Preview, PairView::Image)
+        .unwrap();
 
     // Upright 4000×6000 from a photo rotated 90° is stored as 6000×4000.
     assert_eq!(
@@ -147,7 +244,9 @@ fn keeps_known_dimensions() {
     };
     let id = add(&world, metadata, vec![asset("2026/IMG_2.CR3", b"raw-2")]);
 
-    service(&world).image(id, ImageSize::Grid).unwrap();
+    service(&world)
+        .image(id, ImageSize::Grid, PairView::Image)
+        .unwrap();
 
     assert_eq!(
         world
@@ -173,7 +272,9 @@ fn decode_failures_leave_nothing_in_the_cache() {
         vec![asset("2026/IMG_2.CR3", b"raw-2")],
     );
 
-    let err = service(&world).image(id, ImageSize::Grid).unwrap_err();
+    let err = service(&world)
+        .image(id, ImageSize::Grid, PairView::Image)
+        .unwrap_err();
 
     assert!(matches!(err, ThumbnailError::Decode(_)), "{err:?}");
     assert!(world.fs.files_under(Path::new("/cache")).is_empty());
@@ -183,7 +284,7 @@ fn decode_failures_leave_nothing_in_the_cache() {
 fn reports_missing_photos_and_library() {
     let world = world(FakeDecoder::default());
     assert_eq!(
-        service(&world).image(PhotoId(9), ImageSize::Grid),
+        service(&world).image(PhotoId(9), ImageSize::Grid, PairView::Image),
         Err(ThumbnailError::NotFound(PhotoId(9)))
     );
 
@@ -194,7 +295,7 @@ fn reports_missing_photos_and_library() {
     );
     world.settings.save_settings(&Settings::default()).unwrap();
     assert_eq!(
-        service(&world).image(id, ImageSize::Grid),
+        service(&world).image(id, ImageSize::Grid, PairView::Image),
         Err(ThumbnailError::NoLibrary)
     );
 }
@@ -218,7 +319,7 @@ fn prefill_generates_only_missing_grid_images() {
         vec![asset("2026/missing.CR3", b"gone")],
     );
     let thumbs = service(&world);
-    thumbs.image(a, ImageSize::Grid).unwrap();
+    thumbs.image(a, ImageSize::Grid, PairView::Image).unwrap();
 
     let generated = thumbs.prefill();
 
@@ -303,7 +404,7 @@ fn a_concurrently_created_image_is_kept_not_replaced() {
     // A rendering that started before it existed must not replace it.
     let photo = world.catalog.photo(id).unwrap().unwrap();
     let got = thumbs
-        .ensure(Path::new("/lib"), &photo, ImageSize::Grid)
+        .ensure(Path::new("/lib"), &photo, ImageSize::Grid, PairView::Image)
         .unwrap();
 
     assert_eq!(got, path);

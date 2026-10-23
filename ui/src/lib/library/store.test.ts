@@ -16,6 +16,7 @@ function photo(id: number, city: string | null = null): PhotoSummary {
     width: null,
     height: null,
     has_raw: false,
+    has_image: true,
     file_name: `${id}.jpg`,
     series_id: null,
     best_in_series: false,

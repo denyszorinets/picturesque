@@ -11,7 +11,7 @@ use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
 
-use picturesque_core::photo::{Photo, PhotoId};
+use picturesque_core::photo::{PairView, Photo, PhotoId};
 use picturesque_core::pixels::RgbImage;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -412,7 +412,8 @@ impl AnalysisService {
         }
         let image = self
             .thumbnails
-            .image(id, ImageSize::Preview)
+            // Always the JPEG of a pair, so scores do not depend on what is shown.
+            .image(id, ImageSize::Preview, PairView::Image)
             .map_err(|e| e.to_string())
             .and_then(|path| self.pixels.load(&path, ANALYSIS_EDGE));
         if image.is_err() && self.thumbnails.cache_full() {

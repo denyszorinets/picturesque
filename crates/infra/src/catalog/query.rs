@@ -437,7 +437,8 @@ fn query_page(conn: &Connection, query: &PhotoQuery) -> Result<PhotoPage, Catalo
                 (SELECT count(*) FROM series_member x WHERE x.series_id = sm.series_id),
                 {QUALITY_SQL} AS quality,
                 pss.aesthetic, pss.eyes_closed, coalesce(pss.faces, 0),
-                coalesce(pss.keeper, 0)
+                coalesce(pss.keeper, 0),
+                EXISTS (SELECT 1 FROM asset a WHERE a.photo_id = p.id AND a.role = 'image')
          FROM ({page}) pg JOIN photo p ON p.id = pg.id
                 LEFT JOIN decision d ON d.photo_id = p.id
                 LEFT JOIN series_member sm ON sm.photo_id = p.id
@@ -476,6 +477,7 @@ fn query_page(conn: &Connection, query: &PhotoQuery) -> Result<PhotoPage, Catalo
                 width,
                 height,
                 has_raw: row.get(12)?,
+                has_image: row.get(22)?,
                 file_name: path.rsplit('/').next().unwrap_or_default().to_owned(),
                 series_id: row.get(14)?,
                 best_in_series: row.get::<_, Option<bool>>(15)?.unwrap_or(false),

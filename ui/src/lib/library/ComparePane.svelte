@@ -1,6 +1,7 @@
 <script lang="ts">
   import Icon from "../components/Icon.svelte";
-  import { imageUrl, type PhotoSummary } from "../api";
+  import type { PhotoSummary } from "../api";
+  import { isPair, pairSetting, photoUrl, viewLabel } from "./pair-view.svelte";
   import type { CompareState } from "./compare-state.svelte";
 
   interface Props {
@@ -118,7 +119,7 @@
               class="full"
               class:hidden={!loaded}
               bind:this={full}
-              src={imageUrl(photo.id, "full")}
+              src={photoUrl(photo, "full")}
               alt={photo.file_name}
               draggable="false"
               onload={() => (loaded = true)}
@@ -128,7 +129,7 @@
           <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
           <img
             class="fitted"
-            src={imageUrl(photo.id, "preview")}
+            src={photoUrl(photo, "preview")}
             alt={photo.file_name}
             draggable="false"
             onclick={onactivate}
@@ -154,6 +155,11 @@
           >{#each { length: photo.rating }, i (i)}<Icon
               name="star"
             />{/each}</span
+        >{/if}
+      {#if isPair(photo)}<span
+          class="badge"
+          title={`Showing the ${viewLabel(photo, pairSetting.view)}; Settings choose which file of a pair is shown`}
+          data-testid="compare-pair">RAW+{viewLabel(photo, "image")}</span
         >{/if}
       {#if photo.flag === "pick"}<span class="badge pick"
           ><Icon name="check" /> Pick</span

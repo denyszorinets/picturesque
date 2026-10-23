@@ -4,6 +4,7 @@ use std::fmt;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use picturesque_core::photo::PairView;
 use picturesque_core::ranking::RankWeights;
 use picturesque_core::series::SeriesThresholds;
 use picturesque_core::template::PathTemplate;
@@ -56,6 +57,9 @@ pub struct Settings {
     pub labels: LabelSettings,
     /// What clearing a folder after copying may delete (ADR-0014).
     pub delete_after_copy: DeleteAfterCopy,
+    /// Which file of a RAW+JPEG pair the grid and loupe show.
+    #[ts(type = "\"image\" | \"raw\"")]
+    pub pair_view: PairView,
 }
 
 /// What **Clear folder…** may delete after keepers were copied out of a
@@ -255,6 +259,7 @@ impl Default for Settings {
             recent_folders: Vec::new(),
             labels: LabelSettings::default(),
             delete_after_copy: DeleteAfterCopy::default(),
+            pair_view: PairView::default(),
         }
     }
 }
@@ -286,6 +291,8 @@ pub struct SettingsUpdate {
     pub labels: Option<LabelSettings>,
     #[ts(optional)]
     pub delete_after_copy: Option<DeleteAfterCopy>,
+    #[ts(type = "\"image\" | \"raw\"", optional)]
+    pub pair_view: Option<PairView>,
 }
 
 /// Why settings could not be read or changed.
@@ -432,6 +439,9 @@ impl SettingsService {
         }
         if let Some(mode) = update.delete_after_copy {
             settings.delete_after_copy = mode;
+        }
+        if let Some(view) = update.pair_view {
+            settings.pair_view = view;
         }
         self.store.save_settings(&settings)?;
         Ok(settings)

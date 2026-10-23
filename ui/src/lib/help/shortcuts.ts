@@ -57,6 +57,7 @@ export const SHORTCUTS: ShortcutGroup[] = [
       { keys: ["←", "→"], action: "Previous or next photo" },
       { keys: ["Z"], action: "Zoom to 100%" },
       { keys: ["I"], action: "Show or hide the photo's details" },
+      { keys: ["R"], action: "Switch between the RAW and the JPEG" },
       { keys: ["Esc"], action: "Back to the timeline" },
     ],
   },

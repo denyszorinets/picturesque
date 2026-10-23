@@ -8,12 +8,23 @@ export interface Transport {
   call<T>(command: string, args?: unknown): Promise<T>;
   /** Calls `handler` for every backend event; returns a function that stops listening. */
   subscribe(handler: (event: AppEvent) => void): () => void;
-  /** URL of a photo's cached image, usable as an `<img src>`. */
-  imageUrl(photoId: number, size: ImageSize): string;
+  /**
+   * URL of a photo's cached image, usable as an `<img src>`. `view` picks
+   * the file of a RAW+JPEG pair; without it, the `pair_view` setting does.
+   */
+  imageUrl(photoId: number, size: ImageSize, view?: PairView): string;
 }
 
 /** Cached image sizes (see `picturesque_app::thumbnails::ImageSize`). */
 export type ImageSize = "grid" | "preview" | "full";
+
+/** The file of a RAW+JPEG pair to show (see `picturesque_core::photo::PairView`). */
+export type PairView = "image" | "raw";
+
+/** The image request path `{size}/{photo_id}[/{view}]`. */
+function imagePath(photoId: number, size: ImageSize, view?: PairView): string {
+  return view ? `${size}/${photoId}/${view}` : `${size}/${photoId}`;
+}
 
 /** Name of the Tauri event carrying backend events (see src-tauri/src/lib.rs). */
 export const TAURI_EVENT = "app-event";
@@ -41,9 +52,9 @@ export const tauriTransport: Transport = {
       stop?.();
     };
   },
-  imageUrl(photoId, size) {
+  imageUrl(photoId, size, view) {
     // The `picturesque://` protocol (src-tauri/src/images.rs).
-    return convertFileSrc(`${size}/${photoId}`, "picturesque");
+    return convertFileSrc(imagePath(photoId, size, view), "picturesque");
   },
 };
 
@@ -94,8 +105,8 @@ export function httpTransport(
       };
       return () => source.close();
     },
-    imageUrl(photoId, size) {
-      return `${baseUrl}/api/images/${size}/${photoId}`;
+    imageUrl(photoId, size, view) {
+      return `${baseUrl}/api/images/${imagePath(photoId, size, view)}`;
     },
   };
 }

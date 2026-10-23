@@ -568,6 +568,7 @@ impl PhotoCatalog for MemoryCatalog {
                     width: None,
                     height: None,
                     has_raw: p.assets.raw().is_some(),
+                    has_image: p.assets.image().is_some(),
                     file_name: String::new(),
                     series_id: None,
                     best_in_series: false,

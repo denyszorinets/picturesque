@@ -17,8 +17,10 @@ Tiles
 
 Each tile shows the whole photo (never cropped), with:
 
-- **RAW** when the photo has a RAW file (the JPEG of a RAW+JPEG pair is
-  shown),
+- **RAW** when the photo has a RAW file. For a RAW+JPEG pair the tile
+  shows the camera's JPEG, or the RAW if
+  :ref:`pair_view <reference-settings-pair-view>` says so. A RAW that
+  cannot be rendered falls back to its JPEG.
 - a green check mark for picks and a red cross for rejects (rejected
   photos are dimmed and greyed),
 - its star rating,
@@ -71,6 +73,8 @@ focus.
        move around, click again to fit.
    * - I
      - Show or hide the information panel
+   * - R
+     - Switch between the RAW and the JPEG of a RAW+JPEG pair
    * - P, X, U, 0 – 5
      - Pick, reject, unflag, rate (:ref:`features-library-culling`)
    * - Shift+P, Shift+X, Shift+U
@@ -93,6 +97,21 @@ timeline.
 The fitted view uses a 2048-pixel preview. 100% zoom uses a full-size
 image, created the first time you zoom into a photo and then cached
 (:doc:`/reference/data-locations`).
+
+.. _features-library-raw-jpeg:
+
+RAW+JPEG pairs
+~~~~~~~~~~~~~~
+
+For a RAW+JPEG pair, the bar at the bottom has a **JPEG · RAW** switch
+(or press **R**). It starts on the file
+:ref:`pair_view <reference-settings-pair-view>` chooses (the JPEG by
+default), and your choice stays while you move through photos until the
+loupe is closed. While zoomed to 100%, the same spot stays in view. A photo
+with one file shows which one it is (**RAW**, **JPEG**, **HEIC** …). The RAW
+is shown through the preview the camera stores inside it, so it often
+looks much like the JPEG. If a file cannot be rendered, the loupe says so
+and offers the other one.
 
 .. _features-library-culling:
 
