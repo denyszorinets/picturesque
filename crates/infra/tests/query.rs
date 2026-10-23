@@ -442,7 +442,12 @@ fn summaries_carry_what_the_grid_needs() {
         (page.photos[1].width, page.photos[1].height),
         (Some(6000), Some(4000))
     );
-    assert!(!page.photos.iter().find(|p| p.id == 3).unwrap().has_raw);
+    let photo = |id| page.photos.iter().find(|p| p.id == id).unwrap();
+    assert!(!photo(3).has_raw);
+    // A pair has both; a RAW alone or an image alone has one.
+    assert!(first.has_image);
+    assert!(!photo(2).has_image);
+    assert!(photo(3).has_image);
 }
 
 #[test]

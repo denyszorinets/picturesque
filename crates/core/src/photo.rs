@@ -30,6 +30,33 @@ impl Asset {
     }
 }
 
+/// Which file of a RAW+JPEG pair is shown. Photos with only one of the two
+/// show that one whatever is chosen.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PairView {
+    /// The rendered image the camera wrote (usually a JPEG).
+    #[default]
+    Image,
+    /// The RAW, shown through its embedded preview.
+    Raw,
+}
+
+impl PairView {
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Image => "image",
+            Self::Raw => "raw",
+        }
+    }
+
+    pub fn from_name(name: &str) -> Option<Self> {
+        [Self::Image, Self::Raw]
+            .into_iter()
+            .find(|v| v.name() == name)
+    }
+}
+
 /// Why a set of assets cannot form a photo.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AssetsError {
@@ -114,9 +141,19 @@ impl PhotoAssets {
     /// The file to display: the rendered image when present, otherwise the
     /// RAW (shown through its embedded preview).
     pub fn display(&self) -> &Asset {
-        self.image
+        self.shown(PairView::Image)
+    }
+
+    /// The file to show for `view`, falling back to the other file when the
+    /// photo is not a RAW+JPEG pair.
+    pub fn shown(&self, view: PairView) -> &Asset {
+        let (first, second) = match view {
+            PairView::Image => (&self.image, &self.raw),
+            PairView::Raw => (&self.raw, &self.image),
+        };
+        first
             .as_ref()
-            .or(self.raw.as_ref())
+            .or(second.as_ref())
             .expect("invariant: RAW or image present")
     }
 
@@ -194,6 +231,27 @@ mod tests {
         let raw_only = PhotoAssets::new(vec![asset("b.NEF")]).unwrap();
         assert_eq!(raw_only.primary().path, PathBuf::from("b.NEF"));
         assert_eq!(raw_only.display().path, PathBuf::from("b.NEF"));
+    }
+
+    #[test]
+    fn shown_picks_the_chosen_file_of_a_pair_and_falls_back_otherwise() {
+        let pair = PhotoAssets::new(vec![asset("a.CR3"), asset("a.JPG")]).unwrap();
+        assert_eq!(pair.shown(PairView::Image).path, PathBuf::from("a.JPG"));
+        assert_eq!(pair.shown(PairView::Raw).path, PathBuf::from("a.CR3"));
+
+        let jpeg_only = PhotoAssets::new(vec![asset("b.JPG")]).unwrap();
+        assert_eq!(jpeg_only.shown(PairView::Raw).path, PathBuf::from("b.JPG"));
+        let raw_only = PhotoAssets::new(vec![asset("c.NEF")]).unwrap();
+        assert_eq!(raw_only.shown(PairView::Image).path, PathBuf::from("c.NEF"));
+    }
+
+    #[test]
+    fn pair_view_names_round_trip() {
+        for view in [PairView::Image, PairView::Raw] {
+            assert_eq!(PairView::from_name(view.name()), Some(view));
+            assert_eq!(serde_json::to_value(view).unwrap(), view.name());
+        }
+        assert_eq!(PairView::from_name("jpeg"), None);
     }
 
     #[test]

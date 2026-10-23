@@ -51,7 +51,7 @@ use crate::settings::{SettingsError, SettingsService, SettingsUpdate};
 use crate::sidecars::SidecarService;
 use crate::templates::{self, PreviewTemplateArgs};
 use crate::thumbnails::{ImageSize, ThumbnailError, ThumbnailService};
-use picturesque_core::photo::PhotoId;
+use picturesque_core::photo::{PairView, PhotoId};
 use picturesque_core::ranking::Candidate;
 
 /// Category of an API failure. Transports map it to their own error form
@@ -378,8 +378,10 @@ impl Api {
         self.sidecars.flush()
     }
 
-    /// Resolves an image request path `{size}/{photo_id}` (as used by the
-    /// `picturesque://` protocol and `/api/images/`) to the cached file.
+    /// Resolves an image request path `{size}/{photo_id}[/{view}]` (as used
+    /// by the `picturesque://` protocol and `/api/images/`) to the cached
+    /// file. `view` is `image` or `raw`, the file of a RAW+JPEG pair to show;
+    /// without it, the `pair_view` setting decides.
     pub fn image_request(&self, path: &str) -> Result<PathBuf, ApiError> {
         let invalid = || {
             ApiError::new(
@@ -387,17 +389,34 @@ impl Api {
                 format!("invalid image path `{path}`"),
             )
         };
-        let (size, id) = path.trim_matches('/').split_once('/').ok_or_else(invalid)?;
+        let mut parts = path.trim_matches('/').split('/');
+        let (Some(size), Some(id), view, None) =
+            (parts.next(), parts.next(), parts.next(), parts.next())
+        else {
+            return Err(invalid());
+        };
         let size = ImageSize::from_name(size).ok_or_else(invalid)?;
         let id: i64 = id.parse().map_err(|_| invalid())?;
-        self.image_path(id, size)
+        let view = view
+            .map(|v| PairView::from_name(v).ok_or_else(invalid))
+            .transpose()?;
+        self.image_path(id, size, view)
     }
 
     /// Path of a photo's cached image, generating it if needed. Images are
-    /// served as files by each transport rather than through JSON.
-    pub fn image_path(&self, photo_id: i64, size: ImageSize) -> Result<PathBuf, ApiError> {
-        self.thumbnails
-            .image(PhotoId(photo_id), size)
+    /// served as files by each transport rather than through JSON. `view`
+    /// defaults to the `pair_view` setting.
+    pub fn image_path(
+        &self,
+        photo_id: i64,
+        size: ImageSize,
+        view: Option<PairView>,
+    ) -> Result<PathBuf, ApiError> {
+        let view = match view {
+            Some(view) => Ok(view),
+            None => self.thumbnails.pair_view(),
+        };
+        view.and_then(|view| self.thumbnails.image(PhotoId(photo_id), size, view))
             .map_err(|e| match e {
                 ThumbnailError::NotFound(_) => ApiError::new(ApiErrorCode::NotFound, e.to_string()),
                 ThumbnailError::NoLibrary => {
@@ -645,13 +664,14 @@ impl Api {
                 } else {
                     parse_args(command, args)?
                 };
+                let view = self.thumbnails.pair_view().unwrap_or_default();
                 let details = |id: PhotoId| {
                     let thumbnail = self
                         .catalog
                         .photo(id)
                         .ok()
                         .flatten()
-                        .is_some_and(|p| self.thumbnails.has_grid(&p));
+                        .is_some_and(|p| self.thumbnails.has_grid(&p, view));
                     (thumbnail, self.analysis.progress_of(id))
                 };
                 respond(
@@ -996,7 +1016,8 @@ mod tests {
                 "open_folder": null,
                 "recent_folders": [],
                 "labels": { "pick": "green", "auto_pick": "yellow" },
-                "delete_after_copy": "verified"
+                "delete_after_copy": "verified",
+                "pair_view": "image"
             })
         );
     }

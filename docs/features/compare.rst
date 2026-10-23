@@ -21,6 +21,9 @@ The view starts in 4-up when there are more than two photos, else 2-up,
 with the selected photo active. The active photo has a white outline;
 every key below applies to it.
 
+A RAW+JPEG pair is marked **RAW+JPEG** under its pane and shows the file
+:ref:`pair_view <reference-settings-pair-view>` chooses.
+
 Keys
 ----
 

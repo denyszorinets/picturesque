@@ -10,7 +10,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 use picturesque_core::hash::ContentHash;
-use picturesque_core::photo::{Photo, PhotoId};
+use picturesque_core::photo::{PairView, Photo, PhotoId};
 use serde::Deserialize;
 use ts_rs::TS;
 
@@ -142,8 +142,18 @@ impl ThumbnailService {
             .join(format!("{hex}.jpg"))
     }
 
-    /// The cached image of a photo, generated if missing.
-    pub fn image(&self, id: PhotoId, size: ImageSize) -> Result<PathBuf, ThumbnailError> {
+    /// Which file of a RAW+JPEG pair is shown, from the settings.
+    pub fn pair_view(&self) -> Result<PairView, ThumbnailError> {
+        Ok(self.settings.load_settings()?.pair_view)
+    }
+
+    /// The cached image of a photo's `view` file, generated if missing.
+    pub fn image(
+        &self,
+        id: PhotoId,
+        size: ImageSize,
+        view: PairView,
+    ) -> Result<PathBuf, ThumbnailError> {
         let photo = self
             .catalog
             .photo(id)?
@@ -153,7 +163,7 @@ impl ThumbnailService {
             .load_settings()?
             .library_root
             .ok_or(ThumbnailError::NoLibrary)?;
-        self.ensure(&root, &photo, size)
+        self.ensure(&root, &photo, size, view)
     }
 
     fn ensure(
@@ -161,8 +171,9 @@ impl ThumbnailService {
         root: &Path,
         photo: &Photo,
         size: ImageSize,
+        view: PairView,
     ) -> Result<PathBuf, ThumbnailError> {
-        let asset = photo.assets.display();
+        let asset = photo.assets.shown(view);
         let path = self.cache_path(&asset.hash, size);
         if self.fs.exists(&path) {
             return Ok(path);
@@ -261,29 +272,26 @@ impl ThumbnailService {
             .is_ok_and(|free| free < RESERVE)
     }
 
-    /// Whether the photo's grid thumbnail exists.
-    pub fn has_grid(&self, photo: &Photo) -> bool {
+    /// Whether the photo's grid thumbnail of its `view` file exists.
+    pub fn has_grid(&self, photo: &Photo, view: PairView) -> bool {
         self.fs
-            .exists(&self.cache_path(&photo.assets.display().hash, ImageSize::Grid))
+            .exists(&self.cache_path(&photo.assets.shown(view).hash, ImageSize::Grid))
     }
 
-    /// Generates missing grid images now, in parallel; returns how many
-    /// were generated. Photos that fail to decode are skipped.
+    /// Generates missing grid images of the files the settings show, in
+    /// parallel; returns how many were generated. Photos that fail to
+    /// decode are skipped.
     pub fn prefill(&self) -> usize {
-        let Ok(Some(root)) = self.settings.load_settings().map(|s| s.library_root) else {
+        let Ok(settings) = self.settings.load_settings() else {
+            return 0;
+        };
+        let (Some(root), view) = (settings.library_root, settings.pair_view) else {
             return 0;
         };
         let Ok(photos) = self.catalog.all_photos() else {
             return 0;
         };
-        let missing: Vec<&Photo> = photos
-            .iter()
-            .filter(|p| {
-                !self
-                    .fs
-                    .exists(&self.cache_path(&p.assets.display().hash, ImageSize::Grid))
-            })
-            .collect();
+        let missing: Vec<&Photo> = photos.iter().filter(|p| !self.has_grid(p, view)).collect();
         let next = std::sync::atomic::AtomicUsize::new(0);
         let done = std::sync::atomic::AtomicUsize::new(0);
         let workers = std::thread::available_parallelism()
@@ -298,7 +306,7 @@ impl ThumbnailService {
                         }
                         let i = next.fetch_add(1, Ordering::Relaxed);
                         let Some(photo) = missing.get(i) else { break };
-                        if self.ensure(&root, photo, ImageSize::Grid).is_ok() {
+                        if self.ensure(&root, photo, ImageSize::Grid, view).is_ok() {
                             done.fetch_add(1, Ordering::Relaxed);
                         }
                     }

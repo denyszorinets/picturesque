@@ -33,7 +33,7 @@ import type { Settings } from "./generated/Settings";
 import type { SettingsUpdate } from "./generated/SettingsUpdate";
 import type { TemplatePresetView } from "./generated/TemplatePresetView";
 import type { TemplatePreview } from "./generated/TemplatePreview";
-import { selectTransport, type ImageSize } from "./transport";
+import { selectTransport, type ImageSize, type PairView } from "./transport";
 
 export { ApiError } from "./error";
 export type { AiStatus } from "./generated/AiStatus";
@@ -90,7 +90,7 @@ export {
   pickFolders,
   revealInFolder,
 } from "./dialogs";
-export type { ImageSize } from "./transport";
+export type { ImageSize, PairView } from "./transport";
 
 const transport = selectTransport();
 
@@ -231,9 +231,17 @@ export function getPhoto(photoId: number): Promise<PhotoDetail> {
   return transport.call<PhotoDetail>("get_photo", { photo_id: photoId });
 }
 
-/** URL of a photo's cached image (`grid`: 512 px, `preview`: 2048 px, `full`: native size). */
-export function imageUrl(photoId: number, size: ImageSize): string {
-  return transport.imageUrl(photoId, size);
+/**
+ * URL of a photo's cached image (`grid`: 512 px, `preview`: 2048 px, `full`:
+ * native size). `view` picks the file of a RAW+JPEG pair; without it, the
+ * `pair_view` setting does.
+ */
+export function imageUrl(
+  photoId: number,
+  size: ImageSize,
+  view?: PairView,
+): string {
+  return transport.imageUrl(photoId, size, view);
 }
 
 /** A page of photos matching the filters (default: newest first, 200 per page). */

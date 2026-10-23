@@ -30,7 +30,10 @@ RAW+JPEG pairs
 Cameras set to record RAW+JPEG write two files with the same base name,
 for example ``IMG_0042.CR3`` and ``IMG_0042.JPG``. Picturesque treats them
 as **one photo**: capture metadata is read from the RAW, which usually
-records the most detail, and the JPEG is used for display. Names are
+records the most detail, and the JPEG is shown, with a **RAW** mark. The
+:ref:`pair_view <reference-settings-pair-view>` setting shows the RAW
+instead, and the loupe switches between the two with **R**
+(:ref:`features-library-raw-jpeg`). Names are
 compared without regard to case, so ``img_0042.cr3`` pairs with
 ``IMG_0042.JPG``.
 

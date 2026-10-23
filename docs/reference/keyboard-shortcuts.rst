@@ -81,7 +81,8 @@ Timeline
 Loupe
 -----
 
-← → move between photos, ↑ picks and ↓ rejects, Z zooms, I toggles the information panel, Esc
+← → move between photos, ↑ picks and ↓ rejects, Z zooms, I toggles the information panel,
+R switches between the RAW and the JPEG of a pair, Esc
 closes; the culling keys above apply to the photo shown, and with
 **Auto-advance** on every decision moves to the next photo. See
 :ref:`features-library-loupe`.

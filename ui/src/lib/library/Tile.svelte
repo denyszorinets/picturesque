@@ -1,6 +1,7 @@
 <script lang="ts">
   import Icon from "../components/Icon.svelte";
-  import { imageUrl, type PhotoSummary } from "../api";
+  import type { PhotoSummary } from "../api";
+  import { isPair, pairSetting, photoUrl, viewLabel } from "./pair-view.svelte";
 
   interface Props {
     photo: PhotoSummary;
@@ -38,6 +39,14 @@
     photo.quality === null ? null : `${Math.round(photo.quality * 100)}%`,
   );
   let failed = $state(false);
+  /** The RAW of a pair could not be shown: show its JPEG instead. */
+  let rawFailed = $state(false);
+
+  function onerror() {
+    if (isPair(photo) && pairSetting.view === "raw" && !rawFailed)
+      rawFailed = true;
+    else failed = true;
+  }
 
   /** Picks get a green ring, the app's suggestions a light-green one. */
   const ring = $derived(
@@ -80,12 +89,12 @@
       <span class="broken">Can't show {photo.file_name}</span>
     {:else}
       <img
-        src={imageUrl(photo.id, "grid")}
+        src={photoUrl(photo, "grid", rawFailed ? "image" : undefined)}
         alt={photo.file_name}
         loading="lazy"
         decoding="async"
         draggable="false"
-        onerror={() => (failed = true)}
+        {onerror}
       />
     {/if}
     <span class="badges">
@@ -100,7 +109,13 @@
       {#if photo.flag === "reject"}<span class="badge reject" title="Rejected"
           ><Icon name="x-mark" /></span
         >{/if}
-      {#if photo.has_raw}<span class="badge raw">RAW</span>{/if}
+      {#if photo.has_raw}<span
+          class="badge raw"
+          title={isPair(photo)
+            ? `RAW and ${viewLabel(photo, "image")}; showing the ${viewLabel(photo, pairSetting.view)}`
+            : "RAW"}
+          data-testid="tile-raw">RAW</span
+        >{/if}
       {#if photo.eyes_closed}<span
           class="badge eyes"
           title="Someone has closed eyes"

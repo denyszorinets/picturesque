@@ -8,6 +8,7 @@
   import { AnalysisProgress } from "./lib/library/analysis.svelte";
   import FolderSwitcher from "./lib/session/FolderSwitcher.svelte";
   import LibraryView from "./lib/library/LibraryView.svelte";
+  import { pairSetting } from "./lib/library/pair-view.svelte";
   import SettingsPanel from "./lib/settings/SettingsPanel.svelte";
   import SetupWizard from "./lib/setup/SetupWizard.svelte";
   import StatsView from "./lib/stats/StatsView.svelte";
@@ -38,6 +39,10 @@
   /** The folder menu, also opened from Finish folder. */
   let switcherOpen = $state(false);
   const inFolder = $derived(!!settings?.open_folder);
+  // The grid, loupe and compare show the file of a pair the settings choose.
+  $effect(() => {
+    if (settings) pairSetting.view = settings.pair_view;
+  });
   /** The culling tour, asked for again from Settings. */
   let replayTour = $state(false);
   const tour = $derived(

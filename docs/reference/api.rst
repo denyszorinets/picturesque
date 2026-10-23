@@ -106,7 +106,8 @@ Commands
    A ``PhotoSummary`` has ``id``, ``captured_at``, ``day``
    (``YYYY-MM-DD``, for grouping), ``camera``, ``lens``, ``city``,
    ``country``, ``flag``, ``rating``, displayed ``width``/``height``,
-   ``has_raw``, ``file_name``, ``series_id`` (the first photo of its
+   ``has_raw``, ``has_image`` (both are ``true`` for a RAW+JPEG pair),
+   ``file_name``, ``series_id`` (the first photo of its
    series, or ``null``), ``best_in_series``, ``series_size`` (0 when
    in no series) and ``quality`` (the combined score,
    :ref:`features-series-score`; ``null`` until analyzed), ``aesthetic``
@@ -376,14 +377,17 @@ directly as ``<img src>``:
    * - Where
      - URL
    * - Desktop app
-     - ``picturesque://localhost/{size}%2F{photo_id}`` (``http://picturesque.localhost/...``
+     - ``picturesque://localhost/{size}%2F{photo_id}[%2F{view}]`` (``http://picturesque.localhost/...``
        on Windows); built with ``convertFileSrc`` by ``imageUrl()`` in
        ``ui/src/lib/api``
    * - Development server
-     - ``GET /api/images/{size}/{photo_id}``
+     - ``GET /api/images/{size}/{photo_id}[/{view}]``
 
 ``size`` is ``grid`` (longest edge 512 px), ``preview`` (2048 px) or
-``full`` (native size, for 100% zoom).
+``full`` (native size, for 100% zoom). The optional ``view`` is ``image``
+or ``raw``: the file of a RAW+JPEG pair to show. Without it, the
+:ref:`pair_view <reference-settings-pair-view>` setting decides; photos
+with one file ignore it.
 Images are generated on first request and cached
 (:doc:`data-locations`). Responses carry an ``ETag``; a request with a
 matching ``If-None-Match`` gets ``304 Not Modified``. An unknown photo is

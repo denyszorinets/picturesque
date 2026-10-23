@@ -309,7 +309,7 @@ fn imports_real_files_into_a_real_library() {
 
     // Thumbnails are rendered from the library copy and cached.
     let thumb = api
-        .image_path(1, picturesque_app::thumbnails::ImageSize::Grid)
+        .image_path(1, picturesque_app::thumbnails::ImageSize::Grid, None)
         .unwrap();
     assert_eq!(image::image_dimensions(&thumb).unwrap(), (16, 12));
     let jobs = call(&api, "pipeline_jobs", Value::Null);
