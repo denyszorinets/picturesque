@@ -19,6 +19,11 @@ them for ranking and sorting. Each comes with a detailed page.
      - How good the photo looks to people, from a model trained on human
        ratings (:ref:`features-ai-aesthetic`)
      - The CLIP image model
+   * - Your taste
+     - How much a photo looks like the ones you pick rather than the ones
+       you reject, learned from your decisions (:ref:`features-ai-taste`).
+       Blended into the aesthetic score.
+     - The CLIP image model and at least 10 picks and 10 rejects
    * - Faces
      - Faces found, closed eyes and how sharp each face is
        (:ref:`features-ai-faces`)

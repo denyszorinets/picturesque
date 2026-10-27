@@ -135,6 +135,8 @@ impl fmt::Debug for AppContext {
 struct Analyzed {
     quality: Option<QualityView>,
     aesthetic: Option<AestheticView>,
+    /// How well the photo matches the user's taste, once learned.
+    taste: Option<f32>,
     faces: Option<Vec<crate::analysis::faces::FaceView>>,
     score: Option<f32>,
 }
@@ -144,6 +146,7 @@ impl Analyzed {
         Signals {
             quality: self.quality.as_ref(),
             aesthetic: self.aesthetic.as_ref(),
+            taste: self.taste,
             faces: self.faces.as_deref(),
         }
     }
@@ -308,18 +311,32 @@ impl Api {
         };
         let quality = current(TechnicalAnalyzer::ID).and_then(QualityView::from_result);
         let aesthetic = current(ClipAnalyzer::ID).and_then(AestheticView::from_result);
+        let taste = current(ClipAnalyzer::ID)
+            .and_then(ClipAnalyzer::embedding)
+            .and_then(|e| self.series.taste().model()?.score(&e));
+        let personal_weight = self
+            .settings
+            .get()
+            .map_err(settings_error)?
+            .taste
+            .personal_weight;
         let faces = current(FaceAnalyzer::ID).and_then(crate::analysis::faces::faces);
         let score = picturesque_core::ranking::photo_quality(&Candidate {
             id,
             scores: current(TechnicalAnalyzer::ID)
                 .and_then(|r| serde_json::from_value(r.clone()).ok()),
             rejected: false,
-            aesthetic: aesthetic.map(|a| a.score),
+            aesthetic: picturesque_core::taste::blend(
+                aesthetic.map(|a| a.score),
+                taste,
+                personal_weight as f32,
+            ),
             face: faces.as_deref().and_then(crate::analysis::faces::signal),
         });
         Ok(Analyzed {
             quality,
             aesthetic,
+            taste,
             faces,
             score,
         })
@@ -506,7 +523,8 @@ impl Api {
                 let update: SettingsUpdate = parse_args(command, args)?;
                 let series_changed = update.series.is_some()
                     || update.ranking.is_some()
-                    || update.auto_pick.is_some();
+                    || update.auto_pick.is_some()
+                    || update.taste.is_some();
                 let settings = self.settings.update(update).map_err(settings_error)?;
                 if series_changed {
                     self.series.recompute().map_err(catalog_error)?;
@@ -553,6 +571,7 @@ impl Api {
                 let analyzed = self.analyzed(id)?;
                 detail.quality = analyzed.quality;
                 detail.aesthetic = analyzed.aesthetic;
+                detail.taste = analyzed.taste;
                 detail.faces = analyzed.faces.clone();
                 detail.score = analyzed.score;
                 let series = self.series.view(id).map_err(catalog_error)?;
@@ -763,6 +782,10 @@ impl Api {
             "remove_model" => {
                 let ModelArgs { id } = parse_args(command, args)?;
                 respond(self.models.remove(&id).map_err(model_error)?)
+            }
+            "taste_status" => {
+                no_args(command, &args)?;
+                respond(self.series.taste().status())
             }
             "ai_status" => {
                 no_args(command, &args)?;
@@ -1012,6 +1035,7 @@ mod tests {
                 "ai": { "provider": "auto" },
                 "import": { "rescan_minutes": 5 },
                 "auto_pick": { "enabled": true, "min_quality": 0.5 },
+                "taste": { "personal_weight": 0.5 },
                 "onboarding": { "tour_done": false },
                 "open_folder": null,
                 "recent_folders": [],
@@ -1048,6 +1072,15 @@ mod tests {
 
         assert_eq!(err.code, ApiErrorCode::InvalidArguments);
         assert!(err.message.contains("absolute"));
+    }
+
+    #[test]
+    fn taste_status_starts_with_nothing_learned() {
+        let status = api().call("taste_status", Value::Null).unwrap();
+        assert_eq!(
+            status,
+            json!({ "picks": 0, "rejects": 0, "needed": 10, "learned": false, "agreement": null })
+        );
     }
 
     #[test]

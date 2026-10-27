@@ -857,6 +857,7 @@ fn rankings_best_photos_and_choices_round_trip() {
     )
     .unwrap();
     assert_eq!(c.rejected_photos().unwrap(), [p3]);
+    assert_eq!(c.picked_photos().unwrap(), [p1]);
 }
 
 #[test]

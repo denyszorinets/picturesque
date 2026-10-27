@@ -1,4 +1,5 @@
 import type { AiStatus } from "./generated/AiStatus";
+import type { TasteStatus } from "./generated/TasteStatus";
 import type { AnalysisStatus } from "./generated/AnalysisStatus";
 import type { SidecarStatus } from "./generated/SidecarStatus";
 import type { FinishResult } from "./generated/FinishResult";
@@ -37,6 +38,8 @@ import { selectTransport, type ImageSize, type PairView } from "./transport";
 
 export { ApiError } from "./error";
 export type { AiStatus } from "./generated/AiStatus";
+export type { TasteStatus } from "./generated/TasteStatus";
+export type { TasteSettings } from "./generated/TasteSettings";
 export type { ReanalyzeResult } from "./generated/ReanalyzeResult";
 export type { GearStats } from "./generated/GearStats";
 export type { KeeperCounts } from "./generated/KeeperCounts";
@@ -332,6 +335,11 @@ export function chooseBest(
 /** Which hardware local AI models run on (probes it when the choice changed). */
 export function aiStatus(): Promise<AiStatus> {
   return transport.call<AiStatus>("ai_status");
+}
+
+/** What the personal taste model has learned from picks and rejects. */
+export function tasteStatus(): Promise<TasteStatus> {
+  return transport.call<TasteStatus>("taste_status");
 }
 
 /** The AI models the app offers, with licenses and download state. */

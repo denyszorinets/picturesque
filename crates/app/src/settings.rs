@@ -44,6 +44,8 @@ pub struct Settings {
     pub import: ImportSettings,
     /// Which photos the app marks as keepers.
     pub auto_pick: AutoPickSettings,
+    /// How much the user's own taste counts in the aesthetic score.
+    pub taste: TasteSettings,
     /// What the user has already been shown.
     pub onboarding: OnboardingSettings,
     /// The folder being culled in place, reopened at startup; `None` while
@@ -135,6 +137,25 @@ impl Default for AutoPickSettings {
         Self {
             enabled: true,
             min_quality: 0.5,
+        }
+    }
+}
+
+/// The personal aesthetic model (`docs/features/ai.rst`), learned from
+/// the user's picks and rejects.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, TS)]
+#[serde(default)]
+#[ts(export)]
+pub struct TasteSettings {
+    /// How much the personal score counts in the aesthetic score once
+    /// learned, 0–1: 0 uses only the general score, 1 only the personal one.
+    pub personal_weight: f64,
+}
+
+impl Default for TasteSettings {
+    fn default() -> Self {
+        Self {
+            personal_weight: 0.5,
         }
     }
 }
@@ -254,6 +275,7 @@ impl Default for Settings {
             ai: AiSettings::default(),
             import: ImportSettings::default(),
             auto_pick: AutoPickSettings::default(),
+            taste: TasteSettings::default(),
             onboarding: OnboardingSettings::default(),
             open_folder: None,
             recent_folders: Vec::new(),
@@ -285,6 +307,8 @@ pub struct SettingsUpdate {
     pub import: Option<ImportSettings>,
     #[ts(optional)]
     pub auto_pick: Option<AutoPickSettings>,
+    #[ts(optional)]
+    pub taste: Option<TasteSettings>,
     #[ts(optional)]
     pub onboarding: Option<OnboardingSettings>,
     #[ts(optional)]
@@ -430,6 +454,15 @@ impl SettingsService {
                 )));
             }
             settings.auto_pick = auto_pick;
+        }
+        if let Some(taste) = update.taste {
+            if !(0.0..=1.0).contains(&taste.personal_weight) {
+                return Err(SettingsError::Invalid(format!(
+                    "Your taste's share of the aesthetic score must be 0–100%, got {}%.",
+                    (taste.personal_weight * 100.0).round()
+                )));
+            }
+            settings.taste = taste;
         }
         if let Some(onboarding) = update.onboarding {
             settings.onboarding = onboarding;
@@ -678,6 +711,24 @@ pub(crate) mod tests {
 
         assert!(
             matches!(&err, SettingsError::Invalid(m) if m.contains(".{ext}")),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn the_personal_weight_is_a_share() {
+        let (service, _) = service(&[]);
+        let update = |personal_weight| {
+            service.update(SettingsUpdate {
+                taste: Some(TasteSettings { personal_weight }),
+                ..Default::default()
+            })
+        };
+
+        assert_eq!(update(1.0).unwrap().taste.personal_weight, 1.0);
+        let err = update(1.5).unwrap_err();
+        assert!(
+            matches!(&err, SettingsError::Invalid(m) if m.contains("150%")),
             "{err}"
         );
     }

@@ -9,6 +9,7 @@ import type { RankingSettings } from "./RankingSettings";
 import type { RecentFolder } from "./RecentFolder";
 import type { SeriesSettings } from "./SeriesSettings";
 import type { SidecarNaming } from "./SidecarNaming";
+import type { TasteSettings } from "./TasteSettings";
 
 /**
  * User settings. Missing fields in stored settings take their defaults,
@@ -47,6 +48,10 @@ import: ImportSettings,
  * Which photos the app marks as keepers.
  */
 auto_pick: AutoPickSettings, 
+/**
+ * How much the user's own taste counts in the aesthetic score.
+ */
+taste: TasteSettings, 
 /**
  * What the user has already been shown.
  */

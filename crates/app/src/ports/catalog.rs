@@ -234,6 +234,9 @@ pub trait PhotoCatalog: Send + Sync {
     /// Photos flagged as rejected.
     fn rejected_photos(&self) -> Result<Vec<PhotoId>, CatalogError>;
 
+    /// Photos flagged as picks (by the user, not auto-pick).
+    fn picked_photos(&self) -> Result<Vec<PhotoId>, CatalogError>;
+
     /// Changes the paths of a photo's assets (`old` → `new`, relative to
     /// the library), all or none.
     fn move_assets(&self, id: PhotoId, moves: &[(PathBuf, PathBuf)]) -> Result<(), CatalogError>;

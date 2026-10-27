@@ -427,6 +427,15 @@
               {percent(detail.aesthetic.score)}
             </dd>
           {/if}
+          {#if detail.taste !== null}
+            <dt>Your taste</dt>
+            <dd
+              data-testid="loupe-taste"
+              title="How much it looks like the photos you pick rather than the ones you reject"
+            >
+              {percent(detail.taste)}
+            </dd>
+          {/if}
           {#if detail.faces && detail.faces.length > 0}
             {@const closed = detail.faces.filter((f) => f.eyes_closed).length}
             <dt>Faces</dt>

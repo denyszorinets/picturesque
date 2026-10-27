@@ -12,6 +12,7 @@ const SETTINGS: Settings = {
   ai: { provider: "auto" },
   import: { rescan_minutes: 5 },
   auto_pick: { enabled: true, min_quality: 0.5 },
+  taste: { personal_weight: 0.5 },
   onboarding: { tour_done: false },
   open_folder: null,
   recent_folders: [],

@@ -597,3 +597,61 @@ fn keepers_are_the_good_best_and_single_photos() {
         .unwrap_err();
     assert_eq!(err.code, ApiErrorCode::InvalidArguments);
 }
+
+#[test]
+fn picks_and_rejects_teach_the_aesthetic_score_your_taste() {
+    // 40 decided photos a minute apart, and two undecided ones: the user
+    // picks photos leaning one way and rejects those leaning the other,
+    // while the general aesthetic score rates them all the same.
+    let seconds: Vec<i64> = (0..42).map(|i| i * 60).collect();
+    let (world, api, ids) = setup(&seconds);
+    let lean = |i: usize| if i.is_multiple_of(2) { 1.0 } else { -1.0 };
+    for (i, id) in ids.iter().enumerate() {
+        let noise = (i * 7 % 11) as f32 / 10.0;
+        set_clip(&world, *id, &[lean(i), noise, 1.0 - noise, 0.3], 5.5);
+        set_overall(&world, *id, 0.5);
+    }
+    let changes: Vec<Value> = ids[..40]
+        .iter()
+        .enumerate()
+        .map(|(i, id)| {
+            json!({ "photo_id": id, "flag": if lean(i) > 0.0 { "pick" } else { "reject" } })
+        })
+        .collect();
+    let status = api.call("taste_status", Value::Null).unwrap();
+    assert_eq!(status["learned"], json!(false));
+    api.call("set_decisions", json!({ "changes": changes }))
+        .unwrap();
+    api.recompute_series().unwrap();
+
+    let status = api.call("taste_status", Value::Null).unwrap();
+    assert_eq!(
+        (&status["picks"], &status["rejects"], &status["learned"]),
+        (&json!(20), &json!(20), &json!(true))
+    );
+    let (liked, disliked) = (ids[40], ids[41]);
+    let aesthetic = |id: i64| {
+        world.catalog.scores.lock().unwrap()[&PhotoId(id)]
+            .aesthetic
+            .unwrap()
+    };
+    // General 0.5 blended half and half with the personal score.
+    assert!(aesthetic(liked) > 0.6, "{}", aesthetic(liked));
+    assert!(aesthetic(disliked) < 0.4, "{}", aesthetic(disliked));
+    let detail = api.call("get_photo", json!({ "photo_id": liked })).unwrap();
+    assert!(detail["taste"].as_f64().unwrap() > 0.7);
+    assert!(detail["reasons"].as_array().unwrap().iter().any(|r| {
+        r["text"]
+            .as_str()
+            .unwrap()
+            .starts_with("Like the photos you pick")
+    }));
+
+    // With no weight on the personal score, only the general one counts.
+    api.call(
+        "update_settings",
+        json!({ "taste": { "personal_weight": 0.0 } }),
+    )
+    .unwrap();
+    assert!((aesthetic(liked) - 0.5).abs() < 1e-6);
+}

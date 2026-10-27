@@ -125,7 +125,9 @@ Commands
    ``highlights_clipped``, ``shadows_clipped``; ``null`` until analyzed,
    see :doc:`quality-scores`) and ``aesthetic`` (``score`` 0–1 and the
    predictor's ``rating``, about 1–10; ``null`` until the CLIP model
-   analyzed the photo, see :ref:`features-ai-aesthetic`) and ``faces``
+   analyzed the photo, see :ref:`features-ai-aesthetic`), ``taste`` (how
+   well the photo matches the user's picks, 0–1; ``null`` until enough
+   picks and rejects taught it, see :ref:`features-ai-taste`) and ``faces``
    (largest first; each with ``x``, ``y``, ``width``, ``height`` as
    fractions of the photo, detector ``score``, ``eyes_closed`` —
    ``true``, ``false`` or ``null`` when undecided — ``eye_openness`` and
@@ -182,6 +184,21 @@ Commands
    "waiting_for_models": ["faces and closed eyes"] }``: how many of the
    photos exist (unknown ids are ignored), and what is not analyzed until
    its model is downloaded (as in ``analysis_status``).
+
+``taste_status``
+   No arguments. What the personal taste model learned
+   (:ref:`features-ai-taste`):
+
+   .. code-block:: json
+
+      { "picks": 42, "rejects": 118, "needed": 10, "learned": true,
+        "agreement": 0.87 }
+
+   ``picks`` and ``rejects`` count decided photos with a CLIP embedding;
+   ``needed`` of each are required before anything is learned.
+   ``agreement`` is the cross-validated chance that the model scores one
+   of the user's picks above one of their rejects (``null`` until
+   learned).
 
 ``ai_status``
    No arguments. Where local AI models run (:doc:`/features/ai`):

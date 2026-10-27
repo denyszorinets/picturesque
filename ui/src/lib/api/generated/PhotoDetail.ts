@@ -46,6 +46,11 @@ quality: QualityView | null,
  */
 aesthetic: AestheticView | null, 
 /**
+ * How well the photo matches the user's taste, 0–1, once enough picks
+ * and rejects taught it (`taste_status`).
+ */
+taste: number | null, 
+/**
  * Faces found, largest first; `null` until the face models analyzed
  * the photo.
  */

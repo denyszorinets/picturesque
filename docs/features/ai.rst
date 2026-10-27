@@ -145,6 +145,50 @@ of the time, against 66% for the technical score
 (:repo:`spikes/aesthetic/results.md`). It judges looks only: it does not
 know which shot of a series you prefer or which moment matters to you.
 
+.. _features-ai-taste:
+
+Your taste
+----------
+
+The aesthetic score knows what people in general like. Picturesque also
+learns what **you** like, from your own decisions: once at least 10
+analyzed photos are picks and 10 are rejects, it learns a **personal
+taste model** and gives every photo a **Your taste** score, how much it
+looks like the photos you pick rather than the ones you reject. Nothing is
+downloaded and nothing leaves your computer: the model is a small linear
+model on the CLIP embeddings background analysis already computed.
+
+- **It keeps learning.** Whenever picks or rejects change, the model is
+  retrained in the background with the series, in well under a second for
+  a few hundred decisions and about a second at most (it uses at most
+  1,000 picks and 1,000 rejects). Only flags count: stars, auto-picks and
+  best-photo choices do not.
+- **Blended into the aesthetic score.** The aesthetic score used for
+  ranking, sorting, auto-pick and the **Aesthetic** filter is the general
+  score blended with yours, half and half by default. The
+  ``taste.personal_weight`` setting (:ref:`reference-settings-taste`)
+  changes the share, from 0 (general score only) to 1 (your taste only).
+  The loupe shows the general **Aesthetic** score and **Your taste**
+  separately.
+- **Why this score** says *Like the photos you pick* above 70 % and *Like
+  the photos you reject* below 30 %.
+- ``taste_status`` (:doc:`/reference/api`) reports how many decisions it
+  learned from and how well it **agrees** with you: the chance that it
+  scores one of your picks above one of your rejects, measured on
+  decisions it did not learn from (cross-validation).
+
+It learns what distinguishes your picks from your rejects, so it is most
+useful when you cull consistently. Rejecting the weaker frames of a burst
+also teaches it; picking only in one genre and rejecting only in another
+teaches it to prefer that genre.
+
+On the Commons sample of the general score (featured as "picks", ordinary
+as "rejects"), 40 picks and 40 rejects were enough to rank held-out photos
+better than the general score (AUC 0.89 against 0.79), and blending both
+reached 0.91. With the opposite taste, which the general score gets
+backwards (0.21), it learned that just as well
+(:repo:`spikes/taste/results.md`).
+
 .. _features-ai-search:
 
 Text search
