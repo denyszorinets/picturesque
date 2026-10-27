@@ -165,17 +165,18 @@ model on the CLIP embeddings background analysis already computed.
   best-photo choices do not.
 - **Blended into the aesthetic score.** The aesthetic score used for
   ranking, sorting, auto-pick and the **Aesthetic** filter is the general
-  score blended with yours, half and half by default. The
-  ``taste.personal_weight`` setting (:ref:`reference-settings-taste`)
-  changes the share, from 0 (general score only) to 1 (your taste only).
+  score blended with yours, half and half by default. **Settings → Your
+  taste** (:ref:`reference-settings-taste`) changes the share, from 0 %
+  (general score only) to 100 % (your taste only).
   The loupe shows the general **Aesthetic** score and **Your taste**
   separately.
 - **Why this score** says *Like the photos you pick* above 70 % and *Like
   the photos you reject* below 30 %.
-- ``taste_status`` (:doc:`/reference/api`) reports how many decisions it
-  learned from and how well it **agrees** with you: the chance that it
-  scores one of your picks above one of your rejects, measured on
-  decisions it did not learn from (cross-validation).
+- **Settings → Your taste** says how many decisions it learned from and
+  how well it **agrees** with you: how often it scores one of your picks
+  above one of your rejects, measured on decisions it did not learn from
+  (cross-validation); before that, how many more it needs. The API has it
+  as ``taste_status`` (:doc:`/reference/api`).
 
 It learns what distinguishes your picks from your rejects, so it is most
 useful when you cull consistently. Rejecting the weaker frames of a burst
@@ -204,8 +205,10 @@ install yourself:
 
 1. Install `Ollama <https://ollama.com>`_ and start it.
 2. Download a model, for example ``ollama pull qwen3-vl:4b``.
-3. Turn critiques on with the ``critic`` setting
-   (:ref:`reference-settings-critic`).
+3. In **Settings → AI critic**, turn on *Critique photos with a local
+   vision-language model* and choose the model
+   (:ref:`reference-settings-critic`). Settings say whether the server
+   answers and has the model, and what to do if not.
 
 Then the loupe's info panel has a **Critique this photo** button. The
 critique is kept with the photo and shown whenever you come back to it;
@@ -242,7 +245,11 @@ only critiques written with them.
   machine; ``critic_status`` reports it (``local``).
 - **The rubric** tells the model what to judge: by default composition,
   light, subject and moment, colour and tone, and technique. Write your own
-  to focus on what you are learning.
+  in Settings to focus on what you are learning; *Use the default rubric*
+  goes back.
+- Settings suggest checked models with their size and license; click one
+  to use it. Any model the server has can be typed in.
+- Settings warn when the server address is not on this computer.
 - **Speed.** One critique at a time. On a laptop CPU a 4B model takes tens
   of seconds; the first critique also waits for the model to load. A GPU
   makes it a few seconds.

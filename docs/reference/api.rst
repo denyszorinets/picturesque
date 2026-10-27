@@ -211,7 +211,8 @@ Commands
         "reachable": true, "models": ["qwen3-vl:4b"], "model": "qwen3-vl:4b",
         "model_installed": true, "problem": null,
         "suggested": [{ "name": "qwen3-vl:2b", "size": 1900000000,
-                        "license": "Apache-2.0", "license_url": "…", "note": "…" }] }
+                        "license": "Apache-2.0", "license_url": "…", "note": "…" }],
+        "default_rubric": "- Composition: …" }
 
    ``local`` is ``false`` when the server is on another computer.
    ``problem`` says what to do when the server is not running or lacks the

@@ -2,19 +2,24 @@
   import {
     aiStatus,
     ApiError,
+    criticStatus,
     getSettings,
     previewTemplate,
     reanalyzePhotos,
+    tasteStatus,
     templatePresets,
     updateSettings,
     type AiStatus,
+    type CriticStatus,
     type Provider,
     type ProviderChoice,
     type Settings,
     type SettingsUpdate,
+    type TasteStatus,
     type TemplatePresetView,
     type TemplatePreview,
   } from "../api";
+  import CriticFields from "../ai/CriticFields.svelte";
   import ModelList from "../ai/ModelList.svelte";
   import Reanalyze from "../analysis/Reanalyze.svelte";
   import PathInput from "../components/PathInput.svelte";
@@ -69,6 +74,11 @@
     noise: "Low noise",
     aesthetic: "Aesthetic",
   } as const;
+  /** Share of the personal taste score in the aesthetic score, in percent. */
+  let tastePercent = $state(50);
+  let taste = $state<TasteStatus | null>(null);
+  let critic = $state({ enabled: false, server: "", model: "", rubric: "" });
+  let criticState = $state<CriticStatus | null>(null);
   let provider = $state<ProviderChoice>("auto");
   let ai = $state<AiStatus | null>(null);
   const PROVIDER_LABELS: Record<Provider, string> = {
@@ -103,9 +113,22 @@
       (autoPick !== saved.auto_pick.enabled ||
         autoPickPercent !== Math.round(saved.auto_pick.min_quality * 100)),
   );
+  const tasteChanged = $derived(
+    saved !== null &&
+      tastePercent !== Math.round(saved.taste.personal_weight * 100),
+  );
+  const criticChanged = $derived(
+    saved !== null &&
+      (critic.enabled !== saved.critic.enabled ||
+        critic.server.trim() !== saved.critic.server ||
+        critic.model.trim() !== saved.critic.model ||
+        critic.rubric.trim() !== (saved.critic.rubric ?? "")),
+  );
   const dirty = $derived(
     saved !== null &&
-      (libraryRoot.trim() !== (saved.library_root ?? "") ||
+      (tasteChanged ||
+        criticChanged ||
+        libraryRoot.trim() !== (saved.library_root ?? "") ||
         template.trim() !== saved.path_template ||
         sidecarNaming !== saved.sidecar_naming ||
         pickLabel !== saved.labels.pick ||
@@ -127,6 +150,20 @@
       })
       .catch((e: unknown) => (error = ApiError.from(e).message));
   });
+
+  function loadTaste() {
+    tasteStatus()
+      .then((status) => (taste = status))
+      .catch(() => {});
+  }
+
+  /** Asks the critic's server about the saved settings. */
+  function loadCritic() {
+    criticState = null;
+    criticStatus()
+      .then((status) => (criticState = status))
+      .catch((e: unknown) => (error = ApiError.from(e).message));
+  }
 
   /** Probes the provider; slow the first time (it loads a test model). */
   function loadAi() {
@@ -164,7 +201,16 @@
     autoPickPercent = Math.round(settings.auto_pick.min_quality * 100);
     weights = { ...settings.ranking };
     provider = settings.ai.provider;
+    tastePercent = Math.round(settings.taste.personal_weight * 100);
+    critic = {
+      enabled: settings.critic.enabled,
+      server: settings.critic.server,
+      model: settings.critic.model,
+      rubric: settings.critic.rubric ?? "",
+    };
     loadAi();
+    loadTaste();
+    loadCritic();
     onchange?.(settings);
   }
 
@@ -184,6 +230,14 @@
         update.series = { max_gap_seconds: maxGap, max_distance: maxDistance };
       if (rankingChanged) update.ranking = { ...weights };
       if (provider !== saved.ai.provider) update.ai = { provider };
+      if (tasteChanged) update.taste = { personal_weight: tastePercent / 100 };
+      if (criticChanged)
+        update.critic = {
+          enabled: critic.enabled,
+          server: critic.server.trim(),
+          model: critic.model.trim(),
+          rubric: critic.rubric.trim() || null,
+        };
       if (autoPickChanged)
         update.auto_pick = {
           enabled: autoPick,
@@ -519,6 +573,53 @@
       linked.
     </p>
     <ModelList />
+  </div>
+
+  <div class="field">
+    <label class="inline">
+      <span class="label">Your taste</span>
+      <input
+        type="number"
+        min="0"
+        max="100"
+        step="10"
+        bind:value={tastePercent}
+        data-testid="taste-weight"
+      />
+      % of the aesthetic score
+    </label>
+    <p class="hint muted">
+      Picturesque learns what you like from your picks and rejects, and blends
+      it with the general aesthetic score: 0% uses only the general score, 100%
+      only yours.
+    </p>
+    {#if taste}
+      <p class="hint muted" data-testid="taste-status">
+        {#if taste.learned && taste.agreement !== null}
+          Learned from {taste.picks} picks and {taste.rejects} rejects; it scores
+          your picks above your rejects {Math.round(taste.agreement * 100)}% of
+          the time.
+        {:else}
+          Pick and reject at least {taste.needed} analyzed photos each to teach it
+          (now {taste.picks}
+          {taste.picks === 1 ? "pick" : "picks"} and {taste.rejects}
+          {taste.rejects === 1 ? "reject" : "rejects"}).
+        {/if}
+      </p>
+    {/if}
+  </div>
+
+  <div class="field">
+    <span class="label">AI critic</span>
+    <CriticFields
+      bind:enabled={critic.enabled}
+      bind:server={critic.server}
+      bind:model={critic.model}
+      bind:rubric={critic.rubric}
+      status={criticState}
+      oncheck={loadCritic}
+      unsaved={criticChanged}
+    />
   </div>
 
   <div class="actions">

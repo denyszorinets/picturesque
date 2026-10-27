@@ -15,6 +15,7 @@ const STATUS: CriticStatus = {
   model_installed: true,
   problem: null,
   suggested: [],
+  default_rubric: "- Composition",
 };
 
 const CRITIQUE: CritiqueView = {
