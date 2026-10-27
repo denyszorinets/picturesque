@@ -44,11 +44,31 @@ confirms ADR-0016's choice to show the rating, not rank by it.
 - Linking `libvulkan.so.1` directly would stop the app from starting
   without a Vulkan loader, the problem ADR-0015 solved for ONNX Runtime.
   The crate's `dynamic-backends` feature loads GPU backends (and the best
-  CPU variant) at run time instead; the integration must use it, and the
-  `openmp` default feature should be off to avoid shipping `libgomp`.
+  CPU variant) at run time instead (checked below); the integration must
+  use it, and the `openmp` default feature should be off to avoid
+  shipping `libgomp`.
 - Not checked here: Windows and macOS builds (Metal), Intel macOS, and
   coexistence with ONNX Runtime's WebGPU provider in one process. The
   implementation task builds all three platforms in CI first.
+
+## Dynamic backends
+
+Built with `default-features = false` and `common`, `mtmd`,
+`dynamic-backends` and `vulkan` (no OpenMP):
+
+- The executable links only llama.cpp's own shared libraries
+  (`libllama`, `libggml`, `libggml-base`, `libmtmd`, `libllama-common`,
+  12 MB) and `libstdc++`; neither `libvulkan` nor `libgomp`.
+- Backends are separate libraries loaded with `load_backends_from_path`:
+  `libggml-vulkan.so` (44 MB) and 14 CPU variants from SSE4.2 to
+  Sapphire Rapids (21 MB in all); the best one for the processor is
+  chosen at run time (`libggml-cpu-zen4.so` here).
+- With the Vulkan backend present: 10.0 s per critique on the 780M.
+  Without it (as on a machine without a Vulkan loader): the app starts
+  and runs on the CPU in 20.3 s.
+- Ships as 77 MB of libraries next to the executable, like
+  `libonnxruntime.so` (ADR-0015); the CPU variants can be trimmed.
+- Clean build: 3 m 24 s on 16 cores (every CPU variant is compiled).
 
 ## Pitfalls found
 
