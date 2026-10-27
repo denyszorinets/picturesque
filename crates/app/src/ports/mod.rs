@@ -2,6 +2,7 @@
 //! live in `picturesque-infra` (ADR-0003).
 
 pub mod catalog;
+pub mod critic;
 pub mod events;
 pub mod fs;
 pub mod geocoder;

@@ -9,6 +9,7 @@ pub mod ai;
 pub mod analysis;
 pub mod api;
 pub mod clear;
+pub mod critic;
 pub mod embeddings;
 pub mod explain;
 pub mod export;

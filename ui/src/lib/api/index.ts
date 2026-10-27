@@ -1,5 +1,7 @@
 import type { AiStatus } from "./generated/AiStatus";
 import type { TasteStatus } from "./generated/TasteStatus";
+import type { CriticStatus } from "./generated/CriticStatus";
+import type { CritiqueView } from "./generated/CritiqueView";
 import type { AnalysisStatus } from "./generated/AnalysisStatus";
 import type { SidecarStatus } from "./generated/SidecarStatus";
 import type { FinishResult } from "./generated/FinishResult";
@@ -40,6 +42,10 @@ export { ApiError } from "./error";
 export type { AiStatus } from "./generated/AiStatus";
 export type { TasteStatus } from "./generated/TasteStatus";
 export type { TasteSettings } from "./generated/TasteSettings";
+export type { CriticStatus } from "./generated/CriticStatus";
+export type { CritiqueView } from "./generated/CritiqueView";
+export type { CriticSettings } from "./generated/CriticSettings";
+export type { SuggestedModel } from "./generated/SuggestedModel";
 export type { ReanalyzeResult } from "./generated/ReanalyzeResult";
 export type { GearStats } from "./generated/GearStats";
 export type { KeeperCounts } from "./generated/KeeperCounts";
@@ -340,6 +346,29 @@ export function aiStatus(): Promise<AiStatus> {
 /** What the personal taste model has learned from picks and rejects. */
 export function tasteStatus(): Promise<TasteStatus> {
   return transport.call<TasteStatus>("taste_status");
+}
+
+/** Whether photo critiques can run (asks the model server when on). */
+export function criticStatus(): Promise<CriticStatus> {
+  return transport.call<CriticStatus>("critic_status");
+}
+
+/** The stored critique of a photo by the current model and rubric. */
+export function getCritique(photoId: number): Promise<CritiqueView | null> {
+  return transport.call<CritiqueView | null>("get_critique", {
+    photo_id: photoId,
+  });
+}
+
+/** Asks the model to critique a photo (or returns the stored critique). */
+export function critiquePhoto(
+  photoId: number,
+  refresh = false,
+): Promise<CritiqueView> {
+  return transport.call<CritiqueView>("critique_photo", {
+    photo_id: photoId,
+    refresh,
+  });
 }
 
 /** The AI models the app offers, with licenses and download state. */

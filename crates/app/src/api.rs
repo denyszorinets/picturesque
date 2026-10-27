@@ -8,8 +8,8 @@ use std::fmt;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use serde::Serialize;
 use serde::de::DeserializeOwned;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use ts_rs::TS;
 
@@ -123,6 +123,8 @@ pub struct AppContext {
     pub pipeline_store: Arc<dyn PipelineStore>,
     /// Change notifications for watched import folders.
     pub watcher: Arc<dyn crate::ports::watcher::FolderWatcher>,
+    /// The vision-language model server for critiques (ADR-0016).
+    pub critic: Arc<dyn crate::ports::critic::CriticServer>,
 }
 
 impl fmt::Debug for AppContext {
@@ -164,6 +166,7 @@ pub struct Api {
     analysis: Arc<AnalysisService>,
     series: Arc<SeriesService>,
     ai: AiService,
+    critic: crate::critic::CritiqueService,
     models: Arc<ModelService>,
     embeddings: Arc<EmbeddingIndex>,
     search: TextSearch,
@@ -289,6 +292,12 @@ impl Api {
             search,
             rejects,
             ai: AiService::new(ctx.inference, Arc::clone(&ctx.settings_store)),
+            critic: crate::critic::CritiqueService::new(
+                Arc::clone(&catalog),
+                Arc::clone(&ctx.settings_store),
+                Arc::clone(&thumbnails),
+                ctx.critic,
+            ),
             settings: SettingsService::new(ctx.settings_store, ctx.fs, Arc::clone(&catalog)),
             thumbnails,
             catalog,
@@ -787,6 +796,26 @@ impl Api {
                 no_args(command, &args)?;
                 respond(self.series.taste().status())
             }
+            "critic_status" => {
+                no_args(command, &args)?;
+                respond(self.critic.status().map_err(catalog_error)?)
+            }
+            "get_critique" => {
+                let PhotoArgs { photo_id } = parse_args(command, args)?;
+                respond(
+                    self.critic
+                        .cached(PhotoId(photo_id))
+                        .map_err(critique_error)?,
+                )
+            }
+            "critique_photo" => {
+                let CritiqueArgs { photo_id, refresh } = parse_args(command, args)?;
+                respond(
+                    self.critic
+                        .critique(PhotoId(photo_id), refresh)
+                        .map_err(critique_error)?,
+                )
+            }
             "ai_status" => {
                 no_args(command, &args)?;
                 respond(self.ai.status().map_err(catalog_error)?)
@@ -931,6 +960,29 @@ fn clear_error(e: crate::clear::ClearError) -> ApiError {
     }
 }
 
+fn critique_error(e: crate::critic::CritiqueError) -> ApiError {
+    use crate::critic::CritiqueError;
+    let code = match e {
+        CritiqueError::Disabled => ApiErrorCode::InvalidArguments,
+        CritiqueError::NotFound(_) => ApiErrorCode::NotFound,
+        _ => ApiErrorCode::Internal,
+    };
+    ApiError::new(code, e.to_string())
+}
+
+/// Arguments of `critique_photo`.
+#[derive(Debug, Clone, Copy, Deserialize, TS)]
+#[serde(deny_unknown_fields)]
+#[ts(export)]
+pub struct CritiqueArgs {
+    #[ts(type = "number")]
+    pub photo_id: i64,
+    /// Ask the model again even if a critique is stored.
+    #[serde(default)]
+    #[ts(as = "Option<bool>", optional)]
+    pub refresh: bool,
+}
+
 fn settings_error(e: SettingsError) -> ApiError {
     match e {
         SettingsError::Invalid(msg) => ApiError::new(ApiErrorCode::InvalidArguments, msg),
@@ -1036,6 +1088,12 @@ mod tests {
                 "import": { "rescan_minutes": 5 },
                 "auto_pick": { "enabled": true, "min_quality": 0.5 },
                 "taste": { "personal_weight": 0.5 },
+                "critic": {
+                    "enabled": false,
+                    "server": "http://127.0.0.1:11434/v1",
+                    "model": "qwen3-vl:4b",
+                    "rubric": null
+                },
                 "onboarding": { "tour_done": false },
                 "open_folder": null,
                 "recent_folders": [],

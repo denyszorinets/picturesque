@@ -189,6 +189,67 @@ reached 0.91. With the opposite taste, which the general score gets
 backwards (0.21), it learned that just as well
 (:repo:`spikes/taste/results.md`).
 
+.. _features-ai-critique:
+
+Critiques
+---------
+
+A score says how good a photo is; a **critique** says why. Picturesque can
+ask a vision-language model running on your computer for one: a rating
+from 1 to 10, a one-sentence summary, and what works and what does not
+(:doc:`ADR-0016 </architecture/decisions/0016-local-vision-language-critic>`).
+
+Critiques are **off by default** and need a model server, which you
+install yourself:
+
+1. Install `Ollama <https://ollama.com>`_ and start it.
+2. Download a model, for example ``ollama pull qwen3-vl:4b``.
+3. Turn critiques on with the ``critic`` setting
+   (:ref:`reference-settings-critic`).
+
+Then the loupe's info panel has a **Critique this photo** button. The
+critique is kept with the photo and shown whenever you come back to it;
+**Ask again** asks for a new one. Choosing another model or rubric shows
+only critiques written with them.
+
+.. list-table:: Suggested models (all Apache-2.0)
+   :header-rows: 1
+   :widths: 25 15 60
+
+   * - Model
+     - Download
+     - Notes
+   * - ``qwen3-vl:2b``
+     - 1.9 GB
+     - Fastest; fine on a laptop CPU, shallower critiques.
+   * - ``qwen3-vl:4b`` (default)
+     - 3.3 GB
+     - Good critiques, about 8 GB of memory.
+   * - ``qwen3-vl:8b``
+     - 6.2 GB
+     - Best critiques; wants a GPU or 16 GB of memory.
+
+- **Any OpenAI-compatible server works**: Ollama (default address
+  ``http://127.0.0.1:11434/v1``), llama.cpp's ``llama-server`` (for example
+  ``http://127.0.0.1:8080/v1``) or LM Studio. Any vision model the server
+  has can be chosen; check its license yourself. Picturesque suggests only
+  models whose license it checked: Q-Align/OneAlign (non-commercial code,
+  LLaMA-2 weights), ArtiMuse (no license) and Qwen2.5-VL 3B (research
+  license) are not suggested.
+- **Privacy.** Only the photo's preview, shrunk to 768 pixels and stripped
+  of all metadata (no EXIF, GPS or XMP), is sent, and only when you ask.
+  If the server address is not on this computer, the photo goes to that
+  machine; ``critic_status`` reports it (``local``).
+- **The rubric** tells the model what to judge: by default composition,
+  light, subject and moment, colour and tone, and technique. Write your own
+  to focus on what you are learning.
+- **Speed.** One critique at a time. On a laptop CPU a 4B model takes tens
+  of seconds; the first critique also waits for the model to load. A GPU
+  makes it a few seconds.
+- The rating is **not used for ranking**: models are not calibrated like the
+  aesthetic score, and differ from each other. It is a second opinion in
+  words.
+
 .. _features-ai-search:
 
 Text search

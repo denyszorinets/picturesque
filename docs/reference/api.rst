@@ -200,6 +200,36 @@ Commands
    of the user's picks above one of their rejects (``null`` until
    learned).
 
+``critic_status``
+   No arguments. Whether photo critiques can run
+   (:ref:`features-ai-critique`). While critiques are on, asks the server
+   for its models (5 s timeout):
+
+   .. code-block:: json
+
+      { "enabled": true, "server": "http://127.0.0.1:11434/v1", "local": true,
+        "reachable": true, "models": ["qwen3-vl:4b"], "model": "qwen3-vl:4b",
+        "model_installed": true, "problem": null,
+        "suggested": [{ "name": "qwen3-vl:2b", "size": 1900000000,
+                        "license": "Apache-2.0", "license_url": "…", "note": "…" }] }
+
+   ``local`` is ``false`` when the server is on another computer.
+   ``problem`` says what to do when the server is not running or lacks the
+   model.
+
+``get_critique``
+   ``{ "photo_id": 7 }``. The stored critique by the current model and
+   rubric, or ``null``. Never contacts the server.
+
+``critique_photo``
+   ``{ "photo_id": 7, "refresh": false }``. Asks the model for a critique,
+   or returns the stored one unless ``refresh``. Can take minutes on a
+   CPU. Returns ``{ "model": "qwen3-vl:4b", "rating": 7.5, "score": 0.72,
+   "summary": "…", "strengths": ["…"], "weaknesses": ["…"] }`` (``rating``
+   1–10, ``score`` the same as 0–1). ``invalid_arguments`` while critiques
+   are off; ``internal`` with the reason when the server fails or the reply
+   is not a critique.
+
 ``ai_status``
    No arguments. Where local AI models run (:doc:`/features/ai`):
 

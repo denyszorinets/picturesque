@@ -1413,6 +1413,45 @@ pub struct TestWorld {
     pub pixels: Arc<FakePixels>,
     pub pipeline: Arc<MemoryPipelineStore>,
     pub watcher: Arc<FakeWatcher>,
+    pub critic: Arc<FakeCritic>,
+}
+
+/// A vision-language model server that answers with a set reply and
+/// records what it was asked.
+#[derive(Debug, Default)]
+pub struct FakeCritic {
+    /// The models it has; `None` makes it unreachable.
+    pub models: Mutex<Option<Vec<String>>>,
+    /// Its reply to every question.
+    pub reply: Mutex<String>,
+    pub asked: Mutex<Vec<Question>>,
+}
+
+/// `(server, model, system prompt, image, max edge)` of a question to
+/// [`FakeCritic`].
+pub type Question = (String, String, String, PathBuf, u32);
+
+impl crate::ports::critic::CriticServer for FakeCritic {
+    fn models(&self, _server: &str) -> Result<Vec<String>, crate::ports::critic::CriticError> {
+        self.models.lock().unwrap().clone().ok_or_else(|| {
+            crate::ports::critic::CriticError::Unreachable("connection refused".into())
+        })
+    }
+
+    fn ask(
+        &self,
+        r: &crate::ports::critic::CriticRequest<'_>,
+    ) -> Result<String, crate::ports::critic::CriticError> {
+        self.models(r.server)?;
+        self.asked.lock().unwrap().push((
+            r.server.into(),
+            r.model.into(),
+            r.system.into(),
+            r.image.to_path_buf(),
+            r.max_edge,
+        ));
+        Ok(self.reply.lock().unwrap().clone())
+    }
 }
 
 /// Records what is watched; tests report changes with [`FakeWatcher::touch`].
@@ -1478,6 +1517,7 @@ impl TestWorld {
             events: Arc::default(),
             pipeline: Arc::default(),
             watcher: Arc::default(),
+            critic: Arc::default(),
         }
     }
 
@@ -1516,6 +1556,7 @@ impl TestWorld {
             model_store: Arc::new(MemoryModelStore::default()),
             pipeline_store: self.pipeline.clone(),
             watcher: self.watcher.clone(),
+            critic: self.critic.clone(),
         }
     }
 }

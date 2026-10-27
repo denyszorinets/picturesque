@@ -46,6 +46,8 @@ pub struct Settings {
     pub auto_pick: AutoPickSettings,
     /// How much the user's own taste counts in the aesthetic score.
     pub taste: TasteSettings,
+    /// Photo critiques from a local vision-language model.
+    pub critic: CriticSettings,
     /// What the user has already been shown.
     pub onboarding: OnboardingSettings,
     /// The folder being culled in place, reopened at startup; `None` while
@@ -157,6 +159,67 @@ impl Default for TasteSettings {
         Self {
             personal_weight: 0.5,
         }
+    }
+}
+
+/// Photo critiques from a local vision-language model (ADR-0016,
+/// `docs/features/ai.rst`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(default)]
+#[ts(export)]
+pub struct CriticSettings {
+    pub enabled: bool,
+    /// Base address of an OpenAI-compatible API.
+    pub server: String,
+    pub model: String,
+    /// What the model judges; `null` uses the default rubric.
+    pub rubric: Option<String>,
+}
+
+impl Default for CriticSettings {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            server: crate::critic::DEFAULT_SERVER.into(),
+            model: crate::critic::DEFAULT_MODEL.into(),
+            rubric: None,
+        }
+    }
+}
+
+impl CriticSettings {
+    /// Longest rubric accepted.
+    pub const MAX_RUBRIC: usize = 4_000;
+
+    /// The rubric in use.
+    pub fn rubric(&self) -> &str {
+        self.rubric
+            .as_deref()
+            .filter(|r| !r.trim().is_empty())
+            .unwrap_or(crate::critic::DEFAULT_RUBRIC)
+    }
+
+    fn validate(&self) -> Result<(), String> {
+        if !(self.server.starts_with("http://") || self.server.starts_with("https://")) {
+            return Err(format!(
+                "The critic's server must be an http:// or https:// address, got `{}`.",
+                self.server
+            ));
+        }
+        if self.model.trim().is_empty() {
+            return Err("Choose a model for critiques.".into());
+        }
+        if self
+            .rubric
+            .as_ref()
+            .is_some_and(|r| r.chars().count() > Self::MAX_RUBRIC)
+        {
+            return Err(format!(
+                "The rubric is too long: at most {} characters.",
+                Self::MAX_RUBRIC
+            ));
+        }
+        Ok(())
     }
 }
 
@@ -276,6 +339,7 @@ impl Default for Settings {
             import: ImportSettings::default(),
             auto_pick: AutoPickSettings::default(),
             taste: TasteSettings::default(),
+            critic: CriticSettings::default(),
             onboarding: OnboardingSettings::default(),
             open_folder: None,
             recent_folders: Vec::new(),
@@ -309,6 +373,8 @@ pub struct SettingsUpdate {
     pub auto_pick: Option<AutoPickSettings>,
     #[ts(optional)]
     pub taste: Option<TasteSettings>,
+    #[ts(optional)]
+    pub critic: Option<CriticSettings>,
     #[ts(optional)]
     pub onboarding: Option<OnboardingSettings>,
     #[ts(optional)]
@@ -463,6 +529,10 @@ impl SettingsService {
                 )));
             }
             settings.taste = taste;
+        }
+        if let Some(critic) = update.critic {
+            critic.validate().map_err(SettingsError::Invalid)?;
+            settings.critic = critic;
         }
         if let Some(onboarding) = update.onboarding {
             settings.onboarding = onboarding;
@@ -731,6 +801,58 @@ pub(crate) mod tests {
             matches!(&err, SettingsError::Invalid(m) if m.contains("150%")),
             "{err}"
         );
+    }
+
+    #[test]
+    fn critic_settings_are_validated() {
+        let (service, _) = service(&[]);
+        let update = |critic: CriticSettings| {
+            service.update(SettingsUpdate {
+                critic: Some(critic),
+                ..Default::default()
+            })
+        };
+        let ok = CriticSettings {
+            enabled: true,
+            rubric: Some("Light only.".into()),
+            ..Default::default()
+        };
+        assert_eq!(update(ok.clone()).unwrap().critic.rubric(), "Light only.");
+        for (bad, message) in [
+            (
+                CriticSettings {
+                    server: "ftp://host".into(),
+                    ..ok.clone()
+                },
+                "http://",
+            ),
+            (
+                CriticSettings {
+                    model: " ".into(),
+                    ..ok.clone()
+                },
+                "Choose a model",
+            ),
+            (
+                CriticSettings {
+                    rubric: Some("x".repeat(CriticSettings::MAX_RUBRIC + 1)),
+                    ..ok.clone()
+                },
+                "too long",
+            ),
+        ] {
+            let err = update(bad).unwrap_err();
+            assert!(
+                matches!(&err, SettingsError::Invalid(m) if m.contains(message)),
+                "{err}"
+            );
+        }
+        // An empty rubric means the default one.
+        let blank = CriticSettings {
+            rubric: Some("  ".into()),
+            ..ok
+        };
+        assert_eq!(blank.rubric(), crate::critic::DEFAULT_RUBRIC);
     }
 
     #[test]

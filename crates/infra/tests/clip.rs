@@ -98,6 +98,7 @@ fn library(model: &Path, text: Option<(&Path, &Path)>) -> Library {
     let api = Api::new(AppContext {
         pipeline_store: catalog.clone(),
         watcher: Arc::new(picturesque_app::ports::watcher::NoWatcher),
+        critic: Arc::new(picturesque_infra::critic::HttpCritic::new()),
         settings_store: catalog.clone(),
         catalog: catalog.clone(),
         fs: Arc::new(StdFileSystem),

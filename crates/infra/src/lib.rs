@@ -5,6 +5,7 @@
 //! Types from native libraries and frameworks stay inside this crate.
 
 pub mod catalog;
+pub mod critic;
 pub mod fs;
 pub mod geocode;
 pub mod images;

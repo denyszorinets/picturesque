@@ -1,9 +1,14 @@
 <script lang="ts">
   import Icon from "../components/Icon.svelte";
+  import Critique from "./Critique.svelte";
   import {
     ApiError,
     canReveal,
+    criticStatus,
+    critiquePhoto,
+    getCritique,
     getPhoto,
+    type CriticStatus,
     revealInFolder,
     type PairView,
     type PhotoDetail,
@@ -57,6 +62,13 @@
   let drag: { x: number; y: number; left: number; top: number } | null = null;
 
   const photo = $derived(store.photos[index]);
+  /** Whether critiques are on; checked once per loupe. */
+  let critic = $state<CriticStatus | null>(null);
+  $effect(() => {
+    criticStatus()
+      .then((s) => (critic = s))
+      .catch(() => {});
+  });
   const PAIR_BUTTONS: [PairView, string][] = [
     ["image", "Show the camera's JPEG (R)"],
     ["raw", "Show the RAW (R)"],
@@ -494,6 +506,14 @@
             </li>
           {/each}
         </ul>
+      {/if}
+      {#if photo}
+        <Critique
+          photoId={photo.id}
+          status={critic}
+          load={getCritique}
+          run={critiquePhoto}
+        />
       {/if}
       <p class="keys muted">
         ← → move · P or ↑ pick · X or ↓ reject · U unflag · 0–5 stars ·
