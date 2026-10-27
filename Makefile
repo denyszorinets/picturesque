@@ -1,4 +1,4 @@
-.PHONY: ort-dylib screenshots dist dist-deb dist-rpm dist-appimage dist-linux dist-macos dist-windows smoke help format format-check test lint build doc check clean ui-deps ui-check e2e bindings-check dev-web app-dev docs docs-serve docs-check
+.PHONY: ort-dylib critic-libs screenshots dist dist-deb dist-rpm dist-appimage dist-linux dist-macos dist-windows smoke help format format-check test lint build doc check clean ui-deps ui-check e2e bindings-check dev-web app-dev docs docs-serve docs-check
 
 DOCS_DIR := docs
 SPHINX := uv run --project $(DOCS_DIR) --frozen
@@ -16,6 +16,7 @@ help:
 	@echo "  check         format-check + lint + test + build + ui-check"
 	@echo "  ui-deps       Install front-end dependencies and the Playwright browser"
 	@echo "  ort-dylib     Make ONNX Runtime's shared library (Linux x86-64; ORT_PROFILE=release)"
+	@echo "  critic-libs   Build the critic helper with llama.cpp into target/<profile>/critic"
 	@echo "  ui-check      Front-end type check, lint, format check and tests"
 	@echo "  e2e           Browser end-to-end tests against the dev server (Playwright)"
 	@echo "  bindings-check Fail if generated TypeScript API types are out of date"
@@ -48,6 +49,11 @@ ORT_PROFILE ?= debug
 ort-dylib:
 	scripts/ort-dylib.sh $(ORT_PROFILE)
 
+# The built-in critic's helper with llama.cpp's libraries and backends, in
+# target/<profile>/critic (ADR-0016).
+critic-libs:
+	scripts/critic-libs.sh $(ORT_PROFILE)
+
 test: ort-dylib
 	cargo test --workspace --all-targets $(CARGO_FLAGS)
 	cargo test --workspace --doc $(CARGO_FLAGS)
@@ -72,7 +78,7 @@ ui-check:
 	npm run lint -w ui
 	npm run test -w ui
 
-e2e: ort-dylib
+e2e: ort-dylib critic-libs
 	npm run e2e -w ui
 
 # ts-rs regenerates ui/src/lib/api/generated when tests run.
@@ -81,7 +87,7 @@ bindings-check: test
 	@test -z "$$(git ls-files --others --exclude-standard -- ui/src/lib/api/generated)" || \
 		(echo "untracked generated bindings; commit them" && exit 1)
 
-dev-web: ort-dylib
+dev-web: ort-dylib critic-libs
 	cargo build -p picturesque-devserver
 	trap 'kill 0' EXIT INT TERM; \
 		cargo run --quiet -p picturesque-devserver & \
@@ -119,7 +125,7 @@ smoke:
 	env -u WAYLAND_DISPLAY DISPLAY=:99 GDK_BACKEND=x11 \
 		node ui/smoke/app-smoke.mjs target/release/picturesque-desktop target/smoke-results
 
-app-dev: ort-dylib
+app-dev: ort-dylib critic-libs
 	npx tauri dev
 
 # Installers (docs/development/packaging.rst). Each must be built on the OS
@@ -146,31 +152,37 @@ endif
 dist-deb:
 	$(call require-os,Linux)
 	scripts/ort-dylib.sh release
+	scripts/critic-libs.sh release
 	npx tauri build --bundles deb
 
 dist-rpm:
 	$(call require-os,Linux)
 	scripts/ort-dylib.sh release
+	scripts/critic-libs.sh release
 	npx tauri build --bundles rpm
 
 # linuxdeploy runs extracted so no FUSE is needed.
 dist-appimage:
 	$(call require-os,Linux)
 	scripts/ort-dylib.sh release
+	scripts/critic-libs.sh release
 	APPIMAGE_EXTRACT_AND_RUN=1 npx tauri build --bundles appimage
 
 dist-linux:
 	$(call require-os,Linux)
 	scripts/ort-dylib.sh release
+	scripts/critic-libs.sh release
 	APPIMAGE_EXTRACT_AND_RUN=1 npx tauri build --bundles deb,rpm,appimage
 
 dist-macos:
 	$(call require-os,Darwin)
+	scripts/critic-libs.sh release
 	npx tauri build --bundles app
 	scripts/bundle-macos.sh
 
 dist-windows:
 	$(call require-os,Windows)
+	scripts/critic-libs.sh release
 	npx tauri build --bundles msi,nsis
 
 clean:

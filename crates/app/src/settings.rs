@@ -169,17 +169,32 @@ impl Default for TasteSettings {
 #[ts(export)]
 pub struct CriticSettings {
     pub enabled: bool,
-    /// Base address of an OpenAI-compatible API.
+    /// Which model writes critiques.
+    pub backend: CriticEngine,
+    /// Base address of an OpenAI-compatible API (`server` backend).
     pub server: String,
     pub model: String,
     /// What the model judges; `null` uses the default rubric.
     pub rubric: Option<String>,
 }
 
+/// Where critiques come from.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export)]
+pub enum CriticEngine {
+    /// The downloaded Qwen3-VL model, run by the app's helper.
+    #[default]
+    Builtin,
+    /// A local server the user runs (Ollama, llama.cpp, LM Studio).
+    Server,
+}
+
 impl Default for CriticSettings {
     fn default() -> Self {
         Self {
             enabled: false,
+            backend: CriticEngine::Builtin,
             server: crate::critic::DEFAULT_SERVER.into(),
             model: crate::critic::DEFAULT_MODEL.into(),
             rubric: None,

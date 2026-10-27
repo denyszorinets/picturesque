@@ -124,7 +124,7 @@ pub struct AppContext {
     /// Change notifications for watched import folders.
     pub watcher: Arc<dyn crate::ports::watcher::FolderWatcher>,
     /// The vision-language model server for critiques (ADR-0016).
-    pub critic: Arc<dyn crate::ports::critic::CriticServer>,
+    pub critic: Arc<dyn crate::ports::critic::Critic>,
 }
 
 impl fmt::Debug for AppContext {
@@ -296,6 +296,7 @@ impl Api {
                 Arc::clone(&catalog),
                 Arc::clone(&ctx.settings_store),
                 Arc::clone(&thumbnails),
+                Arc::clone(&models),
                 ctx.critic,
             ),
             settings: SettingsService::new(ctx.settings_store, ctx.fs, Arc::clone(&catalog)),
@@ -1090,6 +1091,7 @@ mod tests {
                 "taste": { "personal_weight": 0.5 },
                 "critic": {
                     "enabled": false,
+                    "backend": "builtin",
                     "server": "http://127.0.0.1:11434/v1",
                     "model": "qwen3-vl:4b",
                     "rubric": null

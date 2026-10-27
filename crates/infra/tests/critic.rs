@@ -5,9 +5,9 @@ use std::net::TcpListener;
 use std::path::Path;
 use std::sync::mpsc;
 
-use picturesque_app::ports::critic::{CriticError, CriticRequest, CriticServer};
+use picturesque_app::ports::critic::{Critic, CriticBackend, CriticError, CriticRequest};
 use picturesque_core::base64;
-use picturesque_infra::critic::HttpCritic;
+use picturesque_infra::critic::CriticAdapter;
 use serde_json::{Value, json};
 
 /// A server answering `requests` requests with `(status, body)` by path,
@@ -78,7 +78,7 @@ fn lists_the_servers_models() {
         200,
         json!({ "object": "list", "data": [{ "id": "qwen3-vl:4b" }, { "id": "llava:7b" }] }),
     )]);
-    let models = HttpCritic::new().models(&server).unwrap();
+    let models = CriticAdapter::new().models(&server).unwrap();
     assert_eq!(models, ["llava:7b", "qwen3-vl:4b"]);
     let (method, path, _) = rx.recv().unwrap();
     assert_eq!((method.as_str(), path.as_str()), ("GET", "/v1/models"));
@@ -93,10 +93,12 @@ fn sends_a_small_photo_without_metadata_and_returns_the_reply() {
         json!({ "choices": [{ "message": { "role": "assistant", "content": content } }] }),
     )]);
     let schema = json!({ "type": "object" });
-    let reply = HttpCritic::new()
+    let reply = CriticAdapter::new()
         .ask(&CriticRequest {
-            server: &format!("{server}/"),
-            model: "qwen3-vl:4b",
+            backend: CriticBackend::Server {
+                url: &format!("{server}/"),
+                model: "qwen3-vl:4b",
+            },
             system: "Judge it.",
             prompt: "Critique this photo.",
             image: fixture(),
@@ -137,15 +139,17 @@ fn reports_server_errors_and_absent_servers() {
     )]);
     let schema = json!({});
     let request = CriticRequest {
-        server: &server,
-        model: "nope",
+        backend: CriticBackend::Server {
+            url: &server,
+            model: "nope",
+        },
         system: "",
         prompt: "",
         image: fixture(),
         max_edge: 64,
         schema: &schema,
     };
-    let err = HttpCritic::new().ask(&request).unwrap_err();
+    let err = CriticAdapter::new().ask(&request).unwrap_err();
     assert!(
         matches!(&err, CriticError::Server(m) if m.contains("not found, try pulling")),
         "{err:?}"
@@ -157,7 +161,7 @@ fn reports_server_errors_and_absent_servers() {
         .local_addr()
         .unwrap()
         .port();
-    let err = HttpCritic::new()
+    let err = CriticAdapter::new()
         .models(&format!("http://127.0.0.1:{port}/v1"))
         .unwrap_err();
     assert!(matches!(err, CriticError::Unreachable(_)), "{err:?}");
@@ -166,6 +170,6 @@ fn reports_server_errors_and_absent_servers() {
         image: Path::new("/does/not/exist.jpg"),
         ..request
     };
-    let err = HttpCritic::new().ask(&missing).unwrap_err();
+    let err = CriticAdapter::new().ask(&missing).unwrap_err();
     assert!(matches!(err, CriticError::Image(_)), "{err:?}");
 }

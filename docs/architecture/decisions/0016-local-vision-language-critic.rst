@@ -110,6 +110,50 @@ Disadvantages:
 
 - Their licenses do not allow use in the app (above).
 
+Amendment: the built-in critic
+------------------------------
+
+:Date: 2026-10-28
+
+Requiring users to install Ollama is a hurdle for the amateurs the
+critique is for. A spike (:issue:`224`, :repo:`spikes/llama/results.md`)
+ran Qwen3-VL 4B Instruct (Qwen's official GGUF files, Q4_K_M with the
+Q8_0 vision projector, Apache-2.0) with llama.cpp from Rust
+(``llama-cpp-2``, MIT or Apache-2.0): about 20 s per critique on a
+16-thread CPU and 10 s on a Radeon 780M through Vulkan, with every reply
+valid JSON under a grammar made from the schema.
+
+The app now has a **built-in critic** (:issue:`225`), the default:
+
+- The model files (2.9 GB) are offered in the model manager like the
+  other models, with checksums and license, and downloaded on request.
+- A helper process, ``picturesque-critic`` (``crates/critic``), runs them
+  with llama.cpp. It is started on the first critique, keeps the model
+  loaded while critiques follow, and is stopped after five idle minutes.
+  It speaks one JSON line per request and reply on stdin and stdout
+  (``picturesque_core::critic_protocol``).
+- A separate process, because a misuse of llama.cpp's API or running out
+  of memory aborts the process with a native assert that Rust cannot
+  catch (the spike hit one): it ends one critique, not the app; and the
+  model's memory is returned when the helper exits.
+- llama.cpp is built with dynamic backends: GPU backends (Vulkan on Linux,
+  Metal on macOS) and the best of 14 CPU variants are libraries loaded at
+  run time from the helper's folder, so it starts without a Vulkan loader.
+  No OpenMP. Software Vulkan drivers are skipped, and the AI acceleration
+  setting *CPU only* keeps it on the CPU. On Windows it runs on the CPU for
+  now (Vulkan there needs the Vulkan SDK on the build machine).
+- The server option stays for users who already run one or want another
+  model.
+
+Alternatives for running the model, considered after the spike:
+
+- **llama.cpp in the app's process**: no helper to ship, but a native
+  assert or out-of-memory would close the app, and llama.cpp would share
+  the process and GPU device with ONNX Runtime.
+- **ONNX Runtime**: Qwen3-VL has no native support in onnxruntime-genai,
+  which has no Rust binding; ``ort`` would need a hand-written generation
+  loop, tokenizer and image preprocessing.
+
 Consequences
 ------------
 
@@ -122,7 +166,11 @@ Positive
 Negative
 ~~~~~~~~
 
-- Users must install and run a server and a model themselves.
+- With the server option, users must install and run a server and a model
+  themselves (the built-in critic, added later, needs neither).
+- The built-in critic adds about 80 MB of llama.cpp libraries to every
+  installer, a C++ build with CMake (and, for Vulkan, ``glslc`` and
+  SPIRV-Headers) to every build machine, and minutes to a clean build.
 - Critiques are slow on a CPU (tens of seconds) and vary between models.
 
 Risks

@@ -32,10 +32,13 @@ jobs:
             libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev \
             libxdo-dev libssl-dev patchelf \
             libvips-dev libraw-dev libheif-dev libheif-plugin-libde265 \
-            mesa-vulkan-drivers
+            mesa-vulkan-drivers \
+            glslc libvulkan-dev spirv-headers
           # mesa-vulkan-drivers: a software Vulkan driver, so tests that probe
           # ONNX Runtime's WebGPU provider find one (without any, Dawn
           # crashes while the test process exits).
+          # glslc, libvulkan-dev, spirv-headers: llama.cpp's Vulkan backend
+          # for the critic helper (ADR-0016).
 
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:

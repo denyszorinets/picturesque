@@ -60,7 +60,8 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev \
             libxdo-dev libssl-dev patchelf file \
-            libvips-dev libraw-dev libheif-dev libheif-plugin-libde265
+            libvips-dev libraw-dev libheif-dev libheif-plugin-libde265 \
+            glslc libvulkan-dev spirv-headers
 
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
@@ -76,10 +77,20 @@ jobs:
       - name: ONNX Runtime library
         run: scripts/ort-dylib.sh release
 
+      - name: Critic helper with llama.cpp
+        run: scripts/critic-libs.sh release
+
       - name: Build deb and AppImage
         env:
           APPIMAGE_EXTRACT_AND_RUN: "1"
         run: npx tauri build --bundles deb,appimage
+
+      - name: The deb ships the critic helper with its libraries
+        run: |
+          contents=$(dpkg-deb -c target/release/bundle/deb/*.deb)
+          for f in picturesque-critic libllama.so.0 libmtmd.so.0 libggml-vulkan.so libggml-cpu-x64.so; do
+            grep -q "usr/lib/picturesque/critic/$f" <<<"$contents" || { echo "missing $f" >&2; exit 1; }
+          done
 
       - name: No load-time ONNX Runtime or Dawn
         # Loaded at first use, after a processor check (ADR-0015): linked at
@@ -109,7 +120,8 @@ jobs:
           dnf install -y git gcc gcc-c++ make rpm-build nodejs npm \
             webkit2gtk4.1-devel gtk3-devel libsoup3-devel librsvg2-devel \
             openssl-devel \
-            vips-devel LibRaw-devel libheif-devel
+            vips-devel LibRaw-devel libheif-devel \
+            cmake glslc vulkan-headers vulkan-loader-devel spirv-headers-devel
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
           echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
 
@@ -119,6 +131,9 @@ jobs:
 
       - name: ONNX Runtime library
         run: scripts/ort-dylib.sh release
+
+      - name: Critic helper with llama.cpp
+        run: scripts/critic-libs.sh release
 
       - name: Build rpm
         run: npx tauri build --bundles rpm
@@ -161,6 +176,9 @@ jobs:
           cache: npm
 
       - run: npm ci
+
+      - name: Critic helper with llama.cpp
+        run: scripts/critic-libs.sh release
 
       - name: Build the app bundle
         run: npx tauri build --bundles app
@@ -211,6 +229,9 @@ jobs:
           cache: npm
 
       - run: npm ci
+
+      - name: Critic helper with llama.cpp
+        run: scripts/critic-libs.sh release
 
       - name: Build the installers
         run: npx tauri build --bundles nsis,msi

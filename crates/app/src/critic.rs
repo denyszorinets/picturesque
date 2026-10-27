@@ -1,8 +1,9 @@
 //! Photo critiques from a local vision-language model (ADR-0016,
 //! `docs/features/ai.rst`).
 //!
-//! On request, sends a photo's preview with a rubric to the model server
-//! from the settings and keeps the reply (a rating, a summary, strengths
+//! On request, sends a photo's preview with a rubric to the built-in critic
+//! (Qwen3-VL run by the `picturesque-critic` helper) or to the model server
+//! from the settings, and keeps the reply (a rating, a summary, strengths
 //! and weaknesses) with the photo's analysis results, together with the
 //! model and a hash of the rubric: a critique by another model or rubric is
 //! not shown. Critiques run one at a time.
@@ -14,10 +15,12 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use ts_rs::TS;
 
+use crate::models::{CRITIC, CRITIC_MMPROJ_FILE, CRITIC_MODEL_FILE, ModelService};
 use crate::ports::catalog::{AnalyzerId, CatalogError, PhotoCatalog};
-use crate::ports::critic::{CriticError, CriticRequest, CriticServer};
+use crate::ports::critic::{Critic, CriticBackend, CriticError, CriticRequest};
+use crate::ports::inference::ProviderChoice;
 use crate::ports::settings::SettingsStore;
-use crate::settings::CriticSettings;
+use crate::settings::{CriticEngine, CriticSettings};
 use crate::thumbnails::{ImageSize, ThumbnailError, ThumbnailService};
 
 /// Ollama's OpenAI-compatible API on this computer.
@@ -26,6 +29,8 @@ pub const DEFAULT_MODEL: &str = "qwen3-vl:4b";
 /// Longest edge of the image sent: enough for composition and light, and
 /// few image tokens.
 pub const MAX_EDGE: u32 = 768;
+/// How critiques by the built-in critic are labelled and stored.
+pub const BUILTIN_MODEL: &str = "Qwen3-VL 4B (built-in)";
 
 /// What the model judges, unless the user wrote their own.
 pub const DEFAULT_RUBRIC: &str = "\
@@ -173,16 +178,20 @@ pub fn suggested() -> Vec<SuggestedModel> {
 #[ts(export)]
 pub struct CriticStatus {
     pub enabled: bool,
+    pub backend: CriticEngine,
     pub server: String,
     /// Whether the server is on this computer; otherwise photos are sent
     /// to another one.
     pub local: bool,
-    /// Whether the server answered (checked only while enabled).
+    /// Whether the server answered, or the built-in critic's helper is
+    /// installed (checked only while enabled).
     pub reachable: bool,
     /// The server's models.
     pub models: Vec<String>,
-    /// The chosen model.
+    /// The model in use.
     pub model: String,
+    /// Whether the server has the model, or the built-in model is
+    /// downloaded.
     pub model_installed: bool,
     /// What to do to make critiques work, if anything.
     pub problem: Option<String>,
@@ -195,6 +204,8 @@ pub struct CriticStatus {
 #[derive(Debug)]
 pub enum CritiqueError {
     Disabled,
+    /// The built-in critic's model is not downloaded.
+    NotDownloaded,
     NotFound(PhotoId),
     Image(String),
     Server(CriticError),
@@ -209,6 +220,10 @@ impl std::fmt::Display for CritiqueError {
             Self::Disabled => {
                 f.write_str("Critiques are off. Turn them on in Settings → AI critic.")
             }
+            Self::NotDownloaded => f.write_str(
+                "The built-in critic's model is not downloaded. \
+                 Download it in Settings → AI models.",
+            ),
             Self::NotFound(id) => write!(f, "There is no photo {}.", id.0),
             Self::Image(e) => write!(f, "Cannot prepare the photo: {e}"),
             Self::Server(e) => write!(f, "Cannot critique the photo: {e}."),
@@ -271,7 +286,8 @@ pub struct CritiqueService {
     catalog: Arc<dyn PhotoCatalog>,
     settings: Arc<dyn SettingsStore>,
     thumbnails: Arc<ThumbnailService>,
-    server: Arc<dyn CriticServer>,
+    models: Arc<ModelService>,
+    critic: Arc<dyn Critic>,
     /// Held while a critique runs.
     busy: Mutex<()>,
 }
@@ -287,19 +303,29 @@ impl CritiqueService {
         catalog: Arc<dyn PhotoCatalog>,
         settings: Arc<dyn SettingsStore>,
         thumbnails: Arc<ThumbnailService>,
-        server: Arc<dyn CriticServer>,
+        models: Arc<ModelService>,
+        critic: Arc<dyn Critic>,
     ) -> Self {
         Self {
             catalog,
             settings,
             thumbnails,
-            server,
+            models,
+            critic,
             busy: Mutex::new(()),
         }
     }
 
     fn settings(&self) -> Result<CriticSettings, CatalogError> {
         Ok(self.settings.load_settings()?.critic)
+    }
+
+    /// The model critiques are written by, as shown and stored.
+    fn model_name(settings: &CriticSettings) -> &str {
+        match settings.backend {
+            CriticEngine::Builtin => BUILTIN_MODEL,
+            CriticEngine::Server => &settings.model,
+        }
     }
 
     /// The stored critique by the current model and rubric, if any.
@@ -314,15 +340,16 @@ impl CritiqueService {
         let Some(stored) = stored else {
             return Ok(None);
         };
-        let matches = stored["model"] == settings.model.as_str()
-            && stored["rubric"] == fingerprint(settings.rubric()).as_str();
+        let model = Self::model_name(&settings);
+        let matches =
+            stored["model"] == model && stored["rubric"] == fingerprint(settings.rubric()).as_str();
         if !matches {
             return Ok(None);
         }
         Ok(
             serde_json::from_value::<Critique>(stored["critique"].clone())
                 .ok()
-                .map(|c| CritiqueView::new(&settings.model, c)),
+                .map(|c| CritiqueView::new(model, c)),
         )
     }
 
@@ -342,11 +369,30 @@ impl CritiqueService {
             .image(id, ImageSize::Preview, view)
             .map_err(thumbnail_error(id))?;
         let rubric = settings.rubric();
-        let reply = self
-            .server
-            .ask(&CriticRequest {
-                server: &settings.server,
+        let files = match settings.backend {
+            CriticEngine::Builtin => Some(
+                self.models
+                    .files(CRITIC)
+                    .ok_or(CritiqueError::NotDownloaded)?,
+            ),
+            CriticEngine::Server => None,
+        };
+        let gpu = self.settings.load_settings()?.ai.provider != ProviderChoice::Cpu;
+        let backend = match &files {
+            Some(files) => CriticBackend::Builtin {
+                model: &files[CRITIC_MODEL_FILE],
+                mmproj: &files[CRITIC_MMPROJ_FILE],
+                gpu,
+            },
+            None => CriticBackend::Server {
+                url: &settings.server,
                 model: &settings.model,
+            },
+        };
+        let reply = self
+            .critic
+            .ask(&CriticRequest {
+                backend,
                 system: &system_prompt(rubric),
                 prompt: "Critique this photo.",
                 image: &image,
@@ -356,16 +402,17 @@ impl CritiqueService {
             .map_err(CritiqueError::Server)?;
         let critique = Critique::parse(&reply)
             .ok_or_else(|| CritiqueError::BadReply(reply.chars().take(200).collect::<String>()))?;
+        let model = Self::model_name(&settings);
         self.catalog.store_analysis(
             id,
             ID,
             &json!({
-                "model": settings.model,
+                "model": model,
                 "rubric": fingerprint(rubric),
                 "critique": critique,
             }),
         )?;
-        Ok(CritiqueView::new(&settings.model, critique))
+        Ok(CritiqueView::new(model, critique))
     }
 
     /// Whether critiques can run; asks the server only while enabled.
@@ -373,11 +420,12 @@ impl CritiqueService {
         let settings = self.settings()?;
         let mut status = CriticStatus {
             enabled: settings.enabled,
-            local: is_local(&settings.server),
+            backend: settings.backend,
+            local: settings.backend == CriticEngine::Builtin || is_local(&settings.server),
             server: settings.server.clone(),
             reachable: false,
             models: Vec::new(),
-            model: settings.model.clone(),
+            model: Self::model_name(&settings).to_owned(),
             model_installed: false,
             problem: None,
             suggested: suggested(),
@@ -386,7 +434,19 @@ impl CritiqueService {
         if !settings.enabled {
             return Ok(status);
         }
-        match self.server.models(&settings.server) {
+        if settings.backend == CriticEngine::Builtin {
+            status.reachable = self.critic.builtin_problem().is_none();
+            status.model_installed = self.models.files(CRITIC).is_some();
+            status.problem = self.critic.builtin_problem().or_else(|| {
+                (!status.model_installed).then(|| {
+                    "Download “Qwen3-VL 4B (built-in critic)” in Settings → AI models \
+                     (2.9 GB)."
+                        .to_owned()
+                })
+            });
+            return Ok(status);
+        }
+        match self.critic.models(&settings.server) {
             Ok(models) => {
                 status.reachable = true;
                 // Ollama lists `name:tag`; `name` alone means `:latest`.

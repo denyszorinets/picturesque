@@ -8,6 +8,7 @@ type Settings = {
   taste: { personal_weight: number };
   critic: {
     enabled: boolean;
+    backend: string;
     server: string;
     model: string;
     rubric: string | null;
@@ -16,6 +17,7 @@ type Settings = {
 
 const CRITIC_DEFAULTS = {
   enabled: false,
+  backend: "builtin",
   server: "http://127.0.0.1:11434/v1",
   model: "qwen3-vl:4b",
   rubric: null,
@@ -116,6 +118,13 @@ test("sets up the critic and critiques a photo in the loupe", async ({
       .getByRole("button", { name: "Settings" })
       .click();
     await page.getByTestId("critic-enabled").check();
+    // The built-in critic is the default; its model is not downloaded here.
+    await expect(page.getByTestId("critic-builtin")).toBeChecked();
+    await page.getByTestId("save-settings").click();
+    await expect(page.getByTestId("critic-status")).toContainText(
+      "Settings → AI models",
+    );
+    await page.getByTestId("critic-use-server").check();
     // Another computer gets a warning.
     await page
       .getByTestId("critic-server")

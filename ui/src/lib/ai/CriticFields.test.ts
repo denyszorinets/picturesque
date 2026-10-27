@@ -7,6 +7,7 @@ afterEach(cleanup);
 
 const STATUS: CriticStatus = {
   enabled: true,
+  backend: "server",
   server: "http://127.0.0.1:11434/v1",
   local: true,
   reachable: true,
@@ -30,6 +31,7 @@ function setup(props: Partial<Record<string, unknown>> = {}) {
   const oncheck = vi.fn();
   render(CriticFields, {
     enabled: true,
+    backend: "server",
     server: "http://127.0.0.1:11434/v1",
     model: "llava:7b",
     rubric: "",
@@ -92,5 +94,30 @@ describe("CriticFields", () => {
       "Save to use these settings.",
     );
     expect(screen.queryByTestId("critic-check")).toBeNull();
+  });
+
+  it("needs no server for the built-in critic", () => {
+    setup({
+      backend: "builtin",
+      status: {
+        ...STATUS,
+        backend: "builtin",
+        model: "Qwen3-VL 4B (built-in)",
+        models: [],
+      },
+    });
+    expect(screen.getByTestId("critic-builtin")).toBeChecked();
+    expect(screen.queryByTestId("critic-server")).toBeNull();
+    expect(screen.queryByTestId("critic-suggested")).toBeNull();
+    expect(screen.getByTestId("critic-rubric")).toBeVisible();
+    expect(screen.getByTestId("critic-status")).toHaveTextContent(
+      "Ready: the built-in critic runs on this computer.",
+    );
+  });
+
+  it("switches to a server", async () => {
+    setup({ backend: "builtin" });
+    await fireEvent.click(screen.getByTestId("critic-use-server"));
+    expect(screen.getByTestId("critic-server")).toBeVisible();
   });
 });

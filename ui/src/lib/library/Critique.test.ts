@@ -7,6 +7,7 @@ afterEach(cleanup);
 
 const STATUS: CriticStatus = {
   enabled: true,
+  backend: "server",
   server: "http://127.0.0.1:11434/v1",
   local: true,
   reachable: true,

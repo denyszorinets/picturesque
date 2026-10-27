@@ -94,6 +94,9 @@ Available models:
    * - YuNet face detector (MIT) and MediaPipe face mesh (Apache-2.0)
      - 5 MB
      - Faces, closed eyes and face sharpness
+   * - Qwen3-VL 4B, built-in critic (Apache-2.0)
+     - 2.9 GB
+     - Critiques of photos (:ref:`features-ai-critique`)
 
 Models are stored in the ``models`` folder of the application data folder
 (:doc:`/reference/data-locations`), one folder per model and version.
@@ -200,22 +203,32 @@ ask a vision-language model running on your computer for one: a rating
 from 1 to 10, a one-sentence summary, and what works and what does not
 (:doc:`ADR-0016 </architecture/decisions/0016-local-vision-language-critic>`).
 
-Critiques are **off by default** and need a model server, which you
-install yourself:
+Critiques are **off by default**. Two ways to get them:
 
-1. Install `Ollama <https://ollama.com>`_ and start it.
-2. Download a model, for example ``ollama pull qwen3-vl:4b``.
-3. In **Settings → AI critic**, turn on *Critique photos with a local
-   vision-language model* and choose the model
-   (:ref:`reference-settings-critic`). Settings say whether the server
-   answers and has the model, and what to do if not.
+- **Built-in** (default): Picturesque runs Qwen3-VL 4B itself.
+  Download *Qwen3-VL 4B (built-in critic)* (2.9 GB, Apache-2.0) in
+  **Settings → AI models**, then turn on *Critique photos with a local
+  vision-language model* in **Settings → AI critic**. Nothing else to
+  install.
+- **A model server you run**: choose it in **Settings → AI critic**, for
+  example `Ollama <https://ollama.com>`_ with ``ollama pull
+  qwen3-vl:4b``. Useful if you already run one or want another model.
 
 Then the loupe's info panel has a **Critique this photo** button. The
 critique is kept with the photo and shown whenever you come back to it;
 **Ask again** asks for a new one. Choosing another model or rubric shows
 only critiques written with them.
 
-.. list-table:: Suggested models (all Apache-2.0)
+The built-in critic runs in a helper process that starts with the first
+critique, keeps the model loaded while you keep asking, and stops after
+five idle minutes, returning its memory (about 5 GB on the CPU). It uses
+the GPU through Vulkan (Linux) or Metal (macOS) when there is one, unless
+**AI acceleration** is *CPU only*; on Windows it uses the CPU. On a Ryzen
+7 PRO 7840HS a critique takes about 20 s on the CPU and 10 s on its
+Radeon 780M; the first one also loads the model (a few seconds). If the
+helper fails, only that critique fails.
+
+.. list-table:: Suggested models for a server (all Apache-2.0)
    :header-rows: 1
    :widths: 25 15 60
 
@@ -240,9 +253,10 @@ only critiques written with them.
   LLaMA-2 weights), ArtiMuse (no license) and Qwen2.5-VL 3B (research
   license) are not suggested.
 - **Privacy.** Only the photo's preview, shrunk to 768 pixels and stripped
-  of all metadata (no EXIF, GPS or XMP), is sent, and only when you ask.
-  If the server address is not on this computer, the photo goes to that
-  machine; ``critic_status`` reports it (``local``).
+  of all metadata (no EXIF, GPS or XMP), is given to the model, and only
+  when you ask. The built-in critic never uses the network. If a server's
+  address is not on this computer, the photo goes to that machine;
+  Settings warn about it.
 - **The rubric** tells the model what to judge: by default composition,
   light, subject and moment, colour and tone, and technique. Write your own
   in Settings to focus on what you are learning; *Use the default rubric*
@@ -250,9 +264,8 @@ only critiques written with them.
 - Settings suggest checked models with their size and license; click one
   to use it. Any model the server has can be typed in.
 - Settings warn when the server address is not on this computer.
-- **Speed.** One critique at a time. On a laptop CPU a 4B model takes tens
-  of seconds; the first critique also waits for the model to load. A GPU
-  makes it a few seconds.
+- **Speed.** One critique at a time. With a server, the time depends on
+  the server and model.
 - The rating is **not used for ranking**: models are not calibrated like the
   aesthetic score, and differ from each other. It is a second opinion in
   words.

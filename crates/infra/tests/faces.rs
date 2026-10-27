@@ -104,7 +104,7 @@ fn closed_eye_fixtures_are_detected() {
     let api = Api::new(AppContext {
         pipeline_store: catalog.clone(),
         watcher: Arc::new(picturesque_app::ports::watcher::NoWatcher),
-        critic: Arc::new(picturesque_infra::critic::HttpCritic::new()),
+        critic: Arc::new(picturesque_infra::critic::CriticAdapter::new()),
         settings_store: catalog.clone(),
         catalog: catalog.clone(),
         fs: Arc::new(StdFileSystem),

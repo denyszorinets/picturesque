@@ -45,6 +45,7 @@ export type { TasteSettings } from "./generated/TasteSettings";
 export type { CriticStatus } from "./generated/CriticStatus";
 export type { CritiqueView } from "./generated/CritiqueView";
 export type { CriticSettings } from "./generated/CriticSettings";
+export type { CriticEngine } from "./generated/CriticEngine";
 export type { SuggestedModel } from "./generated/SuggestedModel";
 export type { ReanalyzeResult } from "./generated/ReanalyzeResult";
 export type { GearStats } from "./generated/GearStats";

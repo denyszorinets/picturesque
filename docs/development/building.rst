@@ -40,6 +40,19 @@ needed. Outside it you need:
   run it once yourself. Without it, AI features say the library is
   missing.
 
+- CMake, for llama.cpp, which the built-in critic's helper
+  (``crates/critic``,
+  :doc:`ADR-0016 </architecture/decisions/0016-local-vision-language-critic>`)
+  compiles from source. On Linux its Vulkan backend also needs ``glslc``,
+  the Vulkan headers and loader, and SPIRV-Headers (Ubuntu: ``glslc
+  libvulkan-dev spirv-headers``; Fedora: ``glslc vulkan-headers
+  vulkan-loader-devel spirv-headers-devel``). The first build of the
+  workspace compiles llama.cpp with every CPU variant: about 3½ minutes on
+  16 cores. ``make critic-libs`` (``scripts/critic-libs.sh``) puts the
+  helper with llama.cpp's libraries and backends in
+  ``target/<profile>/critic``, where the app looks for it; ``e2e``,
+  ``dev-web``, ``app-dev`` and the ``dist-*`` targets run it first.
+
 - On Windows (Git Bash, with the Visual Studio C++ build tools): run
   ``scripts/setup-windows-libvips.sh`` once. It downloads the official
   libvips build for Windows (with LibRaw and libheif, checksum checked)

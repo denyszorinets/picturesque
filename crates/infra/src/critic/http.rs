@@ -1,9 +1,9 @@
-//! [`CriticServer`] over an OpenAI-compatible chat API (ADR-0016): Ollama,
-//! llama.cpp's `llama-server` or LM Studio.
+//! Critiques from a server with an OpenAI-compatible chat API (ADR-0016):
+//! Ollama, llama.cpp's `llama-server` or LM Studio.
 
 use std::time::Duration;
 
-use picturesque_app::ports::critic::{CriticError, CriticRequest, CriticServer};
+use picturesque_app::ports::critic::{CriticError, CriticRequest};
 use picturesque_core::base64;
 use serde_json::{Value, json};
 
@@ -76,8 +76,9 @@ fn json_body(
     body.ok_or_else(|| CriticError::Server("the reply is not JSON".into()))
 }
 
-impl CriticServer for HttpCritic {
-    fn models(&self, server: &str) -> Result<Vec<String>, CriticError> {
+impl HttpCritic {
+    /// The models the server at `server` has, sorted.
+    pub fn models(&self, server: &str) -> Result<Vec<String>, CriticError> {
         let body = json_body(self.quick.get(endpoint(server, "models")).call())?;
         let mut models: Vec<String> = body["data"]
             .as_array()
@@ -91,11 +92,17 @@ impl CriticServer for HttpCritic {
         Ok(models)
     }
 
-    fn ask(&self, r: &CriticRequest<'_>) -> Result<String, CriticError> {
+    /// Asks `model` on the server at `url`; `r.backend` is not consulted.
+    pub fn ask(
+        &self,
+        url: &str,
+        model: &str,
+        r: &CriticRequest<'_>,
+    ) -> Result<String, CriticError> {
         let jpeg =
             crate::images::jpeg_for_upload(r.image, r.max_edge).map_err(CriticError::Image)?;
         let request = json!({
-            "model": r.model,
+            "model": model,
             "stream": false,
             "temperature": 0.2,
             "messages": [
@@ -114,7 +121,7 @@ impl CriticServer for HttpCritic {
         });
         let body = json_body(
             self.slow
-                .post(endpoint(r.server, "chat/completions"))
+                .post(endpoint(url, "chat/completions"))
                 .content_type("application/json")
                 .send(request.to_string()),
         )?;
