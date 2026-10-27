@@ -428,6 +428,19 @@ impl MemoryCatalog {
 }
 
 impl MemoryCatalog {
+    fn flagged(&self, flag: picturesque_core::decision::Flag) -> Vec<PhotoId> {
+        let mut ids: Vec<PhotoId> = self
+            .decisions
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(_, d)| d.flag == flag)
+            .map(|(id, _)| *id)
+            .collect();
+        ids.sort();
+        ids
+    }
+
     fn is_analyzed(&self, id: PhotoId, analyzer: AnalyzerId) -> bool {
         self.analysis
             .lock()
@@ -934,16 +947,11 @@ impl PhotoCatalog for MemoryCatalog {
     }
 
     fn rejected_photos(&self) -> Result<Vec<PhotoId>, CatalogError> {
-        let mut ids: Vec<PhotoId> = self
-            .decisions
-            .lock()
-            .unwrap()
-            .iter()
-            .filter(|(_, d)| d.flag == picturesque_core::decision::Flag::Reject)
-            .map(|(id, _)| *id)
-            .collect();
-        ids.sort();
-        Ok(ids)
+        Ok(self.flagged(picturesque_core::decision::Flag::Reject))
+    }
+
+    fn picked_photos(&self) -> Result<Vec<PhotoId>, CatalogError> {
+        Ok(self.flagged(picturesque_core::decision::Flag::Pick))
     }
 
     fn move_assets(&self, id: PhotoId, moves: &[(PathBuf, PathBuf)]) -> Result<(), CatalogError> {

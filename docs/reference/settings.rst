@@ -126,6 +126,22 @@ Which photos the app marks as keepers
 
 Changing it updates the suggestions immediately.
 
+.. _reference-settings-taste:
+
+``taste``
+---------
+
+How much the user's own taste counts in the aesthetic score
+(:ref:`features-ai-taste`).
+
+:Type: object with ``personal_weight``
+:Default: ``{ "personal_weight": 0.5 }``
+:Values: ``personal_weight``: the share of the personal score, 0–1. 0 uses
+   only the general aesthetic score, 1 only the personal one. Until enough
+   picks and rejects exist, the general score is used whatever the value.
+
+Changing it rescores photos immediately.
+
 .. _reference-settings-import:
 
 ``import``
@@ -207,6 +223,7 @@ API
         "ai": { "provider": "auto" },
         "import": { "rescan_minutes": 5 },
         "auto_pick": { "enabled": true, "min_quality": 0.5 },
+        "taste": { "personal_weight": 0.5 },
         "onboarding": { "tour_done": false },
         "open_folder": null, "recent_folders": [],
         "labels": { "pick": "green", "auto_pick": "yellow" },

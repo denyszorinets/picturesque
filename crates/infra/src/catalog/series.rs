@@ -231,12 +231,13 @@ impl SqliteCatalog {
         tx.commit().map_err(storage)
     }
 
-    pub(super) fn load_rejected(&self) -> Result<Vec<PhotoId>, CatalogError> {
+    /// Photos with `flag` (`pick` or `reject`).
+    pub(super) fn load_flagged(&self, flag: &str) -> Result<Vec<PhotoId>, CatalogError> {
         let conn = self.conn();
         let mut stmt = conn
-            .prepare("SELECT photo_id FROM decision WHERE flag = 'reject' ORDER BY photo_id")
+            .prepare("SELECT photo_id FROM decision WHERE flag = ? ORDER BY photo_id")
             .map_err(storage)?;
-        stmt.query_map([], |row| row.get(0).map(PhotoId))
+        stmt.query_map([flag], |row| row.get(0).map(PhotoId))
             .map_err(storage)?
             .collect::<Result<_, _>>()
             .map_err(storage)

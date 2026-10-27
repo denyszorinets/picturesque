@@ -19,4 +19,5 @@ pub mod quality;
 pub mod ranking;
 pub mod series;
 pub mod similarity;
+pub mod taste;
 pub mod template;

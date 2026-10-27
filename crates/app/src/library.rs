@@ -300,6 +300,9 @@ pub struct PhotoDetail {
     pub quality: Option<crate::analysis::technical::QualityView>,
     /// How good the photo looks, once the CLIP model analyzed it.
     pub aesthetic: Option<crate::analysis::clip::AestheticView>,
+    /// How well the photo matches the user's taste, 0–1, once enough picks
+    /// and rejects taught it (`taste_status`).
+    pub taste: Option<f32>,
     /// Faces found, largest first; `null` until the face models analyzed
     /// the photo.
     pub faces: Option<Vec<crate::analysis::faces::FaceView>>,
@@ -433,6 +436,7 @@ impl PhotoDetail {
             rating: decision.rating.stars(),
             quality: None,
             aesthetic: None,
+            taste: None,
             faces: None,
             score: None,
             reasons: Vec::new(),

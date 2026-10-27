@@ -27,6 +27,7 @@ pub mod sessions;
 pub mod settings;
 pub mod sidecars;
 pub mod stats;
+pub mod taste;
 pub mod templates;
 pub mod thumbnails;
 

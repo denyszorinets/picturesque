@@ -33,6 +33,8 @@ pub struct ReasonView {
 pub struct Signals<'a> {
     pub quality: Option<&'a QualityView>,
     pub aesthetic: Option<&'a AestheticView>,
+    /// The personal taste score, 0–1.
+    pub taste: Option<f32>,
     pub faces: Option<&'a [FaceView]>,
 }
 
@@ -165,6 +167,19 @@ pub fn reasons(photo: Signals<'_>, series: Option<SeriesPlace<'_>>) -> Vec<Reaso
             ));
         }
     }
+    if let Some(t) = photo.taste {
+        if t >= 0.7 {
+            out.push(reason(
+                Tone::Good,
+                format!("Like the photos you pick (your taste {})", percent(t)),
+            ));
+        } else if t <= 0.3 {
+            out.push(reason(
+                Tone::Bad,
+                format!("Like the photos you reject (your taste {})", percent(t)),
+            ));
+        }
+    }
     out
 }
 
@@ -212,6 +227,7 @@ mod tests {
             Signals {
                 quality: Some(&q),
                 aesthetic: Some(&a),
+                taste: Some(0.81),
                 faces: Some(&faces),
             },
             Some(SeriesPlace {
@@ -231,6 +247,7 @@ mod tests {
                 (Tone::Good, "Sharp (90%)"),
                 (Tone::Good, "Well exposed"),
                 (Tone::Good, "Looks appealing (aesthetic 72%)"),
+                (Tone::Good, "Like the photos you pick (your taste 81%)"),
             ]
         );
     }
@@ -253,6 +270,7 @@ mod tests {
             Signals {
                 quality: Some(&q),
                 aesthetic: Some(&a),
+                taste: Some(0.12),
                 faces: Some(&faces),
             },
             Some(SeriesPlace {
@@ -263,6 +281,7 @@ mod tests {
                 best: Signals {
                     quality: Some(&best_q),
                     aesthetic: Some(&best_a),
+                    taste: None,
                     faces: Some(&best_faces),
                 },
             }),
@@ -280,6 +299,7 @@ mod tests {
                 (Tone::Bad, "Overexposed: bright areas are blown out"),
                 (Tone::Bad, "Noisy (low noise 30%)"),
                 (Tone::Bad, "Looks plain (aesthetic 20%)"),
+                (Tone::Bad, "Like the photos you reject (your taste 12%)"),
             ]
         );
     }
