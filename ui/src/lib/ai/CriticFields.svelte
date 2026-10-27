@@ -1,8 +1,9 @@
 <script lang="ts">
-  import type { CriticStatus } from "../api";
+  import type { CriticEngine, CriticStatus } from "../api";
 
   interface Props {
     enabled: boolean;
+    backend: CriticEngine;
     server: string;
     model: string;
     /** `""` uses the default rubric. */
@@ -17,6 +18,7 @@
 
   let {
     enabled = $bindable(),
+    backend = $bindable(),
     server = $bindable(),
     model = $bindable(),
     rubric = $bindable(),
@@ -64,11 +66,36 @@
     Critique photos with a local vision-language model
   </label>
   <p class="hint muted">
-    The loupe gets a <strong>Critique this photo</strong> button: a rating and
-    what works and what does not, from a model on a server you run, such as
-    <a href="https://ollama.com" target="_blank" rel="noreferrer">Ollama</a>.
+    The loupe gets a <strong>Critique this photo</strong> button: a rating and what
+    works and what does not, written on this computer.
   </p>
   {#if enabled}
+    <div class="backends" role="radiogroup" aria-label="Critic">
+      <label class="inline">
+        <input
+          type="radio"
+          bind:group={backend}
+          value="builtin"
+          data-testid="critic-builtin"
+        />
+        Built-in: Qwen3-VL 4B, downloaded once under <em>AI models</em> below
+      </label>
+      <label class="inline">
+        <input
+          type="radio"
+          bind:group={backend}
+          value="server"
+          data-testid="critic-use-server"
+        />
+        A model server you run (<a
+          href="https://ollama.com"
+          target="_blank"
+          rel="noreferrer">Ollama</a
+        >, llama.cpp, LM Studio)
+      </label>
+    </div>
+  {/if}
+  {#if enabled && backend === "server"}
     <label class="inline">
       Server
       <input
@@ -118,6 +145,8 @@
         {/each}
       </ul>
     {/if}
+  {/if}
+  {#if enabled}
     <label class="field">
       <span>Rubric: what the model judges</span>
       <textarea
@@ -140,6 +169,8 @@
         Checking…
       {:else if status.problem}
         <span class="problem">{status.problem}</span>
+      {:else if status.reachable && status.backend === "builtin"}
+        Ready: the built-in critic runs on this computer.
       {:else if status.reachable}
         Ready: {status.model} is installed.
       {/if}
@@ -187,6 +218,12 @@
   .hint {
     margin: 0;
     font-size: 0.85rem;
+  }
+
+  .backends {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
   }
 
   .suggested {

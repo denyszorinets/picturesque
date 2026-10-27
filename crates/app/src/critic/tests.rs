@@ -12,18 +12,39 @@ use crate::testing::{FakeMetadata, MemFs, TestWorld, fake_hash};
 const REPLY: &str = r#"Sure! {"rating": 7.5, "summary": " Warm light on a calm lake. ",
     "strengths": ["golden light", " ", "clean horizon"], "weaknesses": ["kayaks too small"]}"#;
 
-/// A library with one photo and a server that has `models`.
+/// A library with one photo and a server that has `models`, critiques
+/// from the server.
 fn setup(enabled: bool, models: Option<&[&str]>) -> (TestWorld, Api, i64) {
+    let critic = CriticSettings {
+        enabled,
+        backend: CriticEngine::Server,
+        ..Default::default()
+    };
+    setup_with(critic, models, false)
+}
+
+/// A library with one photo, critiques from the built-in critic, whose
+/// model is `downloaded` or not.
+fn setup_builtin(downloaded: bool) -> (TestWorld, Api, i64) {
+    let critic = CriticSettings {
+        enabled: true,
+        ..Default::default()
+    };
+    setup_with(critic, None, downloaded)
+}
+
+fn setup_with(
+    critic: CriticSettings,
+    models: Option<&[&str]>,
+    downloaded: bool,
+) -> (TestWorld, Api, i64) {
     let fs = MemFs::new().dir("/lib").file("/lib/IMG_1.JPG", b"one");
     let world = TestWorld::new(fs, FakeMetadata::default());
     world
         .settings
         .save_settings(&Settings {
             library_root: Some("/lib".into()),
-            critic: CriticSettings {
-                enabled,
-                ..Default::default()
-            },
+            critic,
             ..Default::default()
         })
         .unwrap();
@@ -43,7 +64,18 @@ fn setup(enabled: bool, models: Option<&[&str]>) -> (TestWorld, Api, i64) {
     *world.critic.models.lock().unwrap() =
         models.map(|m| m.iter().map(|s| (*s).to_owned()).collect());
     *world.critic.reply.lock().unwrap() = REPLY.into();
-    let api = Api::new(world.context()).unwrap();
+    let mut context = world.context();
+    let spec = crate::models::catalog()
+        .into_iter()
+        .find(|m| m.id == CRITIC)
+        .expect("the critic model is offered");
+    let store = crate::testing::MemoryModelStore::default();
+    if downloaded {
+        store.install(&spec, &[]);
+    }
+    context.models = vec![spec];
+    context.model_store = Arc::new(store);
+    let api = Api::new(context).unwrap();
     (world, api, id.0)
 }
 
@@ -108,15 +140,15 @@ fn critiques_once_and_keeps_the_critique_for_the_model_and_rubric() {
     assert_eq!(view["strengths"], json!(["golden light", "clean horizon"]));
     let asked = world.critic.asked.lock().unwrap().clone();
     assert_eq!(asked.len(), 1);
-    let (server, model, system, image, max_edge) = &asked[0];
+    let q = &asked[0];
     assert_eq!(
-        (server.as_str(), model.as_str()),
-        (DEFAULT_SERVER, "qwen3-vl:4b")
+        (q.target.as_str(), q.model.as_str(), q.gpu),
+        (DEFAULT_SERVER, "qwen3-vl:4b", None)
     );
-    assert!(system.contains("Composition: framing"));
+    assert!(q.system.contains("Composition: framing"));
     // The cached preview, shrunk by the adapter.
-    assert!(image.starts_with("/cache"), "{image:?}");
-    assert_eq!(*max_edge, MAX_EDGE);
+    assert!(q.image.starts_with("/cache"), "{:?}", q.image);
+    assert_eq!(q.max_edge, MAX_EDGE);
 
     // Stored: shown again without asking.
     assert_eq!(
@@ -134,7 +166,7 @@ fn critiques_once_and_keeps_the_critique_for_the_model_and_rubric() {
     // Another rubric makes the stored critique stale.
     api.call(
         "update_settings",
-        json!({ "critic": { "enabled": true, "server": DEFAULT_SERVER,
+        json!({ "critic": { "enabled": true, "backend": "server", "server": DEFAULT_SERVER,
                             "model": "qwen3-vl:4b", "rubric": "Only the light." } }),
     )
     .unwrap();
@@ -145,7 +177,7 @@ fn critiques_once_and_keeps_the_critique_for_the_model_and_rubric() {
     api.call("critique_photo", json!({ "photo_id": id }))
         .unwrap();
     let asked = world.critic.asked.lock().unwrap();
-    assert!(asked[2].2.contains("Only the light."));
+    assert!(asked[2].system.contains("Only the light."));
 }
 
 #[test]
@@ -220,4 +252,81 @@ fn status_checks_the_server_only_when_enabled() {
         (&status["model_installed"], &status["problem"]),
         (&json!(true), &Value::Null)
     );
+}
+
+#[test]
+fn the_builtin_critic_uses_the_downloaded_model() {
+    let (_, api, id) = setup_builtin(false);
+    let status = api.call("critic_status", Value::Null).unwrap();
+    assert_eq!(status["backend"], "builtin");
+    assert_eq!(status["model"], BUILTIN_MODEL);
+    assert_eq!(status["local"], true);
+    assert_eq!(status["model_installed"], false);
+    assert!(
+        status["problem"]
+            .as_str()
+            .unwrap()
+            .contains("Settings → AI models")
+    );
+    let err = api
+        .call("critique_photo", json!({ "photo_id": id }))
+        .unwrap_err();
+    assert!(err.message.contains("not downloaded"), "{}", err.message);
+
+    let (world, api, id) = setup_builtin(true);
+    let status = api.call("critic_status", Value::Null).unwrap();
+    assert_eq!(
+        (
+            &status["reachable"],
+            &status["model_installed"],
+            &status["problem"]
+        ),
+        (&json!(true), &json!(true), &Value::Null)
+    );
+    let view = api
+        .call("critique_photo", json!({ "photo_id": id }))
+        .unwrap();
+    assert_eq!(view["model"], BUILTIN_MODEL);
+    let q = world.critic.asked.lock().unwrap()[0].clone();
+    assert_eq!((q.target.as_str(), q.gpu), ("builtin", Some(true)));
+    assert!(
+        q.model.ends_with(crate::models::CRITIC_MODEL_FILE),
+        "{}",
+        q.model
+    );
+    // Stored under the built-in model: switching to a server hides it.
+    api.call(
+        "update_settings",
+        json!({ "critic": { "enabled": true, "backend": "server", "server": DEFAULT_SERVER,
+                            "model": "qwen3-vl:4b", "rubric": null } }),
+    )
+    .unwrap();
+    assert_eq!(
+        api.call("get_critique", json!({ "photo_id": id })).unwrap(),
+        Value::Null
+    );
+}
+
+#[test]
+fn the_builtin_critic_follows_the_acceleration_setting() {
+    let (world, api, id) = setup_builtin(true);
+    api.call("update_settings", json!({ "ai": { "provider": "cpu" } }))
+        .unwrap();
+    api.call("critique_photo", json!({ "photo_id": id }))
+        .unwrap();
+    assert_eq!(world.critic.asked.lock().unwrap()[0].gpu, Some(false));
+}
+
+#[test]
+fn says_when_the_builtin_critic_is_not_installed() {
+    let (world, api, id) = setup_builtin(true);
+    *world.critic.builtin_problem.lock().unwrap() =
+        Some("the critic helper is missing; reinstall Picturesque".into());
+    let status = api.call("critic_status", Value::Null).unwrap();
+    assert_eq!(status["reachable"], false);
+    assert!(status["problem"].as_str().unwrap().contains("reinstall"));
+    let err = api
+        .call("critique_photo", json!({ "photo_id": id }))
+        .unwrap_err();
+    assert!(err.message.contains("reinstall"), "{}", err.message);
 }

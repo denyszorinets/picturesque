@@ -207,13 +207,17 @@ Commands
 
    .. code-block:: json
 
-      { "enabled": true, "server": "http://127.0.0.1:11434/v1", "local": true,
+      { "enabled": true, "backend": "server",
+        "server": "http://127.0.0.1:11434/v1", "local": true,
         "reachable": true, "models": ["qwen3-vl:4b"], "model": "qwen3-vl:4b",
         "model_installed": true, "problem": null,
         "suggested": [{ "name": "qwen3-vl:2b", "size": 1900000000,
                         "license": "Apache-2.0", "license_url": "…", "note": "…" }],
         "default_rubric": "- Composition: …" }
 
+   With the ``builtin`` backend, ``reachable`` says whether the helper is
+   installed, ``model_installed`` whether the model is downloaded, and
+   ``model`` is ``"Qwen3-VL 4B (built-in)"``; the server is not asked.
    ``local`` is ``false`` when the server is on another computer.
    ``problem`` says what to do when the server is not running or lacks the
    model.

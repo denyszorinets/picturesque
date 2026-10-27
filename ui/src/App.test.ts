@@ -29,6 +29,7 @@ vi.mock("./lib/api", async (importOriginal) => {
         taste: { personal_weight: 0.5 },
         critic: {
           enabled: false,
+          backend: "builtin",
           server: "http://127.0.0.1:11434/v1",
           model: "qwen3-vl:4b",
           rubric: null,

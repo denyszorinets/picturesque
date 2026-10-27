@@ -48,7 +48,8 @@
         ],
         "files": {
           "/usr/lib/picturesque/libonnxruntime.so": "../target/release/libonnxruntime.so",
-          "/usr/lib/picturesque/libwebgpu_dawn.so": "../target/release/libwebgpu_dawn.so"
+          "/usr/lib/picturesque/libwebgpu_dawn.so": "../target/release/libwebgpu_dawn.so",
+          "/usr/lib/picturesque/critic": "../target/release/critic"
         }
       },
       "rpm": {
@@ -59,13 +60,15 @@
         ],
         "files": {
           "/usr/lib/picturesque/libonnxruntime.so": "../target/release/libonnxruntime.so",
-          "/usr/lib/picturesque/libwebgpu_dawn.so": "../target/release/libwebgpu_dawn.so"
+          "/usr/lib/picturesque/libwebgpu_dawn.so": "../target/release/libwebgpu_dawn.so",
+          "/usr/lib/picturesque/critic": "../target/release/critic"
         }
       },
       "appimage": {
         "files": {
           "/usr/lib/picturesque/libonnxruntime.so": "../target/release/libonnxruntime.so",
-          "/usr/lib/picturesque/libwebgpu_dawn.so": "../target/release/libwebgpu_dawn.so"
+          "/usr/lib/picturesque/libwebgpu_dawn.so": "../target/release/libwebgpu_dawn.so",
+          "/usr/lib/picturesque/critic": "../target/release/critic"
         }
       }
     }

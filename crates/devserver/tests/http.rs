@@ -25,7 +25,7 @@ fn api_with(catalog: Arc<SqliteCatalog>, cache_dir: std::path::PathBuf) -> Arc<A
         Api::new(AppContext {
             pipeline_store: catalog.clone(),
             watcher: Arc::new(picturesque_app::ports::watcher::NoWatcher),
-            critic: Arc::new(picturesque_infra::critic::HttpCritic::new()),
+            critic: Arc::new(picturesque_infra::critic::CriticAdapter::new()),
             settings_store: catalog.clone(),
             catalog,
             fs: Arc::new(StdFileSystem),

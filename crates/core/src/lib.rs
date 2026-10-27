@@ -8,6 +8,7 @@
 pub mod base64;
 pub mod clip;
 pub mod clip_tokenizer;
+pub mod critic_protocol;
 pub mod decision;
 pub mod faces;
 pub mod grouping;

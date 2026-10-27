@@ -1416,40 +1416,69 @@ pub struct TestWorld {
     pub critic: Arc<FakeCritic>,
 }
 
-/// A vision-language model server that answers with a set reply and
-/// records what it was asked.
+/// A vision-language model (server or built-in) that answers with a set
+/// reply and records what it was asked.
 #[derive(Debug, Default)]
 pub struct FakeCritic {
-    /// The models it has; `None` makes it unreachable.
+    /// The models the server has; `None` makes it unreachable.
     pub models: Mutex<Option<Vec<String>>>,
+    /// Why the built-in critic cannot run, if it cannot.
+    pub builtin_problem: Mutex<Option<String>>,
     /// Its reply to every question.
     pub reply: Mutex<String>,
     pub asked: Mutex<Vec<Question>>,
 }
 
-/// `(server, model, system prompt, image, max edge)` of a question to
-/// [`FakeCritic`].
-pub type Question = (String, String, String, PathBuf, u32);
+/// A question to [`FakeCritic`].
+#[derive(Debug, Clone, PartialEq)]
+pub struct Question {
+    /// The server's address, or `builtin`.
+    pub target: String,
+    /// The server's model name, or the built-in model's file.
+    pub model: String,
+    /// For the built-in critic, whether it may use a GPU.
+    pub gpu: Option<bool>,
+    pub system: String,
+    pub image: PathBuf,
+    pub max_edge: u32,
+}
 
-impl crate::ports::critic::CriticServer for FakeCritic {
+impl crate::ports::critic::Critic for FakeCritic {
     fn models(&self, _server: &str) -> Result<Vec<String>, crate::ports::critic::CriticError> {
         self.models.lock().unwrap().clone().ok_or_else(|| {
             crate::ports::critic::CriticError::Unreachable("connection refused".into())
         })
     }
 
+    fn builtin_problem(&self) -> Option<String> {
+        self.builtin_problem.lock().unwrap().clone()
+    }
+
     fn ask(
         &self,
         r: &crate::ports::critic::CriticRequest<'_>,
     ) -> Result<String, crate::ports::critic::CriticError> {
-        self.models(r.server)?;
-        self.asked.lock().unwrap().push((
-            r.server.into(),
-            r.model.into(),
-            r.system.into(),
-            r.image.to_path_buf(),
-            r.max_edge,
-        ));
+        use crate::ports::critic::CriticBackend;
+        let (target, model, gpu) = match r.backend {
+            CriticBackend::Server { url, model } => {
+                self.models(url)?;
+                (url.to_owned(), model.to_owned(), None)
+            }
+            CriticBackend::Builtin { model, gpu, .. } => {
+                if let Some(problem) = self.builtin_problem() {
+                    return Err(crate::ports::critic::CriticError::Unreachable(problem));
+                }
+                ("builtin".to_owned(), model.display().to_string(), Some(gpu))
+            }
+        };
+        self.asked.lock().unwrap().push(Question {
+            target,
+            model,
+            gpu,
+            system: r.system.into(),
+            image: r.image.to_path_buf(),
+            max_edge: r.max_edge,
+        });
         Ok(self.reply.lock().unwrap().clone())
     }
 }

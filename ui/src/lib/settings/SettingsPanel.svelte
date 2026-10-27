@@ -10,6 +10,7 @@
     templatePresets,
     updateSettings,
     type AiStatus,
+    type CriticEngine,
     type CriticStatus,
     type Provider,
     type ProviderChoice,
@@ -77,7 +78,13 @@
   /** Share of the personal taste score in the aesthetic score, in percent. */
   let tastePercent = $state(50);
   let taste = $state<TasteStatus | null>(null);
-  let critic = $state({ enabled: false, server: "", model: "", rubric: "" });
+  let critic = $state({
+    enabled: false,
+    backend: "builtin" as CriticEngine,
+    server: "",
+    model: "",
+    rubric: "",
+  });
   let criticState = $state<CriticStatus | null>(null);
   let provider = $state<ProviderChoice>("auto");
   let ai = $state<AiStatus | null>(null);
@@ -120,6 +127,7 @@
   const criticChanged = $derived(
     saved !== null &&
       (critic.enabled !== saved.critic.enabled ||
+        critic.backend !== saved.critic.backend ||
         critic.server.trim() !== saved.critic.server ||
         critic.model.trim() !== saved.critic.model ||
         critic.rubric.trim() !== (saved.critic.rubric ?? "")),
@@ -204,6 +212,7 @@
     tastePercent = Math.round(settings.taste.personal_weight * 100);
     critic = {
       enabled: settings.critic.enabled,
+      backend: settings.critic.backend,
       server: settings.critic.server,
       model: settings.critic.model,
       rubric: settings.critic.rubric ?? "",
@@ -234,6 +243,7 @@
       if (criticChanged)
         update.critic = {
           enabled: critic.enabled,
+          backend: critic.backend,
           server: critic.server.trim(),
           model: critic.model.trim(),
           rubric: critic.rubric.trim() || null,
@@ -613,6 +623,7 @@
     <span class="label">AI critic</span>
     <CriticFields
       bind:enabled={critic.enabled}
+      bind:backend={critic.backend}
       bind:server={critic.server}
       bind:model={critic.model}
       bind:rubric={critic.rubric}
