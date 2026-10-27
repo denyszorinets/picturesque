@@ -187,6 +187,8 @@ pub struct CriticStatus {
     /// What to do to make critiques work, if anything.
     pub problem: Option<String>,
     pub suggested: Vec<SuggestedModel>,
+    /// The rubric used when the user has not written one.
+    pub default_rubric: String,
 }
 
 /// Why a critique could not be made.
@@ -379,6 +381,7 @@ impl CritiqueService {
             model_installed: false,
             problem: None,
             suggested: suggested(),
+            default_rubric: DEFAULT_RUBRIC.into(),
         };
         if !settings.enabled {
             return Ok(status);

@@ -132,7 +132,8 @@ Changing it updates the suggestions immediately.
 ---------
 
 How much the user's own taste counts in the aesthetic score
-(:ref:`features-ai-taste`).
+(:ref:`features-ai-taste`). In the app: **Settings → Your taste**, as a
+percentage.
 
 :Type: object with ``personal_weight``
 :Default: ``{ "personal_weight": 0.5 }``
@@ -148,7 +149,7 @@ Changing it rescores photos immediately.
 ----------
 
 Photo critiques from a local vision-language model
-(:ref:`features-ai-critique`).
+(:ref:`features-ai-critique`). In the app: **Settings → AI critic**.
 
 :Type: object with ``enabled``, ``server``, ``model`` and ``rubric``
 :Default: ``{ "enabled": false, "server": "http://127.0.0.1:11434/v1",

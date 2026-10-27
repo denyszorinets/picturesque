@@ -25,4 +25,8 @@ model: string, model_installed: boolean,
 /**
  * What to do to make critiques work, if anything.
  */
-problem: string | null, suggested: Array<SuggestedModel>, };
+problem: string | null, suggested: Array<SuggestedModel>, 
+/**
+ * The rubric used when the user has not written one.
+ */
+default_rubric: string, };

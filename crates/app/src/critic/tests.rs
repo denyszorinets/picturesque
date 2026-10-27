@@ -189,6 +189,7 @@ fn status_checks_the_server_only_when_enabled() {
     assert_eq!(status["problem"], Value::Null);
     assert_eq!(status["suggested"][1]["name"], "qwen3-vl:4b");
     assert_eq!(status["suggested"][1]["license"], "Apache-2.0");
+    assert_eq!(status["default_rubric"], DEFAULT_RUBRIC);
     drop(world);
 
     let (_, api, _) = setup(true, None);
