@@ -18,6 +18,15 @@ flags=()
 [ "$profile" = release ] && flags=(--release)
 
 out=target/$profile/critic
+# llama-cpp-sys-2 leaves dangling lib*.so links here, and its next build
+# fails on them with "File exists" (see crates/critic/build.rs, which
+# removes them too, but only when its build script runs).
+for d in "target/$profile" "target/$profile/deps" "target/$profile/examples"; do
+  [ -d "$d" ] || continue
+  for f in "$d"/lib*.so*; do
+    if [ -L "$f" ] && [ ! -e "$f" ]; then rm -f "$f"; fi
+  done
+done
 # The build folder of llama-cpp-sys-2, from its build script's output
 # (Windows paths come JSON-escaped: C:\\a\\b).
 dir=$(cargo build -q -p picturesque-critic ${flags[@]+"${flags[@]}"} --message-format=json |
