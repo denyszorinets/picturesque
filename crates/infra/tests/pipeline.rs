@@ -31,6 +31,7 @@ fn api_with(catalog: &Arc<SqliteCatalog>, cache: &Path, watcher: Arc<dyn FolderW
     Api::new(AppContext {
         pipeline_store: catalog.clone(),
         watcher,
+        critic: Arc::new(picturesque_infra::critic::HttpCritic::new()),
         settings_store: catalog.clone(),
         catalog: catalog.clone(),
         fs: Arc::new(StdFileSystem),

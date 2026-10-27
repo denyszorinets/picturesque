@@ -27,6 +27,12 @@ vi.mock("./lib/api", async (importOriginal) => {
         import: { rescan_minutes: 5 },
         auto_pick: { enabled: true, min_quality: 0.5 },
         taste: { personal_weight: 0.5 },
+        critic: {
+          enabled: false,
+          server: "http://127.0.0.1:11434/v1",
+          model: "qwen3-vl:4b",
+          rubric: null,
+        },
         onboarding: { tour_done: false },
         open_folder: null,
         recent_folders: [],

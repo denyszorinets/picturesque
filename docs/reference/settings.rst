@@ -142,6 +142,22 @@ How much the user's own taste counts in the aesthetic score
 
 Changing it rescores photos immediately.
 
+.. _reference-settings-critic:
+
+``critic``
+----------
+
+Photo critiques from a local vision-language model
+(:ref:`features-ai-critique`).
+
+:Type: object with ``enabled``, ``server``, ``model`` and ``rubric``
+:Default: ``{ "enabled": false, "server": "http://127.0.0.1:11434/v1",
+   "model": "qwen3-vl:4b", "rubric": null }``
+:Values: ``server``: base address of an OpenAI-compatible API, ``http://``
+   or ``https://``. ``model``: a model the server has. ``rubric``: what the
+   model judges, at most 4,000 characters; ``null`` or empty uses the
+   default rubric.
+
 .. _reference-settings-import:
 
 ``import``
@@ -224,6 +240,8 @@ API
         "import": { "rescan_minutes": 5 },
         "auto_pick": { "enabled": true, "min_quality": 0.5 },
         "taste": { "personal_weight": 0.5 },
+        "critic": { "enabled": false, "server": "http://127.0.0.1:11434/v1",
+                    "model": "qwen3-vl:4b", "rubric": null },
         "onboarding": { "tour_done": false },
         "open_folder": null, "recent_folders": [],
         "labels": { "pick": "green", "auto_pick": "yellow" },

@@ -1,6 +1,7 @@
 //! CLIP image embeddings: preprocessing, normalized vectors and their
 //! storage form (`docs/features/ai.rst`).
 
+use crate::base64;
 use crate::pixels::RgbImage;
 
 /// Edge of the square image CLIP ViT-B/32 takes.
@@ -59,11 +60,11 @@ impl Embedding {
     /// Little-endian `f32`s in base64, for storing.
     pub fn encode(&self) -> String {
         let bytes: Vec<u8> = self.0.iter().flat_map(|v| v.to_le_bytes()).collect();
-        base64_encode(&bytes)
+        base64::encode(&bytes)
     }
 
     pub fn decode(text: &str) -> Option<Self> {
-        let bytes = base64_decode(text)?;
+        let bytes = base64::decode(text)?;
         let (chunks, rest) = bytes.as_chunks::<4>();
         if !rest.is_empty() {
             return None;
@@ -103,46 +104,6 @@ impl LinearHead {
                 + self.bias
         })
     }
-}
-
-const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-
-fn base64_encode(bytes: &[u8]) -> String {
-    let mut out = String::with_capacity(bytes.len().div_ceil(3) * 4);
-    for chunk in bytes.chunks(3) {
-        let b = [
-            chunk[0],
-            *chunk.get(1).unwrap_or(&0),
-            *chunk.get(2).unwrap_or(&0),
-        ];
-        let n = u32::from(b[0]) << 16 | u32::from(b[1]) << 8 | u32::from(b[2]);
-        for i in 0..4 {
-            if i <= chunk.len() {
-                out.push(ALPHABET[(n >> (18 - 6 * i) & 63) as usize] as char);
-            } else {
-                out.push('=');
-            }
-        }
-    }
-    out
-}
-
-fn base64_decode(text: &str) -> Option<Vec<u8>> {
-    let text = text.trim_end_matches('=');
-    let mut out = Vec::with_capacity(text.len() * 3 / 4);
-    let mut acc = 0u32;
-    let mut bits = 0;
-    for c in text.bytes() {
-        let v = ALPHABET.iter().position(|&a| a == c)? as u32;
-        acc = acc << 6 | v;
-        bits += 6;
-        if bits >= 8 {
-            bits -= 8;
-            out.push((acc >> bits) as u8);
-            acc &= (1 << bits) - 1;
-        }
-    }
-    Some(out)
 }
 
 #[cfg(test)]
@@ -223,10 +184,6 @@ mod tests {
             let e = Embedding::new(&raw).unwrap();
             assert_eq!(Embedding::decode(&e.encode()), Some(e));
         }
-        assert_eq!(base64_encode(b"Man"), "TWFu");
-        assert_eq!(base64_encode(b"Ma"), "TWE=");
-        assert_eq!(base64_encode(b"M"), "TQ==");
-        assert_eq!(base64_decode("TWE=").unwrap(), b"Ma");
         assert!(Embedding::decode("not base64!").is_none());
         assert!(Embedding::decode("TWE=").is_none()); // 2 bytes: not f32s
     }
