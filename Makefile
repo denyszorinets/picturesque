@@ -183,7 +183,7 @@ dist-macos:
 dist-windows:
 	$(call require-os,Windows)
 	scripts/critic-libs.sh release
-	npx tauri build --bundles msi,nsis
+	npx tauri build --bundles msi,nsis --config src-tauri/tauri.critic.windows.conf.json
 
 clean:
 	cargo clean

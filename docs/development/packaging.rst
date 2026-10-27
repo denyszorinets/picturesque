@@ -88,7 +88,9 @@ made by ``scripts/critic-libs.sh release`` (the ``picturesque-critic``
 helper, llama.cpp's libraries and its backends, about 80 MB on Linux),
 installed as ``/usr/lib/picturesque/critic`` (deb, rpm, AppImage),
 ``Contents/MacOS/critic`` (dmg) or ``critic`` next to the executable
-(Windows). The helper finds its libraries beside it, so the folder is
+(Windows; added by :repo:`src-tauri/tauri.critic.windows.conf.json` when
+the installers are built, because Tauri checks resources whenever the app
+compiles). The helper finds its libraries beside it, so the folder is
 self-contained. On Windows it runs on the CPU only for now. The release
 workflow checks that the deb contains it.
 

@@ -7,6 +7,8 @@
 #
 #   scripts/critic-libs.sh [debug|release]
 #
+# Needs patchelf on Linux.
+#
 # llama-cpp-sys-2 copies only some libraries (none where CMake installs to
 # lib64) and never the backends, so they are copied from its build folder.
 set -euo pipefail
@@ -39,4 +41,12 @@ for f in "${libs[@]}" "$dir"/backends/*; do
   # Links keep their names (libllama.so.0); copy the files they point to.
   cp -fL "$f" "$out/$(basename "$f")"
 done
+# llama.cpp's libraries link each other (libggml.so.0 needs
+# libggml-base.so.0) without an rpath; $ORIGIN makes them find their
+# siblings wherever the folder is, which linuxdeploy (AppImage) also needs.
+if [ "$(uname -s)" = Linux ]; then
+  for f in "$out"/lib*.so*; do
+    patchelf --set-rpath '$ORIGIN' "$f"
+  done
+fi
 echo "critic-libs: helper, llama.cpp libraries and $(ls "$dir"/backends | wc -l) backends in $out"

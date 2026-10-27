@@ -12,6 +12,15 @@ use picturesque_core::critic_protocol::HelperRequest;
 use picturesque_infra::critic::{CriticAdapter, HelperCritic};
 use serde_json::json;
 
+/// Serializes the tests: while one writes its fake helper, a process
+/// another starts briefly inherits the open file, and running the helper
+/// then fails with *Text file busy*.
+fn serial() -> std::sync::MutexGuard<'static, ()> {
+    static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    LOCK.lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
 /// A fake helper in `dir` that logs each start to `dir/starts` and runs
 /// `body` for each request line.
 fn fake(dir: &Path, body: &str) -> PathBuf {
@@ -49,6 +58,7 @@ const DONE: &str = r#"echo '{"status":"done","text":"nice","device":"CPU","secon
 
 #[test]
 fn keeps_one_helper_for_consecutive_critiques() {
+    let _serial = serial();
     let dir = tempfile::tempdir().unwrap();
     let critic = HelperCritic::with_helper(Some(fake(dir.path(), DONE)), Duration::from_secs(60));
     assert_eq!(critic.problem(), None);
@@ -60,6 +70,7 @@ fn keeps_one_helper_for_consecutive_critiques() {
 
 #[test]
 fn passes_on_the_helpers_errors() {
+    let _serial = serial();
     let dir = tempfile::tempdir().unwrap();
     let helper = fake(
         dir.path(),
@@ -77,6 +88,7 @@ fn passes_on_the_helpers_errors() {
 
 #[test]
 fn a_crash_fails_one_critique_and_the_next_starts_a_new_helper() {
+    let _serial = serial();
     let dir = tempfile::tempdir().unwrap();
     // The first helper dies on its first request; later ones answer.
     let crash_once = format!(
@@ -97,6 +109,7 @@ fn a_crash_fails_one_critique_and_the_next_starts_a_new_helper() {
 
 #[test]
 fn stops_the_helper_when_idle() {
+    let _serial = serial();
     let dir = tempfile::tempdir().unwrap();
     let critic =
         HelperCritic::with_helper(Some(fake(dir.path(), DONE)), Duration::from_millis(300));

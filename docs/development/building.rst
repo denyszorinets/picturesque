@@ -46,7 +46,8 @@ needed. Outside it you need:
   compiles from source. On Linux its Vulkan backend also needs ``glslc``,
   the Vulkan headers and loader, and SPIRV-Headers (Ubuntu: ``glslc
   libvulkan-dev spirv-headers``; Fedora: ``glslc vulkan-headers
-  vulkan-loader-devel spirv-headers-devel``). The first build of the
+  vulkan-loader-devel spirv-headers-devel``), and ``patchelf`` to assemble
+  it. The first build of the
   workspace compiles llama.cpp with every CPU variant: about 3½ minutes on
   16 cores. ``make critic-libs`` (``scripts/critic-libs.sh``) puts the
   helper with llama.cpp's libraries and backends in

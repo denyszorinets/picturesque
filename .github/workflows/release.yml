@@ -16,6 +16,7 @@ on:
     paths:
       - .github/workflows/release.yml
       - src-tauri/tauri*.conf.json
+      - scripts/critic-libs.sh
       - scripts/bundle-macos.sh
       - scripts/setup-windows-libvips.sh
   workflow_dispatch:
@@ -121,7 +122,7 @@ jobs:
             webkit2gtk4.1-devel gtk3-devel libsoup3-devel librsvg2-devel \
             openssl-devel \
             vips-devel LibRaw-devel libheif-devel \
-            cmake glslc vulkan-headers vulkan-loader-devel spirv-headers-devel
+            cmake clang-devel patchelf glslc vulkan-headers vulkan-loader-devel spirv-headers-devel
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
           echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
 
@@ -234,7 +235,9 @@ jobs:
         run: scripts/critic-libs.sh release
 
       - name: Build the installers
-        run: npx tauri build --bundles nsis,msi
+        # The critic folder (scripts/critic-libs.sh) is added only here: Tauri
+        # checks resources when the app compiles, and tests do not build it.
+        run: npx tauri build --bundles nsis,msi --config src-tauri/tauri.critic.windows.conf.json
 
       - name: Install silently and start the app
         run: |

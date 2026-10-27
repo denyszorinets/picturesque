@@ -3,8 +3,7 @@
   "bundle": {
     "resources": {
       "../target/windows-runtime/*.dll": "./",
-      "../target/windows-runtime/vips-modules-8.18/*.dll": "vips-modules-8.18/",
-      "../target/release/critic/*": "critic/"
+      "../target/windows-runtime/vips-modules-8.18/*.dll": "vips-modules-8.18/"
     }
   }
 }
