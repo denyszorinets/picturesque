@@ -2,8 +2,6 @@
   import {
     aiStatus,
     ApiError,
-    backgroundCritiqueStatus,
-    onAppEvent,
     criticStatus,
     getSettings,
     previewTemplate,
@@ -50,9 +48,17 @@
     ontour?: () => void;
     /** Whether a folder is culled in place (library settings do not apply). */
     inFolder?: boolean;
+    /** Progress of the background critic, from the app. */
+    critiqueProgress?: BackgroundCritiqueStatus | null;
   }
 
-  let { onchange, onsetup, ontour, inFolder = false }: Props = $props();
+  let {
+    onchange,
+    onsetup,
+    ontour,
+    inFolder = false,
+    critiqueProgress = null,
+  }: Props = $props();
 
   let saved = $state<Settings | null>(null);
   let presets = $state<TemplatePresetView[]>([]);
@@ -96,7 +102,6 @@
     scorePercent: 25 as number | null,
   });
   const scoreValid = $derived(validPercent(critic.scorePercent));
-  let backgroundProgress = $state<BackgroundCritiqueStatus | null>(null);
   let criticState = $state<CriticStatus | null>(null);
   let provider = $state<ProviderChoice>("auto");
   let ai = $state<AiStatus | null>(null);
@@ -182,19 +187,6 @@
       .then((status) => (taste = status))
       .catch(() => {});
   }
-
-  // Progress of the background critic: asked once, then pushed.
-  $effect(() => {
-    backgroundCritiqueStatus()
-      .then((status) => (backgroundProgress = status))
-      .catch(() => {});
-    return onAppEvent((event) => {
-      if (event.type === "background_critique_progress") {
-        const { type: _, ...status } = event;
-        backgroundProgress = status;
-      }
-    });
-  });
 
   /** Asks the critic's server about the saved settings. */
   function loadCritic() {
@@ -638,7 +630,7 @@
       bind:background={critic.background}
       bind:intensity={critic.intensity}
       bind:scorePercent={critic.scorePercent}
-      progress={backgroundProgress}
+      progress={critiqueProgress}
       status={criticState}
       oncheck={loadCritic}
       unsaved={criticChanged}

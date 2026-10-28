@@ -15,4 +15,9 @@ rating: number,
 /**
  * The rating as 0–1.
  */
-score: number, summary: string, strengths: Array<string>, weaknesses: Array<string>, };
+score: number, summary: string, strengths: Array<string>, weaknesses: Array<string>, 
+/**
+ * Written by another model or rubric than the current settings; shown,
+ * but `critique_photo` makes a new one.
+ */
+outdated: boolean, };

@@ -137,6 +137,7 @@ fn critiques_once_and_keeps_the_critique_for_the_model_and_rubric() {
         .call("critique_photo", json!({ "photo_id": id }))
         .unwrap();
     assert_eq!(view["model"], "qwen3-vl:4b");
+    assert_eq!(view["outdated"], false);
     assert_eq!(view["rating"], 7.5);
     assert!((view["score"].as_f64().unwrap() - 6.5 / 9.0).abs() < 1e-6);
     assert_eq!(view["strengths"], json!(["golden light", "clean horizon"]));
@@ -166,7 +167,7 @@ fn critiques_once_and_keeps_the_critique_for_the_model_and_rubric() {
         .unwrap();
     assert_eq!(world.critic.asked.lock().unwrap().len(), 2);
 
-    // A critique written with the earlier prompt is no longer shown.
+    // A critique written with the earlier prompt is shown as outdated.
     world
         .catalog
         .store_analysis(
@@ -176,9 +177,10 @@ fn critiques_once_and_keeps_the_critique_for_the_model_and_rubric() {
                      "critique": { "rating": 7.0, "summary": "Old." } }),
         )
         .unwrap();
+    let old = api.call("get_critique", json!({ "photo_id": id })).unwrap();
     assert_eq!(
-        api.call("get_critique", json!({ "photo_id": id })).unwrap(),
-        Value::Null
+        (&old["summary"], &old["outdated"]),
+        (&json!("Old."), &json!(true))
     );
     api.call("critique_photo", json!({ "photo_id": id }))
         .unwrap();
@@ -191,12 +193,13 @@ fn critiques_once_and_keeps_the_critique_for_the_model_and_rubric() {
                             "model": "qwen3-vl:4b", "rubric": "Only the light." } }),
     )
     .unwrap();
-    assert_eq!(
-        api.call("get_critique", json!({ "photo_id": id })).unwrap(),
-        Value::Null
-    );
-    api.call("critique_photo", json!({ "photo_id": id }))
+    let old = api.call("get_critique", json!({ "photo_id": id })).unwrap();
+    assert_eq!(old["outdated"], true);
+    assert_eq!(old["model"], "qwen3-vl:4b");
+    let fresh = api
+        .call("critique_photo", json!({ "photo_id": id }))
         .unwrap();
+    assert_eq!(fresh["outdated"], false);
     let asked = world.critic.asked.lock().unwrap();
     assert!(asked[3].system.contains("Only the light."));
 }
@@ -315,16 +318,17 @@ fn the_builtin_critic_uses_the_downloaded_model() {
         "{}",
         q.model
     );
-    // Stored under the built-in model: switching to a server hides it.
+    // Stored under the built-in model: switching to a server marks it outdated.
     api.call(
         "update_settings",
         json!({ "critic": { "enabled": true, "backend": "server", "server": DEFAULT_SERVER,
                             "model": "qwen3-vl:4b", "rubric": null } }),
     )
     .unwrap();
+    let old = api.call("get_critique", json!({ "photo_id": id })).unwrap();
     assert_eq!(
-        api.call("get_critique", json!({ "photo_id": id })).unwrap(),
-        Value::Null
+        (&old["model"], &old["outdated"]),
+        (&json!(BUILTIN_MODEL), &json!(true))
     );
 }
 
@@ -357,4 +361,38 @@ fn schema_lists_the_flaws_first_and_the_rating_last() {
     let schema = Critique::schema();
     let keys: Vec<_> = schema["properties"].as_object().unwrap().keys().collect();
     assert_eq!(keys, ["weaknesses", "strengths", "summary", "rating"]);
+}
+
+#[test]
+fn an_older_critique_stays_visible_and_is_redone_on_request() {
+    // (stored model, stored rubric is the current one, outdated, asks again)
+    let cases = [
+        ("qwen3-vl:4b", true, false, false),
+        ("other-model", true, true, true),
+        ("qwen3-vl:4b", false, true, true),
+    ];
+    for (model, same_rubric, outdated, asks) in cases {
+        let (world, api, id) = setup(true, Some(&["qwen3-vl:4b"]));
+        let rubric = if same_rubric {
+            rubric_key(DEFAULT_RUBRIC)
+        } else {
+            "Only the light.".to_owned()
+        };
+        let stored = json!({ "model": model, "rubric": rubric, "critique": {
+            "rating": 7.0, "summary": "Old.", "strengths": [], "weaknesses": [] } });
+        world
+            .catalog
+            .store_analysis(PhotoId(id), ID, &stored)
+            .unwrap();
+
+        let view = api.call("get_critique", json!({ "photo_id": id })).unwrap();
+        assert_eq!(view["outdated"], outdated, "{model} {same_rubric}");
+        assert_eq!(view["model"], model);
+        assert_eq!(view["summary"], "Old.");
+
+        api.call("critique_photo", json!({ "photo_id": id }))
+            .unwrap();
+        let asked = world.critic.asked.lock().unwrap().len();
+        assert_eq!(asked, usize::from(asks), "{model} {same_rubric}");
+    }
 }

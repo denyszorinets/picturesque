@@ -1,12 +1,15 @@
 <script lang="ts">
   import Icon from "../components/Icon.svelte";
   import { logLine } from "./log";
-  import type { JobFilter, LogLevel } from "../api";
+  import type { BackgroundCritiqueStatus, JobFilter, LogLevel } from "../api";
   import PathInput from "../components/PathInput.svelte";
+  import CritiqueCard from "./CritiqueCard.svelte";
   import { STEP_LABELS, steps, type Pipeline } from "./pipeline.svelte";
 
   interface Props {
     pipeline: Pipeline;
+    /** Background critique progress; `null` until known. */
+    critique?: BackgroundCritiqueStatus | null;
     /** Whether the view is on screen; it reloads only then. */
     visible: boolean;
     /** Whether a library folder is set; importing waits for one. */
@@ -20,6 +23,7 @@
 
   let {
     pipeline,
+    critique = null,
     visible,
     hasLibrary,
     inFolder = false,
@@ -204,6 +208,10 @@
     {/if}
   </section>
 
+  <div class="critique-area">
+    <CritiqueCard status={critique} {onsettings} />
+  </div>
+
   <section class="card photos" aria-labelledby="photos-title">
     <div class="heading">
       <h2 id="photos-title">Photos</h2>
@@ -374,14 +382,19 @@
     grid-template-columns: minmax(0, 1fr) minmax(18rem, 26rem);
     grid-template-areas:
       "sources log"
+      "critique log"
       "photos log";
-    grid-template-rows: auto 1fr;
+    grid-template-rows: auto auto 1fr;
     gap: 1rem;
     align-items: start;
   }
 
   .sources {
     grid-area: sources;
+  }
+
+  .critique-area {
+    grid-area: critique;
   }
 
   .photos {
@@ -400,7 +413,7 @@
   @media (max-width: 1100px) {
     .activity {
       grid-template-columns: minmax(0, 1fr);
-      grid-template-areas: "sources" "photos" "log";
+      grid-template-areas: "sources" "critique" "photos" "log";
     }
 
     .log {

@@ -61,11 +61,15 @@ pub struct CritiqueView {
     pub summary: String,
     pub strengths: Vec<String>,
     pub weaknesses: Vec<String>,
+    /// Written by another model or rubric than the current settings; shown,
+    /// but `critique_photo` makes a new one.
+    pub outdated: bool,
 }
 
 impl CritiqueView {
     fn new(model: &str, c: Critique) -> Self {
         Self {
+            outdated: false,
             model: model.to_owned(),
             score: (c.rating - 1.0) / 9.0,
             rating: c.rating,
@@ -211,7 +215,8 @@ impl CritiqueService {
         }
     }
 
-    /// The stored critique by the current model and rubric, if any.
+    /// The stored critique, if any; `outdated` when another model or rubric
+    /// than the current settings wrote it.
     pub fn cached(&self, id: PhotoId) -> Result<Option<CritiqueView>, CritiqueError> {
         let settings = self.settings()?;
         let stored = self
@@ -223,16 +228,17 @@ impl CritiqueService {
         let Some(stored) = stored else {
             return Ok(None);
         };
-        let model = Self::model_name(&settings);
-        let matches =
-            stored["model"] == model && stored["rubric"] == rubric_key(settings.rubric()).as_str();
-        if !matches {
-            return Ok(None);
-        }
+        let current = Self::model_name(&settings);
+        let outdated = stored["model"] != current
+            || stored["rubric"] != rubric_key(settings.rubric()).as_str();
+        let model = stored["model"].as_str().unwrap_or(current);
         Ok(
             serde_json::from_value::<Critique>(stored["critique"].clone())
                 .ok()
-                .map(|c| CritiqueView::new(model, c)),
+                .map(|c| CritiqueView {
+                    outdated,
+                    ..CritiqueView::new(model, c)
+                }),
         )
     }
 
@@ -243,7 +249,10 @@ impl CritiqueService {
         if !settings.enabled {
             return Err(CritiqueError::Disabled);
         }
-        if !refresh && let Some(view) = self.cached(id)? {
+        if !refresh
+            && let Some(view) = self.cached(id)?
+            && !view.outdated
+        {
             return Ok(view);
         }
         let _waiting = Waiting::new(&self.interactive);

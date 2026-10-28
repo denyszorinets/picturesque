@@ -222,3 +222,92 @@ test("sets up the background critic without starting it", async ({
   expect(settings.critic.intensity).toBe("when_idle");
   expect(settings.critic.score_weight).toBeCloseTo(0.4);
 });
+
+test("shows the critique pill and keeps a critique after closing the loupe", async ({
+  page,
+  request,
+}) => {
+  const server = createServer((req, res) => {
+    void (async () => {
+      res.writeHead(200, { "content-type": "application/json" });
+      if (req.url === "/v1/models") {
+        res.end(JSON.stringify({ data: [{ id: "tiny-vl" }] }));
+        return;
+      }
+      await body(req);
+      const critique = {
+        rating: 6,
+        summary: "Plain but clean.",
+        strengths: ["clean"],
+        weaknesses: ["flat"],
+      };
+      res.end(
+        JSON.stringify({
+          choices: [{ message: { content: JSON.stringify(critique) } }],
+        }),
+      );
+    })();
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const port = (server.address() as AddressInfo).port;
+  try {
+    await importFiles(request, {
+      "pill/a.JPG": {
+        bytes: jpeg(9310),
+        time: new Date("1985-06-06T10:00:00"),
+      },
+    });
+    await call(request, "update_settings", {
+      library_root: LIBRARY,
+      onboarding: { tour_done: true },
+      critic: {
+        ...CRITIC_DEFAULTS,
+        enabled: true,
+        backend: "server",
+        server: `http://127.0.0.1:${port}/v1`,
+        model: "tiny-vl",
+        background: true,
+        // Not "full": keeps the pill stable (waiting or paused) for the asserts.
+        intensity: "when_idle",
+      },
+    });
+    await page.goto("/");
+    await expect(page.getByTestId("critique-ring")).toBeVisible();
+    await expect(page.getByTestId("critique-ring-label")).toContainText(
+      /^Critique(?: paused ·)? \d+ \/ \d+/,
+    );
+    // Only one popover is open at a time.
+    const popovers = page.getByTestId("activity-popover");
+    await page.getByTestId("critique-ring").click();
+    await expect(popovers).toHaveCount(1);
+    await page.getByTestId("activity-ring").click();
+    await expect(popovers).toHaveCount(1);
+    await page.locator("h1").click();
+    await expect(popovers).toHaveCount(0);
+    await page
+      .getByRole("navigation")
+      .getByRole("button", { name: "Activity" })
+      .click();
+    await expect(page.getByTestId("activity-critique-count")).toContainText(
+      "photos critiqued",
+    );
+
+    await page
+      .getByRole("navigation")
+      .getByRole("button", { name: "Library" })
+      .click();
+    await page.locator("[data-photo-id]").first().click();
+    await page.keyboard.press("Enter");
+    const summary = page.getByTestId("critique-summary");
+    if (!(await summary.isVisible())) {
+      await page.getByTestId("critique-run").click();
+    }
+    await expect(summary).toContainText("Plain but clean.");
+    await page.keyboard.press("Escape");
+    await page.keyboard.press("Enter");
+    await expect(summary).toContainText("Plain but clean.");
+  } finally {
+    server.close();
+    await call(request, "update_settings", { critic: CRITIC_DEFAULTS });
+  }
+});

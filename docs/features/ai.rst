@@ -216,8 +216,9 @@ Critiques are **off by default**. Two ways to get them:
 
 Then the loupe's info panel has a **Critique this photo** button. The
 critique is kept with the photo and shown whenever you come back to it;
-**Ask again** asks for a new one. Choosing another model or rubric shows
-only critiques written with them.
+**Ask again** asks for a new one. After choosing another model or rubric,
+earlier critiques stay visible, marked as written by an earlier model or
+rubric, until you ask again.
 
 The built-in critic runs in a helper process that starts with the first
 critique, keeps the model loaded while you keep asking, and stops after
@@ -297,6 +298,12 @@ every photo has a critique to compare. It is **off by default**: turn on
 the built-in critic and with a model server, and uses the same model,
 rubric and backend as the critiques you ask for. It critiques one photo at
 a time, every photo of the library except rejects.
+
+While it works, a second pill in the top right corner, next to the
+analysis pill, shows ``Critique N / M`` (photos with a current critique out
+of all photos but rejects). It says why it waits when paused, and the
+**Activity** tab has a *Critique* section with the same count, the time
+per photo, the time left and the photos that failed.
 
 It is a separate, slow pipeline. The order is:
 
