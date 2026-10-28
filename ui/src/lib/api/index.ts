@@ -1,6 +1,7 @@
 import type { AiStatus } from "./generated/AiStatus";
 import type { TasteStatus } from "./generated/TasteStatus";
 import type { CriticStatus } from "./generated/CriticStatus";
+import type { BackgroundCritiqueStatus } from "./generated/BackgroundCritiqueStatus";
 import type { CritiqueView } from "./generated/CritiqueView";
 import type { AnalysisStatus } from "./generated/AnalysisStatus";
 import type { SidecarStatus } from "./generated/SidecarStatus";
@@ -43,6 +44,8 @@ export type { AiStatus } from "./generated/AiStatus";
 export type { TasteStatus } from "./generated/TasteStatus";
 export type { TasteSettings } from "./generated/TasteSettings";
 export type { CriticStatus } from "./generated/CriticStatus";
+export type { BackgroundCritiqueStatus } from "./generated/BackgroundCritiqueStatus";
+export type { CriticIntensity } from "./generated/CriticIntensity";
 export type { CritiqueView } from "./generated/CritiqueView";
 export type { CriticSettings } from "./generated/CriticSettings";
 export type { CriticEngine } from "./generated/CriticEngine";
@@ -352,6 +355,16 @@ export function tasteStatus(): Promise<TasteStatus> {
 /** Whether photo critiques can run (asks the model server when on). */
 export function criticStatus(): Promise<CriticStatus> {
   return transport.call<CriticStatus>("critic_status");
+}
+
+/** Progress of critiquing the whole library in the background. */
+export function backgroundCritiqueStatus(): Promise<BackgroundCritiqueStatus> {
+  return transport.call<BackgroundCritiqueStatus>("background_critique_status");
+}
+
+/** Tells the app the user is active (the background critic yields). */
+export function reportActivity(): Promise<null> {
+  return transport.call<null>("report_activity");
 }
 
 /** The stored critique of a photo by the current model and rubric. */

@@ -2,6 +2,8 @@
   import {
     aiStatus,
     ApiError,
+    backgroundCritiqueStatus,
+    onAppEvent,
     criticStatus,
     getSettings,
     previewTemplate,
@@ -10,7 +12,9 @@
     templatePresets,
     updateSettings,
     type AiStatus,
+    type BackgroundCritiqueStatus,
     type CriticEngine,
+    type CriticIntensity,
     type CriticStatus,
     type Provider,
     type ProviderChoice,
@@ -20,6 +24,8 @@
     type TemplatePresetView,
     type TemplatePreview,
   } from "../api";
+  import { validPercent } from "./percent";
+  import TasteFields from "./TasteFields.svelte";
   import CriticFields from "../ai/CriticFields.svelte";
   import ModelList from "../ai/ModelList.svelte";
   import Reanalyze from "../analysis/Reanalyze.svelte";
@@ -76,7 +82,7 @@
     aesthetic: "Aesthetic",
   } as const;
   /** Share of the personal taste score in the aesthetic score, in percent. */
-  let tastePercent = $state(50);
+  let tastePercent = $state<number | null>(50);
   let taste = $state<TasteStatus | null>(null);
   let critic = $state({
     enabled: false,
@@ -84,7 +90,13 @@
     server: "",
     model: "",
     rubric: "",
+    background: false,
+    intensity: "gentle" as CriticIntensity,
+    /** Share of critiques in the aesthetic score, in percent. */
+    scorePercent: 25 as number | null,
   });
+  const scoreValid = $derived(validPercent(critic.scorePercent));
+  let backgroundProgress = $state<BackgroundCritiqueStatus | null>(null);
   let criticState = $state<CriticStatus | null>(null);
   let provider = $state<ProviderChoice>("auto");
   let ai = $state<AiStatus | null>(null);
@@ -120,8 +132,10 @@
       (autoPick !== saved.auto_pick.enabled ||
         autoPickPercent !== Math.round(saved.auto_pick.min_quality * 100)),
   );
+  const tasteValid = $derived(validPercent(tastePercent));
   const tasteChanged = $derived(
     saved !== null &&
+      tasteValid &&
       tastePercent !== Math.round(saved.taste.personal_weight * 100),
   );
   const criticChanged = $derived(
@@ -130,7 +144,11 @@
         critic.backend !== saved.critic.backend ||
         critic.server.trim() !== saved.critic.server ||
         critic.model.trim() !== saved.critic.model ||
-        critic.rubric.trim() !== (saved.critic.rubric ?? "")),
+        critic.rubric.trim() !== (saved.critic.rubric ?? "") ||
+        critic.background !== saved.critic.background ||
+        critic.intensity !== saved.critic.intensity ||
+        (scoreValid &&
+          critic.scorePercent !== Math.round(saved.critic.score_weight * 100))),
   );
   const dirty = $derived(
     saved !== null &&
@@ -164,6 +182,19 @@
       .then((status) => (taste = status))
       .catch(() => {});
   }
+
+  // Progress of the background critic: asked once, then pushed.
+  $effect(() => {
+    backgroundCritiqueStatus()
+      .then((status) => (backgroundProgress = status))
+      .catch(() => {});
+    return onAppEvent((event) => {
+      if (event.type === "background_critique_progress") {
+        const { type: _, ...status } = event;
+        backgroundProgress = status;
+      }
+    });
+  });
 
   /** Asks the critic's server about the saved settings. */
   function loadCritic() {
@@ -216,6 +247,9 @@
       server: settings.critic.server,
       model: settings.critic.model,
       rubric: settings.critic.rubric ?? "",
+      background: settings.critic.background,
+      intensity: settings.critic.intensity,
+      scorePercent: Math.round(settings.critic.score_weight * 100),
     };
     loadAi();
     loadTaste();
@@ -239,7 +273,8 @@
         update.series = { max_gap_seconds: maxGap, max_distance: maxDistance };
       if (rankingChanged) update.ranking = { ...weights };
       if (provider !== saved.ai.provider) update.ai = { provider };
-      if (tasteChanged) update.taste = { personal_weight: tastePercent / 100 };
+      if (tasteChanged)
+        update.taste = { personal_weight: (tastePercent ?? 0) / 100 };
       if (criticChanged)
         update.critic = {
           enabled: critic.enabled,
@@ -247,6 +282,9 @@
           server: critic.server.trim(),
           model: critic.model.trim(),
           rubric: critic.rubric.trim() || null,
+          background: critic.background,
+          intensity: critic.intensity,
+          score_weight: (critic.scorePercent ?? 0) / 100,
         };
       if (autoPickChanged)
         update.auto_pick = {
@@ -586,37 +624,7 @@
   </div>
 
   <div class="field">
-    <label class="inline">
-      <span class="label">Your taste</span>
-      <input
-        type="number"
-        min="0"
-        max="100"
-        step="10"
-        bind:value={tastePercent}
-        data-testid="taste-weight"
-      />
-      % of the aesthetic score
-    </label>
-    <p class="hint muted">
-      Picturesque learns what you like from your picks and rejects, and blends
-      it with the general aesthetic score: 0% uses only the general score, 100%
-      only yours.
-    </p>
-    {#if taste}
-      <p class="hint muted" data-testid="taste-status">
-        {#if taste.learned && taste.agreement !== null}
-          Learned from {taste.picks} picks and {taste.rejects} rejects; it scores
-          your picks above your rejects {Math.round(taste.agreement * 100)}% of
-          the time.
-        {:else}
-          Pick and reject at least {taste.needed} analyzed photos each to teach it
-          (now {taste.picks}
-          {taste.picks === 1 ? "pick" : "picks"} and {taste.rejects}
-          {taste.rejects === 1 ? "reject" : "rejects"}).
-        {/if}
-      </p>
-    {/if}
+    <TasteFields bind:percent={tastePercent} {taste} />
   </div>
 
   <div class="field">
@@ -627,6 +635,10 @@
       bind:server={critic.server}
       bind:model={critic.model}
       bind:rubric={critic.rubric}
+      bind:background={critic.background}
+      bind:intensity={critic.intensity}
+      bind:scorePercent={critic.scorePercent}
+      progress={backgroundProgress}
       status={criticState}
       oncheck={loadCritic}
       unsaved={criticChanged}
@@ -637,7 +649,11 @@
     <button
       class="primary"
       onclick={save}
-      disabled={!dirty || saving || !!preview?.error}
+      disabled={!dirty ||
+        saving ||
+        !!preview?.error ||
+        !scoreValid ||
+        !tasteValid}
       data-testid="save-settings"
     >
       Save

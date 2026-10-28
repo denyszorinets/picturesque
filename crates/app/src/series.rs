@@ -144,6 +144,8 @@ pub struct SeriesService {
     settings: Arc<dyn SettingsStore>,
     events: Arc<dyn EventSink>,
     taste: TasteService,
+    /// Critique scores as last computed (`critique_score`).
+    critique_scores: Mutex<HashMap<PhotoId, f32>>,
     /// The last stored series and scores; also serializes recomputes.
     last: Mutex<Option<Stored>>,
     notify: Mutex<Option<Sender<()>>>,
@@ -163,12 +165,34 @@ impl SeriesService {
     ) -> Self {
         Self {
             taste: TasteService::new(Arc::clone(&catalog)),
+            critique_scores: Mutex::default(),
             catalog,
             settings,
             events,
             last: Mutex::new(None),
             notify: Mutex::new(None),
         }
+    }
+
+    /// The series as last stored (empty before the first recompute).
+    pub fn stored_series(&self) -> Vec<StoredSeries> {
+        self.last
+            .lock()
+            .expect("series lock")
+            .as_ref()
+            .map(|(series, _)| series.clone())
+            .unwrap_or_default()
+    }
+
+    /// A photo's critique score (0–1, its rating's percentile among the
+    /// library's critiques) as last computed; `None` without a critique or
+    /// while critiques are off.
+    pub fn critique_score(&self, id: PhotoId) -> Option<f32> {
+        self.critique_scores
+            .lock()
+            .expect("critique scores lock")
+            .get(&id)
+            .copied()
     }
 
     /// The personal taste model, retrained by [`Self::recompute`].
@@ -204,13 +228,23 @@ impl SeriesService {
         let order: Vec<PhotoId> = captured.iter().map(|(id, _)| *id).collect();
         let personal = self.taste.update(&order, &embeddings)?;
         let personal_weight = settings.taste.personal_weight as f32;
+        let critiques = self.critique_scores(&settings)?;
+        let critique_weight = settings.critic.score_weight as f32;
         let aesthetic: HashMap<PhotoId, f32> = embeddings
-            .iter()
-            .filter_map(|(id, e)| {
-                let p = personal.as_ref().and_then(|m| m.score(e));
-                Some((*id, blend(general.get(id).copied(), p, personal_weight)?))
+            .keys()
+            .chain(critiques.keys())
+            .collect::<HashSet<_>>()
+            .into_iter()
+            .filter_map(|id| {
+                let p = personal.as_ref().and_then(|m| m.score(embeddings.get(id)?));
+                let looks = blend(general.get(id).copied(), p, personal_weight);
+                Some((
+                    *id,
+                    blend(looks, critiques.get(id).copied(), critique_weight)?,
+                ))
             })
             .collect();
+        *self.critique_scores.lock().expect("critique scores lock") = critiques;
         let found_faces: HashMap<PhotoId, Vec<FaceView>> = self
             .catalog
             .analysis_results(FaceAnalyzer::ID)?
@@ -324,6 +358,28 @@ impl SeriesService {
             *last = Some((series, qualities));
         }
         Ok(count)
+    }
+
+    /// Every critiqued photo's critique score, while critiques are on
+    /// (`core::critique`): old critiques count until they are redone.
+    fn critique_scores(
+        &self,
+        settings: &crate::settings::Settings,
+    ) -> Result<HashMap<PhotoId, f32>, CatalogError> {
+        if !settings.critic.enabled {
+            return Ok(HashMap::new());
+        }
+        // Rejects are not critiqued by the background critic, so they stay
+        // out of the population the percentiles and the threshold use.
+        let rejected: HashSet<PhotoId> = self.catalog.rejected_photos()?.into_iter().collect();
+        let ratings: Vec<(PhotoId, f32)> = self
+            .catalog
+            .analysis_results(crate::critic::ID)?
+            .into_iter()
+            .filter(|(id, _)| !rejected.contains(id))
+            .filter_map(|(id, r)| Some((id, r["critique"]["rating"].as_f64()? as f32)))
+            .collect();
+        Ok(picturesque_core::critique::scores(&ratings))
     }
 
     /// The series `id` belongs to.

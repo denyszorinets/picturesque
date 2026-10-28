@@ -5,6 +5,12 @@
 //! follow each other, so the model stays loaded; after [`IDLE`] without one
 //! it is stopped and its memory returned. If it dies (llama.cpp aborts on
 //! some errors), that critique fails and the next one starts a new helper.
+//!
+//! Background critiques may run it at low priority. A process cannot raise
+//! its own priority again, so the helper is restarted when the priority
+//! changes (the model reloads from the page cache in a second or two), and
+//! [`HelperCritic::interrupt`] stops a background critique by ending the
+//! process.
 
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
@@ -12,7 +18,7 @@ use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 use std::sync::{Arc, Mutex, Weak};
 use std::time::{Duration, Instant};
 
-use picturesque_app::ports::critic::CriticError;
+use picturesque_app::ports::critic::{CriticError, Throttle};
 use picturesque_core::critic_protocol::{HelperReply, HelperRequest};
 
 /// How long the model stays loaded after a critique.
@@ -45,17 +51,50 @@ pub fn locate() -> Option<PathBuf> {
 }
 
 struct Running {
-    child: Child,
+    /// Shared so that [`HelperCritic::interrupt`] can end it while a
+    /// critique waits for its reply.
+    child: Arc<Mutex<Child>>,
     stdin: ChildStdin,
     stdout: BufReader<ChildStdout>,
     last_used: Instant,
+    low_priority: bool,
 }
 
 impl Drop for Running {
     fn drop(&mut self) {
         // It would exit once its stdin closes, but may be mid-critique.
-        let _ = self.child.kill();
-        let _ = self.child.wait();
+        let mut child = self.child.lock().expect("child lock");
+        let _ = child.kill();
+        let _ = child.wait();
+    }
+}
+
+/// The background critique in progress, which may be interrupted.
+#[derive(Default)]
+struct Current {
+    child: Option<Arc<Mutex<Child>>>,
+    interrupted: bool,
+    /// A background `ask` is under way (thumbnailing, start-up or waiting).
+    in_progress: bool,
+    /// [`HelperCritic::interrupt`] came before `child` was registered.
+    interrupt_requested: bool,
+}
+
+/// Marks a background `ask` as in progress while it lives.
+struct InProgress<'a>(&'a Mutex<Current>);
+
+impl<'a> InProgress<'a> {
+    fn new(current: &'a Mutex<Current>) -> Self {
+        let mut c = current.lock().expect("current lock");
+        c.in_progress = true;
+        c.interrupt_requested = false;
+        Self(current)
+    }
+}
+
+impl Drop for InProgress<'_> {
+    fn drop(&mut self) {
+        *self.0.lock().expect("current lock") = Current::default();
     }
 }
 
@@ -66,11 +105,19 @@ struct State {
     watching: bool,
 }
 
+/// A test's hook into `ask`.
+#[cfg(test)]
+type Hook = Box<dyn Fn() + Send + Sync>;
+
 #[derive(Clone)]
 pub struct HelperCritic {
     helper: Option<PathBuf>,
     idle: Duration,
     state: Arc<Mutex<State>>,
+    current: Arc<Mutex<Current>>,
+    /// Called once the helper is unregistered, before `ask` returns.
+    #[cfg(test)]
+    after_reply: Arc<Mutex<Option<Hook>>>,
 }
 
 impl std::fmt::Debug for HelperCritic {
@@ -94,6 +141,9 @@ impl HelperCritic {
             helper,
             idle,
             state: Arc::default(),
+            current: Arc::default(),
+            #[cfg(test)]
+            after_reply: Arc::default(),
         }
     }
 
@@ -113,23 +163,85 @@ impl HelperCritic {
         self.state.lock().expect("helper lock").running.is_some()
     }
 
-    /// Asks the helper; `request.max_tokens` is set here.
-    pub fn ask(&self, mut request: HelperRequest) -> Result<String, CriticError> {
+    /// Whether the running helper has low priority.
+    pub fn is_low_priority(&self) -> bool {
+        self.state
+            .lock()
+            .expect("helper lock")
+            .running
+            .as_ref()
+            .is_some_and(|r| r.low_priority)
+    }
+
+    /// Ends the helper if it is writing a background critique.
+    pub fn interrupt(&self) {
+        let mut current = self.current.lock().expect("current lock");
+        if let Some(child) = current.child.clone() {
+            current.interrupted = true;
+            let _ = child.lock().expect("child lock").kill();
+        } else if current.in_progress {
+            // Not started yet: `ask` stops before sending the request.
+            current.interrupt_requested = true;
+        }
+    }
+
+    /// Asks the helper; `request.max_tokens` and `threads` are set here.
+    /// `background` critiques may be interrupted.
+    pub fn ask(
+        &self,
+        mut request: HelperRequest,
+        background: Option<Throttle>,
+    ) -> Result<String, CriticError> {
         if let Some(problem) = self.problem() {
             return Err(CriticError::Unreachable(problem));
         }
         request.max_tokens = MAX_TOKENS;
+        request.threads = background.and_then(|t| t.threads).unwrap_or(0);
+        let low_priority = background.is_some_and(|t| t.low_priority);
         let line = serde_json::to_string(&request).expect("requests serialize");
+        let _in_progress = background.map(|_| InProgress::new(&self.current));
         let mut state = self.state.lock().expect("helper lock");
+        // A user's critique between background ones changes the priority,
+        // so the helper restarts and reloads the model (1-2 s); by design.
+        if state
+            .running
+            .as_ref()
+            .is_some_and(|r| r.low_priority != low_priority)
+        {
+            state.running = None;
+        }
         if state.running.is_none() {
-            state.running = Some(self.start()?);
+            state.running = Some(self.start(low_priority)?);
         }
         if !state.watching {
             state.watching = true;
             watch(Arc::downgrade(&self.state), self.idle);
         }
         let running = state.running.as_mut().expect("just started");
+        if background.is_some() {
+            let mut current = self.current.lock().expect("current lock");
+            if std::mem::take(&mut current.interrupt_requested) {
+                return Err(CriticError::Interrupted);
+            }
+            current.child = Some(Arc::clone(&running.child));
+        }
         let reply = exchange(running, &line);
+        // Unregister the helper and read `interrupted` under one lock: an
+        // `interrupt` after this finds nothing to kill, so it cannot end the
+        // helper the next critique uses.
+        let interrupted = {
+            let mut current = self.current.lock().expect("current lock");
+            current.child = None;
+            current.interrupted
+        };
+        #[cfg(test)]
+        if let Some(hook) = self.after_reply.lock().expect("hook lock").as_ref() {
+            hook();
+        }
+        if interrupted {
+            state.running = None;
+            return Err(CriticError::Interrupted);
+        }
         match reply {
             Ok(reply) => {
                 running.last_used = Instant::now();
@@ -140,8 +252,8 @@ impl HelperCritic {
             }
             Err(e) => {
                 // Dead or confused: start afresh next time.
-                let mut dead = state.running.take().expect("running");
-                let status = exit_status(&mut dead.child);
+                let dead = state.running.take().expect("running");
+                let status = exit_status(&mut dead.child.lock().expect("child lock"));
                 drop(dead);
                 Err(CriticError::Server(match status {
                     Some(status) => format!("the built-in critic stopped ({status}): {e}"),
@@ -151,9 +263,9 @@ impl HelperCritic {
         }
     }
 
-    fn start(&self) -> Result<Running, CriticError> {
+    fn start(&self, low_priority: bool) -> Result<Running, CriticError> {
         let path = self.helper.as_deref().expect("checked by problem()");
-        let mut child = Command::new(path)
+        let mut child = command(path, low_priority)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             // llama.cpp's own messages, and the reason if it aborts.
@@ -163,11 +275,35 @@ impl HelperCritic {
         let stdin = child.stdin.take().expect("piped");
         let stdout = BufReader::new(child.stdout.take().expect("piped"));
         Ok(Running {
-            child,
+            child: Arc::new(Mutex::new(child)),
             stdin,
             stdout,
             last_used: Instant::now(),
+            low_priority,
         })
+    }
+}
+
+/// The command starting the helper, at low priority if asked: through
+/// `nice` on Unix (it replaces itself with the helper), with a lower
+/// priority class on Windows.
+fn command(path: &Path, low_priority: bool) -> Command {
+    if !low_priority {
+        return Command::new(path);
+    }
+    #[cfg(unix)]
+    {
+        let mut nice = Command::new("nice");
+        nice.arg("-n").arg("10").arg("--").arg(path);
+        nice
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const BELOW_NORMAL_PRIORITY_CLASS: u32 = 0x0000_4000;
+        let mut command = Command::new(path);
+        command.creation_flags(BELOW_NORMAL_PRIORITY_CLASS);
+        command
     }
 }
 
@@ -228,4 +364,95 @@ fn watch(state: Weak<Mutex<State>>, idle: Duration) {
             }
         }
     });
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::*;
+    use std::os::unix::fs::PermissionsExt;
+
+    /// Serializes tests that write and run fake helpers (*Text file busy*).
+    fn serial() -> std::sync::MutexGuard<'static, ()> {
+        static LOCK: Mutex<()> = Mutex::new(());
+        LOCK.lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    /// A fake helper logging each start to `dir/starts` and each request to
+    /// `dir/requests`, answering every request.
+    fn fake(dir: &Path) -> PathBuf {
+        let path = dir.join("picturesque-critic");
+        std::fs::write(
+            &path,
+            format!(
+                "#!/bin/sh\necho start >> '{}'\nwhile IFS= read -r line; do\necho req >> '{}'\n\
+                 echo '{{\"status\":\"done\",\"text\":\"nice\",\"device\":\"CPU\",\"seconds\":0.1}}'\ndone\n",
+                dir.join("starts").display(),
+                dir.join("requests").display()
+            ),
+        )
+        .unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+        path
+    }
+
+    fn lines(dir: &Path, name: &str) -> usize {
+        std::fs::read_to_string(dir.join(name)).map_or(0, |s| s.lines().count())
+    }
+
+    fn request() -> HelperRequest {
+        HelperRequest {
+            model: "m.gguf".into(),
+            mmproj: "p.gguf".into(),
+            gpu: false,
+            threads: 0,
+            system: String::new(),
+            prompt: String::new(),
+            image: String::new(),
+            schema: "{}".into(),
+            max_tokens: 0,
+        }
+    }
+
+    const BACKGROUND: Throttle = Throttle {
+        low_priority: false,
+        threads: None,
+    };
+
+    #[test]
+    fn an_interrupt_during_start_up_cancels_the_background_critique() {
+        let _serial = serial();
+        let dir = tempfile::tempdir().unwrap();
+        let critic = HelperCritic::with_helper(Some(fake(dir.path())), Duration::from_secs(60));
+        // `ask` marks itself in progress, then blocks on the state lock.
+        let held = critic.state.lock().unwrap();
+        let asking = critic.clone();
+        let thread = std::thread::spawn(move || asking.ask(request(), Some(BACKGROUND)));
+        while !critic.current.lock().unwrap().in_progress {
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        critic.interrupt();
+        drop(held);
+        assert!(matches!(
+            thread.join().unwrap(),
+            Err(CriticError::Interrupted)
+        ));
+        assert_eq!(lines(dir.path(), "requests"), 0);
+    }
+
+    #[test]
+    fn an_interrupt_after_the_reply_does_not_end_the_helper() {
+        let _serial = serial();
+        let dir = tempfile::tempdir().unwrap();
+        let critic = HelperCritic::with_helper(Some(fake(dir.path())), Duration::from_secs(60));
+        let interrupting = critic.clone();
+        *critic.after_reply.lock().unwrap() = Some(Box::new(move || interrupting.interrupt()));
+        // The interrupt lands after the reply is in and the helper is
+        // unregistered: too late to matter.
+        assert_eq!(critic.ask(request(), Some(BACKGROUND)).unwrap(), "nice");
+        *critic.after_reply.lock().unwrap() = None;
+        // The helper lives on for the next critique.
+        assert_eq!(critic.ask(request(), Some(BACKGROUND)).unwrap(), "nice");
+        assert_eq!(lines(dir.path(), "starts"), 1);
+    }
 }

@@ -266,9 +266,125 @@ helper fails, only that critique fails.
 - Settings warn when the server address is not on this computer.
 - **Speed.** One critique at a time. With a server, the time depends on
   the server and model.
-- The rating is **not used for ranking**: models are not calibrated like the
-  aesthetic score, and differ from each other. It is a second opinion in
-  words.
+- The rating is a second opinion in words. Ratings are not calibrated like
+  the aesthetic score and models differ from each other, so ratings are not
+  compared directly. Ranking uses the **critique score** instead
+  (:ref:`features-ai-critique-score`).
+
+How strict it is
+~~~~~~~~~~~~~~~~
+
+The critic is told to judge like a juror of a selective competition: it
+lists the flaws first, then the strengths, and only then rates. Ordinary
+snapshots get 3 to 5; 8 or more is rare. On a sample of 50 Wikimedia
+Commons photos, 25 featured pictures and 25 ordinary ones, the mean rating
+was 7.6 for the featured pictures and 4.2 for the ordinary photos, and it
+tells them apart as well as the milder prompt it replaced (AUC 0.90). The
+measurements are in ``spikes/llama/results.md``.
+
+Critiques written by an earlier prompt version are still counted until
+they are redone; the background critic redoes them last.
+
+.. _features-ai-critique-background:
+
+Background critique
+~~~~~~~~~~~~~~~~~~~
+
+Picturesque can critique the whole library in the background, so that
+every photo has a critique to compare. It is **off by default**: turn on
+*Critique the whole library in the background* in **Settings → AI critic**
+(:ref:`reference-settings-critic`), once critiques are on. It works with
+the built-in critic and with a model server, and uses the same model,
+rubric and backend as the critiques you ask for. It critiques one photo at
+a time, every photo of the library except rejects.
+
+It is a separate, slow pipeline. The order is:
+
+1. Photos on screen first; the library's ``prioritize_analysis`` call also
+   prioritizes their critiques.
+2. The best photo of each series, and the picks.
+3. Photos in no series.
+4. The rest of each series.
+
+Within each group, newest photos come first. A photo whose critique was
+written by another model or rubric, or with an older prompt version, keeps
+that critique and counts in the score until it is redone; such photos are
+redone only after every photo without any critique.
+
+All its state is in the catalog, where critiques are stored with the
+analysis results, so after a restart it carries on where it stopped. A
+photo whose critique fails is skipped until the critic settings change.
+
+The intensity setting (``critic.intensity``) in **Settings → AI critic**
+sets how hard it works:
+
+- **Gentle** (default): runs the built-in helper at low operating-system
+  priority and with half the processor's threads. It waits while photos
+  are being imported or analyzed, and while the computer runs on battery.
+  Battery is detected on Linux only for now; elsewhere, power counts as
+  mains.
+- **When idle**: full speed, but only after three minutes without using
+  the app.
+- **Full**: full speed whenever critiques are on.
+
+Changing the intensity restarts the built-in helper; the model reloads in
+a second or two. A critique you ask for in the loupe interrupts the
+background one, which is retried later. A server cannot be interrupted, so
+with a server your request waits until the background critique finishes
+its current photo.
+
+More about the background critic:
+
+- Rejected photos are not critiqued and do not count in the percentiles.
+- A critique you ask for in the loupe is shown at once and updates the
+  scores.
+- On shutdown, a critique in progress is cancelled and redone later.
+- A critique you ask for while the background one works restarts the
+  built-in helper once, because the background critique runs at low
+  priority. The model reloads in a second or two.
+- After three failed critiques in a row, or when the server or the
+  built-in critic cannot be reached, it pauses and shows why in
+  **Settings → AI critic**.
+
+The speed depends on the hardware. On an AMD Radeon 780M with Vulkan a
+critique takes about 10 s, and on a 16-thread CPU about 20 s. A library of
+10,000 photos takes about 28 hours on the GPU and 55 hours on the CPU; that
+is why the feature is off by default and gentle by default.
+
+**Settings → AI critic** shows the progress: how many photos are critiqued
+out of how many, how many are to redo, about how long is left, why it is
+paused if it is, *Critiquing now* while it works, and *Done* when it is
+finished. The API has the same figures as ``background_critique_status``
+(:doc:`/reference/api`).
+
+.. _features-ai-critique-score:
+
+Critique score
+~~~~~~~~~~~~~~
+
+Ratings are not calibrated: a model may rate an ordinary photo 8 and a
+featured one 7. So each photo's **critique score** is the share of the
+library's critiqued photos that it is rated above, ties counting half. A
+score of 80 % means the photo is better than 80 % of your critiqued photos.
+With fewer than 20 critiques, the rating maps linearly instead, from 1 to
+10 onto 0 to 100 %.
+
+The loupe shows it in a **Critic** row, and **Why this score** adds *The
+critic ranks it among your best (top N%)* at 80 % or more, where N is 100
+minus the critique score in percent (at least 1), and *The critic ranks it
+below most of your photos (bottom N%)* at 20 % or less, where N is the
+critique score in percent (at least 1). With fewer than 20 critiques the
+score is the rating mapped linearly, so N then reflects the rating, not a
+rank.
+
+The critique score counts for ``critic.score_weight`` of the aesthetic
+score; the default is 25 %, and **Settings → AI critic** shows it as
+*Critique counts for N % of the aesthetic score*. The aesthetic score used
+for ranking, sorting, auto-pick and the **Aesthetic** filter is built in
+steps: the general score, blended with **Your taste** (:ref:`features-ai-taste`),
+then blended with the critique score. Photos without a critique are not
+affected. Critique scores count only while critiques are on. See
+:doc:`/concepts/scores`.
 
 .. _features-ai-search:
 

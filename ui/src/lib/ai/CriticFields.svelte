@@ -1,5 +1,11 @@
 <script lang="ts">
-  import type { CriticEngine, CriticStatus } from "../api";
+  import type {
+    BackgroundCritiqueStatus,
+    CriticEngine,
+    CriticIntensity,
+    CriticStatus,
+  } from "../api";
+  import BackgroundCritiqueFields from "./BackgroundCritiqueFields.svelte";
 
   interface Props {
     enabled: boolean;
@@ -8,6 +14,12 @@
     model: string;
     /** `""` uses the default rubric. */
     rubric: string;
+    background: boolean;
+    intensity: CriticIntensity;
+    /** Share of critiques in the aesthetic score, in percent. */
+    scorePercent: number | null;
+    /** Background critique progress; `null` while unknown. */
+    progress: BackgroundCritiqueStatus | null;
     /** For the saved settings; `null` while unknown. */
     status: CriticStatus | null;
     /** Asks the server again (for the saved settings). */
@@ -22,6 +34,10 @@
     server = $bindable(),
     model = $bindable(),
     rubric = $bindable(),
+    background = $bindable(),
+    intensity = $bindable(),
+    scorePercent = $bindable(),
+    progress,
     status,
     oncheck,
     unsaved,
@@ -180,6 +196,13 @@
         >
       {/if}
     </p>
+    <BackgroundCritiqueFields
+      bind:background
+      bind:intensity
+      bind:scorePercent
+      {progress}
+      {unsaved}
+    />
   {/if}
 </div>
 

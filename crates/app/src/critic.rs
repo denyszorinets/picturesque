@@ -8,16 +8,17 @@
 //! model and a hash of the rubric: a critique by another model or rubric is
 //! not shown. Critiques run one at a time.
 
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 use picturesque_core::photo::PhotoId;
-use serde::{Deserialize, Serialize};
-use serde_json::{Value, json};
+use serde::Serialize;
+use serde_json::json;
 use ts_rs::TS;
 
 use crate::models::{CRITIC, CRITIC_MMPROJ_FILE, CRITIC_MODEL_FILE, ModelService};
 use crate::ports::catalog::{AnalyzerId, CatalogError, PhotoCatalog};
-use crate::ports::critic::{Critic, CriticBackend, CriticError, CriticRequest};
+use crate::ports::critic::{Critic, CriticBackend, CriticError, CriticRequest, Throttle};
 use crate::ports::inference::ProviderChoice;
 use crate::ports::settings::SettingsStore;
 use crate::settings::{CriticEngine, CriticSettings};
@@ -32,76 +33,20 @@ pub const MAX_EDGE: u32 = 768;
 /// How critiques by the built-in critic are labelled and stored.
 pub const BUILTIN_MODEL: &str = "Qwen3-VL 4B (built-in)";
 
-/// What the model judges, unless the user wrote their own.
-pub const DEFAULT_RUBRIC: &str = "\
-- Composition: framing, balance, leading lines, distracting elements at the edges.
-- Light: direction, quality and contrast of the light; exposure.
-- Subject and moment: is the subject clear, is the moment or expression right?
-- Colour and tone: harmony, white balance, saturation.
-- Technique: focus on the subject, motion blur, noise.";
+mod status;
+pub use status::{CriticStatus, SuggestedModel, suggested};
+
+pub mod prompt;
+#[cfg(test)]
+use prompt::fingerprint;
+pub use prompt::{Critique, DEFAULT_RUBRIC};
+use prompt::{rubric_key, system_prompt};
 
 /// Where critiques are stored among the analysis results.
 pub const ID: AnalyzerId = AnalyzerId {
     name: "critique",
     version: 1,
 };
-
-/// The JSON the model is asked for.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct Critique {
-    /// 1–10.
-    pub rating: f32,
-    pub summary: String,
-    #[serde(default)]
-    pub strengths: Vec<String>,
-    #[serde(default)]
-    pub weaknesses: Vec<String>,
-}
-
-/// Most strengths or weaknesses kept.
-const MAX_POINTS: usize = 5;
-
-impl Critique {
-    /// The first JSON object in a model's reply, tidied; `None` when there
-    /// is none or it lacks a rating or summary.
-    pub fn parse(reply: &str) -> Option<Self> {
-        // Reasoning models think aloud first.
-        let reply = reply.rsplit("</think>").next().unwrap_or(reply);
-        let start = reply.find('{')?;
-        let end = reply.rfind('}')?;
-        let mut c: Self = serde_json::from_str(reply.get(start..=end)?).ok()?;
-        if !c.rating.is_finite() {
-            return None;
-        }
-        c.rating = c.rating.clamp(1.0, 10.0);
-        c.summary = c.summary.trim().to_owned();
-        let tidy = |points: Vec<String>| -> Vec<String> {
-            points
-                .into_iter()
-                .map(|p| p.trim().to_owned())
-                .filter(|p| !p.is_empty())
-                .take(MAX_POINTS)
-                .collect()
-        };
-        c.strengths = tidy(c.strengths);
-        c.weaknesses = tidy(c.weaknesses);
-        (!c.summary.is_empty()).then_some(c)
-    }
-
-    fn schema() -> Value {
-        let points = json!({ "type": "array", "items": { "type": "string" }, "maxItems": 3 });
-        json!({
-            "type": "object",
-            "properties": {
-                "rating": { "type": "number", "minimum": 1, "maximum": 10 },
-                "summary": { "type": "string" },
-                "strengths": points,
-                "weaknesses": points,
-            },
-            "required": ["rating", "summary", "strengths", "weaknesses"],
-        })
-    }
-}
 
 /// A critique, as `get_critique` and `critique_photo` return it.
 #[derive(Debug, Clone, PartialEq, Serialize, TS)]
@@ -129,75 +74,6 @@ impl CritiqueView {
             weaknesses: c.weaknesses,
         }
     }
-}
-
-/// A model the app suggests: one whose license was checked (ADR-0016).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
-#[ts(export)]
-pub struct SuggestedModel {
-    /// The name to pull with Ollama.
-    pub name: String,
-    /// Approximate download size in bytes.
-    #[ts(type = "number")]
-    pub size: u64,
-    pub license: String,
-    pub license_url: String,
-    pub note: String,
-}
-
-/// Models offered in Settings, smallest first.
-pub fn suggested() -> Vec<SuggestedModel> {
-    let qwen = |name: &str, size: u64, note: &str| SuggestedModel {
-        name: name.into(),
-        size,
-        license: "Apache-2.0".into(),
-        license_url: "https://huggingface.co/Qwen/Qwen3-VL-4B-Instruct".into(),
-        note: note.into(),
-    };
-    vec![
-        qwen(
-            "qwen3-vl:2b",
-            1_900_000_000,
-            "Fastest; fine on a laptop CPU, shallower critiques.",
-        ),
-        qwen(
-            "qwen3-vl:4b",
-            3_300_000_000,
-            "Recommended: good critiques, about 8 GB of memory.",
-        ),
-        qwen(
-            "qwen3-vl:8b",
-            6_200_000_000,
-            "Best critiques; wants a GPU or 16 GB of memory.",
-        ),
-    ]
-}
-
-/// Returned by `critic_status`.
-#[derive(Debug, Clone, PartialEq, Serialize, TS)]
-#[ts(export)]
-pub struct CriticStatus {
-    pub enabled: bool,
-    pub backend: CriticEngine,
-    pub server: String,
-    /// Whether the server is on this computer; otherwise photos are sent
-    /// to another one.
-    pub local: bool,
-    /// Whether the server answered, or the built-in critic's helper is
-    /// installed (checked only while enabled).
-    pub reachable: bool,
-    /// The server's models.
-    pub models: Vec<String>,
-    /// The model in use.
-    pub model: String,
-    /// Whether the server has the model, or the built-in model is
-    /// downloaded.
-    pub model_installed: bool,
-    /// What to do to make critiques work, if anything.
-    pub problem: Option<String>,
-    pub suggested: Vec<SuggestedModel>,
-    /// The rubric used when the user has not written one.
-    pub default_rubric: String,
 }
 
 /// Why a critique could not be made.
@@ -261,27 +137,6 @@ pub fn is_local(server: &str) -> bool {
             .is_ok_and(|ip| ip.is_loopback())
 }
 
-/// 64-bit FNV-1a, stable across builds, to recognize the rubric a critique
-/// was written with.
-fn fingerprint(text: &str) -> String {
-    let hash = text.bytes().fold(0xcbf2_9ce4_8422_2325u64, |h, b| {
-        (h ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3)
-    });
-    format!("{hash:016x}")
-}
-
-fn system_prompt(rubric: &str) -> String {
-    format!(
-        "You are an experienced photo editor helping an amateur photographer decide \
-         which photos to keep and learn from them. Judge the photo against this rubric:\n\
-         {rubric}\n\n\
-         Reply with JSON only: {{\"rating\": a number from 1 to 10, \"summary\": one \
-         sentence, \"strengths\": up to 3 short phrases, \"weaknesses\": up to 3 short \
-         phrases}}. Rate 5 for an ordinary snapshot, 7 for a good photo, and 9 or 10 only \
-         for outstanding ones. Be specific about this photo, kind but honest."
-    )
-}
-
 pub struct CritiqueService {
     catalog: Arc<dyn PhotoCatalog>,
     settings: Arc<dyn SettingsStore>,
@@ -290,6 +145,26 @@ pub struct CritiqueService {
     critic: Arc<dyn Critic>,
     /// Held while a critique runs.
     busy: Mutex<()>,
+    /// Critiques the user asked for that are waiting or running.
+    interactive: AtomicUsize,
+    /// Whether a background critique is running.
+    background_running: AtomicBool,
+}
+
+/// Counts a user's critique as waiting while it lives.
+struct Waiting<'a>(&'a AtomicUsize);
+
+impl<'a> Waiting<'a> {
+    fn new(count: &'a AtomicUsize) -> Self {
+        count.fetch_add(1, Ordering::AcqRel);
+        Self(count)
+    }
+}
+
+impl Drop for Waiting<'_> {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, Ordering::AcqRel);
+    }
 }
 
 impl std::fmt::Debug for CritiqueService {
@@ -313,7 +188,15 @@ impl CritiqueService {
             models,
             critic,
             busy: Mutex::new(()),
+            interactive: AtomicUsize::new(0),
+            background_running: AtomicBool::new(false),
         }
+    }
+
+    /// Pretends a background critique is running (tests).
+    #[cfg(test)]
+    pub(crate) fn mark_background_running(&self) {
+        self.background_running.store(true, Ordering::Release);
     }
 
     fn settings(&self) -> Result<CriticSettings, CatalogError> {
@@ -321,7 +204,7 @@ impl CritiqueService {
     }
 
     /// The model critiques are written by, as shown and stored.
-    fn model_name(settings: &CriticSettings) -> &str {
+    pub(crate) fn model_name(settings: &CriticSettings) -> &str {
         match settings.backend {
             CriticEngine::Builtin => BUILTIN_MODEL,
             CriticEngine::Server => &settings.model,
@@ -342,7 +225,7 @@ impl CritiqueService {
         };
         let model = Self::model_name(&settings);
         let matches =
-            stored["model"] == model && stored["rubric"] == fingerprint(settings.rubric()).as_str();
+            stored["model"] == model && stored["rubric"] == rubric_key(settings.rubric()).as_str();
         if !matches {
             return Ok(None);
         }
@@ -354,6 +237,7 @@ impl CritiqueService {
     }
 
     /// Critiques a photo, or returns the stored critique unless `refresh`.
+    /// Takes precedence over the background critic, interrupting it.
     pub fn critique(&self, id: PhotoId, refresh: bool) -> Result<CritiqueView, CritiqueError> {
         let settings = self.settings()?;
         if !settings.enabled {
@@ -362,7 +246,52 @@ impl CritiqueService {
         if !refresh && let Some(view) = self.cached(id)? {
             return Ok(view);
         }
+        let _waiting = Waiting::new(&self.interactive);
+        self.interrupt_background();
         let _busy = self.busy.lock().expect("critic lock");
+        self.run(id, &settings, None)
+    }
+
+    /// Ends the background critique that is running, if any (shutdown).
+    pub fn interrupt_background(&self) {
+        if self.background_running.load(Ordering::Acquire) {
+            self.critic.interrupt();
+        }
+    }
+
+    /// Critiques a photo for the background critic, unless the user is
+    /// waiting for a critique; `Ok(None)` when it gave way (or was
+    /// interrupted) and the photo should be tried again later.
+    pub fn critique_in_background(
+        &self,
+        id: PhotoId,
+        throttle: Throttle,
+    ) -> Result<Option<CritiqueView>, CritiqueError> {
+        let settings = self.settings()?;
+        if !settings.enabled {
+            return Err(CritiqueError::Disabled);
+        }
+        let _busy = self.busy.lock().expect("critic lock");
+        self.background_running.store(true, Ordering::Release);
+        let result = if self.interactive.load(Ordering::Acquire) > 0 {
+            Ok(None)
+        } else {
+            match self.run(id, &settings, Some(throttle)) {
+                Ok(view) => Ok(Some(view)),
+                Err(CritiqueError::Server(CriticError::Interrupted)) => Ok(None),
+                Err(e) => Err(e),
+            }
+        };
+        self.background_running.store(false, Ordering::Release);
+        result
+    }
+
+    fn run(
+        &self,
+        id: PhotoId,
+        settings: &CriticSettings,
+        background: Option<Throttle>,
+    ) -> Result<CritiqueView, CritiqueError> {
         let view = self.thumbnails.pair_view().map_err(thumbnail_error(id))?;
         let image = self
             .thumbnails
@@ -393,6 +322,7 @@ impl CritiqueService {
             .critic
             .ask(&CriticRequest {
                 backend,
+                background,
                 system: &system_prompt(rubric),
                 prompt: "Critique this photo.",
                 image: &image,
@@ -402,72 +332,17 @@ impl CritiqueService {
             .map_err(CritiqueError::Server)?;
         let critique = Critique::parse(&reply)
             .ok_or_else(|| CritiqueError::BadReply(reply.chars().take(200).collect::<String>()))?;
-        let model = Self::model_name(&settings);
+        let model = Self::model_name(settings);
         self.catalog.store_analysis(
             id,
             ID,
             &json!({
                 "model": model,
-                "rubric": fingerprint(rubric),
+                "rubric": rubric_key(rubric),
                 "critique": critique,
             }),
         )?;
         Ok(CritiqueView::new(model, critique))
-    }
-
-    /// Whether critiques can run; asks the server only while enabled.
-    pub fn status(&self) -> Result<CriticStatus, CatalogError> {
-        let settings = self.settings()?;
-        let mut status = CriticStatus {
-            enabled: settings.enabled,
-            backend: settings.backend,
-            local: settings.backend == CriticEngine::Builtin || is_local(&settings.server),
-            server: settings.server.clone(),
-            reachable: false,
-            models: Vec::new(),
-            model: Self::model_name(&settings).to_owned(),
-            model_installed: false,
-            problem: None,
-            suggested: suggested(),
-            default_rubric: DEFAULT_RUBRIC.into(),
-        };
-        if !settings.enabled {
-            return Ok(status);
-        }
-        if settings.backend == CriticEngine::Builtin {
-            status.reachable = self.critic.builtin_problem().is_none();
-            status.model_installed = self.models.files(CRITIC).is_some();
-            status.problem = self.critic.builtin_problem().or_else(|| {
-                (!status.model_installed).then(|| {
-                    "Download “Qwen3-VL 4B (built-in critic)” in Settings → AI models \
-                     (2.9 GB)."
-                        .to_owned()
-                })
-            });
-            return Ok(status);
-        }
-        match self.critic.models(&settings.server) {
-            Ok(models) => {
-                status.reachable = true;
-                // Ollama lists `name:tag`; `name` alone means `:latest`.
-                status.model_installed = models
-                    .iter()
-                    .any(|m| *m == settings.model || *m == format!("{}:latest", settings.model));
-                if !status.model_installed {
-                    status.problem = Some(format!(
-                        "The server has no model `{}`. With Ollama, run `ollama pull {}`.",
-                        settings.model, settings.model
-                    ));
-                }
-                status.models = models;
-            }
-            Err(e) => {
-                status.problem = Some(format!(
-                    "{e}. Install Ollama (ollama.com) and start it, or check the address."
-                ));
-            }
-        }
-        Ok(status)
     }
 }
 
@@ -477,6 +352,8 @@ fn thumbnail_error(id: PhotoId) -> impl Fn(ThumbnailError) -> CritiqueError {
         other => CritiqueError::Image(other.to_string()),
     }
 }
+
+pub mod background;
 
 #[cfg(test)]
 mod tests;

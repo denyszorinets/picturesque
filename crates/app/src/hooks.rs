@@ -67,7 +67,8 @@ impl EventSink for EventHooks {
             | AppEvent::ModelProgress(_)
             | AppEvent::ExportProgress(_)
             | AppEvent::PipelineProgress(_)
-            | AppEvent::SidecarProgress(_) => {}
+            | AppEvent::SidecarProgress(_)
+            | AppEvent::BackgroundCritiqueProgress(_) => {}
         }
     }
 }

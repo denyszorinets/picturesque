@@ -51,6 +51,11 @@ aesthetic: AestheticView | null,
  */
 taste: number | null, 
 /**
+ * The critique's percentile among the library's critiques, 0–1; null
+ * without a critique or while critiques are off.
+ */
+critique_score: number | null, 
+/**
  * Faces found, largest first; `null` until the face models analyzed
  * the photo.
  */

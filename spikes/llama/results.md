@@ -87,3 +87,28 @@ fast on the Radeon 780M, needs no server, and the files and licenses fit
 the model manager (3 GB, Apache-2.0). Build with `mtmd`,
 `dynamic-backends`, Vulkan (Linux, Windows) and Metal (macOS), without
 OpenMP, and keep the local-server critic as an alternative.
+
+## Prompt evaluation (2026-10-28)
+
+50 Wikimedia Commons photos: 25 featured pictures and 25 random photos.
+Rating mean / median by class; AUC tells featured from ordinary (about
++-0.06 error with 25 photos per class). The scripts were throwaway and are
+not kept.
+
+| prompt | featured | ordinary | AUC | s/photo |
+|---|---|---|---|---|
+| first prompt (milder; "rate 5 for an ordinary snapshot, 7 for a good photo") | 8.48 / 9 | 7.12 / 7 | 0.894 | 11.7 |
+| strict with a formal `analysis` written first | 8.07 / 8 (15+15 photos) | 6.60 / 6 | 0.789 | 14.4 |
+| final: flaws first, grade anchors, no `analysis`, rating last | 7.64 / 8 | 4.24 / 4 | 0.902 | 9.5 |
+
+Ratings of the final prompt, photos per rating:
+
+- featured: 4: 2, 6: 3, 8: 15, 9: 5
+- ordinary: 3: 11, 4: 9, 5: 1, 8: 4
+
+Asking for a formal analysis before the rating did not make the model
+stricter, and it cost time; listing the flaws first and anchoring the
+scale did. The order of the JSON keys decides what the model writes
+first, and the schema keeps its key order (serde_json `preserve_order`).
+Four of 25 ordinary photos still got an 8, so the rating is a signal, not
+a verdict; that is why the library score uses percentiles.

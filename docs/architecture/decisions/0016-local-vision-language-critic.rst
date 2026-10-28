@@ -154,6 +154,52 @@ Alternatives for running the model, considered after the spike:
   which has no Rust binding; ``ort`` would need a hand-written generation
   loop, tokenizer and image preprocessing.
 
+Amendment: background critique
+------------------------------
+
+:Date: 2026-10-28
+
+The app can critique the whole library in the background (:issue:`228`,
+:ref:`features-ai-critique-background`). Decisions:
+
+- **A separate, slow pipeline**, off by default (``critic.background``). It
+  critiques one photo at a time, every photo except rejects, with the same
+  model, rubric and backend as on-demand critiques. Its state is in the
+  catalog, so it resumes after a restart.
+- **Percentile calibration.** Ratings are not calibrated (a model rated an
+  ordinary photo 8 and a featured one 7). A photo's critique score is the
+  share of the library's critiqued photos rated below it, ties counting
+  half; with fewer than 20 critiques, ratings map linearly. The score is
+  blended into the aesthetic score by ``critic.score_weight`` (default
+  0.25). This amends the Decision: the critique's rating is still not used
+  for ranking, but the critique score is.
+- **Intensity levels.** ``gentle`` (default: low operating-system priority,
+  half the processor threads, waits during imports, analysis and on battery),
+  ``when_idle`` (full speed after three minutes without using the app) and
+  ``full``.
+- **User critiques interrupt it.** A critique asked for in the loupe
+  interrupts the background one, which is retried later. Servers cannot be
+  interrupted, so the background critique finishes first there.
+- **Key order in the schema.** The critic's JSON Schema is sent with its
+  keys in generation order (flaws, strengths, summary, rating): llama.cpp's
+  grammar writes them in that order, and the rating is written last so that
+  it follows the flaws the model just listed. To keep the order, the
+  workspace enables serde_json's ``preserve_order`` feature (adds the
+  ``indexmap`` crate, already in the lockfile through schemars; MIT or
+  Apache-2.0).
+- **Failures.** A critique that fails is skipped until the critic settings
+  change. After three failures in a row, or when the server or helper cannot
+  be reached, the background critic pauses and tells why instead of trying
+  every photo.
+
+Alternatives considered:
+
+- **Blending the absolute rating linearly** into the score: the ratings
+  compress to 7 to 8.
+- **Replacing the aesthetic score** with the critique: too exposed to the
+  model's bias.
+- **Running at full speed always**: slows the computer.
+
 Consequences
 ------------
 

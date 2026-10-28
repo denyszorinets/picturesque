@@ -22,6 +22,7 @@ pub enum AppEvent {
     ExportProgress(ExportStatus),
     PipelineProgress(PipelineStatus),
     SidecarProgress(SidecarStatus),
+    BackgroundCritiqueProgress(crate::critic::background::BackgroundCritiqueStatus),
 }
 
 /// Delivers events to the UI: Tauri events in the desktop app,

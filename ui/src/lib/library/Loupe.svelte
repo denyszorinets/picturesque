@@ -439,6 +439,15 @@
               {percent(detail.aesthetic.score)}
             </dd>
           {/if}
+          {#if detail.critique_score !== null}
+            <dt>Critic</dt>
+            <dd
+              data-testid="loupe-critic"
+              title="Where the critic ranks it among your critiqued photos"
+            >
+              {percent(detail.critique_score)}
+            </dd>
+          {/if}
           {#if detail.taste !== null}
             <dt>Your taste</dt>
             <dd

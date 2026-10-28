@@ -144,6 +144,7 @@ fn main() {
         pipeline_store: catalog.clone(),
         watcher: Arc::new(picturesque_app::ports::watcher::NoWatcher),
         critic: Arc::new(picturesque_infra::critic::CriticAdapter::new()),
+        power: Arc::new(picturesque_infra::power::SystemPower),
         settings_store: catalog.clone(),
         catalog: catalog.clone(),
         fs: Arc::new(StdFileSystem),

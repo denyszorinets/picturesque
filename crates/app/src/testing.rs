@@ -1414,6 +1414,17 @@ pub struct TestWorld {
     pub pipeline: Arc<MemoryPipelineStore>,
     pub watcher: Arc<FakeWatcher>,
     pub critic: Arc<FakeCritic>,
+    pub power: Arc<FakePower>,
+}
+
+/// Mains or battery power, as a test sets it.
+#[derive(Debug, Default)]
+pub struct FakePower(pub std::sync::atomic::AtomicBool);
+
+impl crate::ports::power::PowerSource for FakePower {
+    fn on_battery(&self) -> bool {
+        self.0.load(std::sync::atomic::Ordering::Relaxed)
+    }
 }
 
 /// A vision-language model (server or built-in) that answers with a set
@@ -1427,6 +1438,10 @@ pub struct FakeCritic {
     /// Its reply to every question.
     pub reply: Mutex<String>,
     pub asked: Mutex<Vec<Question>>,
+    /// Makes `ask` fail as if the server went away after `models` answered.
+    pub ask_unreachable: std::sync::atomic::AtomicBool,
+    /// How often `interrupt` was called.
+    pub interrupts: std::sync::atomic::AtomicUsize,
 }
 
 /// A question to [`FakeCritic`].
@@ -1459,6 +1474,14 @@ impl crate::ports::critic::Critic for FakeCritic {
         r: &crate::ports::critic::CriticRequest<'_>,
     ) -> Result<String, crate::ports::critic::CriticError> {
         use crate::ports::critic::CriticBackend;
+        if self
+            .ask_unreachable
+            .load(std::sync::atomic::Ordering::Relaxed)
+        {
+            return Err(crate::ports::critic::CriticError::Unreachable(
+                "connection lost".into(),
+            ));
+        }
         let (target, model, gpu) = match r.backend {
             CriticBackend::Server { url, model } => {
                 self.models(url)?;
@@ -1480,6 +1503,11 @@ impl crate::ports::critic::Critic for FakeCritic {
             max_edge: r.max_edge,
         });
         Ok(self.reply.lock().unwrap().clone())
+    }
+
+    fn interrupt(&self) {
+        self.interrupts
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     }
 }
 
@@ -1547,6 +1575,7 @@ impl TestWorld {
             pipeline: Arc::default(),
             watcher: Arc::default(),
             critic: Arc::default(),
+            power: Arc::default(),
         }
     }
 
@@ -1586,6 +1615,7 @@ impl TestWorld {
             pipeline_store: self.pipeline.clone(),
             watcher: self.watcher.clone(),
             critic: self.critic.clone(),
+            power: self.power.clone(),
         }
     }
 }
