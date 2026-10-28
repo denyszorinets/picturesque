@@ -105,6 +105,12 @@ test("sets up the critic and critiques a photo in the loupe", async ({
         summary: "A calm, well balanced frame.",
         strengths: ["soft light"],
         weaknesses: ["tilted horizon"],
+        issues: ["horizon"],
+        potential: 9,
+        fixable: "easy",
+        fix_steps: ["Straighten the horizon"],
+        improvements: ["Wait for the boat to cross"],
+        camera_tips: ["Use a tripod"],
       };
       res.writeHead(200, { "content-type": "application/json" });
       res.end(
@@ -167,12 +173,30 @@ test("sets up the critic and critiques a photo in the loupe", async ({
       .click();
     await page.locator("[data-photo-id]").first().click();
     await page.keyboard.press("Enter");
-    await page.getByTestId("critique-run").click();
+    // An earlier test or run may have stored a critique for this photo.
+    const first = page
+      .getByTestId("critique-run")
+      .or(page.getByTestId("critique-again"));
+    await first.click();
     await expect(page.getByTestId("critique-summary")).toContainText(
       "8.0/10 A calm, well balanced frame.",
     );
     await expect(page.getByTestId("critique-weaknesses")).toContainText(
       "tilted horizon",
+    );
+    await expect(page.getByTestId("critique-issues")).toContainText("Horizon");
+    await page.getByTestId("critique-advice").locator("summary").click();
+    await expect(page.getByTestId("critique-advice")).toContainText(
+      "Wait for the boat to cross",
+    );
+    await expect(page.getByTestId("critique-advice")).toContainText(
+      "Use a tripod",
+    );
+    await expect(page.getByTestId("critique-raw")).toContainText(
+      "Easy to improve with editing",
+    );
+    await expect(page.getByTestId("critique-raw")).toContainText(
+      "could reach 9.0/10",
     );
     expect(asked).toHaveLength(1);
     expect(asked[0]!.model).toBe("tiny-vl");
@@ -305,17 +329,26 @@ test("shows the critique pill and keeps a critique after closing the loupe", asy
       .getByRole("navigation")
       .getByRole("button", { name: "Library" })
       .click();
-    await page.locator("[data-photo-id]").first().click();
+    // Narrow the timeline to the day of this test's photo (the shared
+    // library holds older critiques on other photos).
+    await page.getByTestId("filter-from").fill("1985-06-06");
+    await page.getByTestId("filter-to").fill("1985-06-06");
+    await page.locator("[data-photo-id]").first().click({ timeout: 10_000 });
     await page.keyboard.press("Enter");
     const summary = page.getByTestId("critique-summary");
     // The background worker may store the critique before or after the loupe
     // opens: wait for either, and run it ourselves only if it is still missing.
     const run = page.getByTestId("critique-run");
     await expect(summary.or(run)).toBeVisible();
+    const outdated = page.getByTestId("critique-outdated");
     if (await run.isVisible()) {
       await run.click({ timeout: 5000 }).catch(() => {
         // The background critique landed first and replaced the button.
       });
+    }
+    // A critique from an earlier test is shown as outdated: ask again.
+    if (await outdated.isVisible()) {
+      await page.getByTestId("critique-again").click();
     }
     await expect(summary).toContainText("Plain but clean.");
     await page.keyboard.press("Escape");

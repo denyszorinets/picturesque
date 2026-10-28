@@ -26,6 +26,12 @@ const CRITIQUE: CritiqueView = {
   summary: "Warm light on a calm lake.",
   strengths: ["golden light"],
   weaknesses: ["kayaks too small"],
+  issues: [],
+  potential: null,
+  fixable: null,
+  fix_steps: [],
+  improvements: [],
+  camera_tips: [],
   outdated: false,
 };
 
@@ -122,5 +128,69 @@ describe("Critique", () => {
       "Could not load the critique: catalog is busy",
     );
     expect(screen.getByTestId("critique-run")).toBeInTheDocument();
+  });
+
+  describe("v2 fields", () => {
+    const V2: CritiqueView = {
+      ...CRITIQUE,
+      issues: ["exposure", "horizon"],
+      potential: 8.5,
+      fixable: "easy",
+      fix_steps: ["Lift the shadows"],
+      improvements: ["Step closer to the kayaks"],
+      camera_tips: ["Use f/8 at 1/250"],
+    };
+
+    async function show(c: CritiqueView) {
+      render(Critique, {
+        photoId: 1,
+        status: STATUS,
+        load: async () => c,
+        run: vi.fn(),
+      });
+      await screen.findByTestId("critique-summary");
+    }
+
+    it("shows issue tags and the advice lists", async () => {
+      await show(V2);
+      const tags = screen.getByTestId("critique-issues");
+      expect(tags).toHaveTextContent("Exposure");
+      expect(tags).toHaveTextContent("Horizon");
+      const advice = screen.getByTestId("critique-advice");
+      expect(advice).toHaveTextContent("How to improve");
+      expect(advice).toHaveTextContent("Step closer to the kayaks");
+      expect(advice).toHaveTextContent("Camera settings");
+      expect(advice).toHaveTextContent("Use f/8 at 1/250");
+      expect(screen.getByTestId("critique-raw")).toHaveTextContent(
+        "Lift the shadows",
+      );
+    });
+
+    it.each([
+      ["not_needed", "Nothing to fix in editing"],
+      ["easy", "Easy to improve with editing"],
+      ["needs_skill", "Can be improved with editing skill"],
+      ["not_fixable", "Not fixable in editing"],
+    ] as const)("words fixable %s", async (fixable, text) => {
+      await show({ ...V2, fixable });
+      expect(screen.getByTestId("critique-raw")).toHaveTextContent(text);
+    });
+
+    it("shows the potential only when it is clearly higher", async () => {
+      await show({ ...V2, potential: 7.9 });
+      expect(screen.queryByTestId("critique-potential")).toBeNull();
+      cleanup();
+      await show({ ...V2, potential: 8.0 });
+      expect(screen.getByTestId("critique-potential")).toHaveTextContent(
+        "could reach 8.0/10",
+      );
+    });
+
+    it("shows none of it for an old critique", async () => {
+      await show(CRITIQUE);
+      expect(screen.queryByTestId("critique-issues")).toBeNull();
+      expect(screen.queryByTestId("critique-advice")).toBeNull();
+      expect(screen.queryByTestId("critique-raw")).toBeNull();
+    });
   });
 });

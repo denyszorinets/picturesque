@@ -19,7 +19,7 @@ use picturesque_core::critic_protocol::{HelperReply, HelperRequest};
 
 /// The prompt (about 200 tokens), the image (about 430 at 768 px) and the
 /// reply fit with room to spare.
-const CONTEXT: u32 = 2048;
+const CONTEXT: u32 = 3072;
 const BATCH: u32 = 1024;
 /// Low: critiques should be steady, not creative.
 const TEMPERATURE: f32 = 0.2;

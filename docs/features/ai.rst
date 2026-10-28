@@ -200,8 +200,8 @@ Critiques
 
 A score says how good a photo is; a **critique** says why. Picturesque can
 ask a vision-language model running on your computer for one: a rating
-from 1 to 10, a one-sentence summary, and what works and what does not
-(:doc:`ADR-0016 </architecture/decisions/0016-local-vision-language-critic>`).
+from 1 to 10, a one-sentence summary, what works and what does not, and
+advice (:doc:`ADR-0016 </architecture/decisions/0016-local-vision-language-critic>`).
 
 Critiques are **off by default**. Two ways to get them:
 
@@ -220,14 +220,27 @@ critique is kept with the photo and shown whenever you come back to it;
 earlier critiques stay visible, marked as written by an earlier model or
 rubric, until you ask again.
 
+The advice has four parts. Each flaw has a **category** (exposure, focus,
+composition, noise, colour, horizon, light, timing or other). For a RAW
+file the critic estimates the **potential**, the rating the photo could
+reach after the best editing (exposure, white balance, crop, noise
+reduction), says whether the flaws are **fixable** (not needed, easy,
+needs skill, not fixable) and lists up to three **fix steps**. It also
+suggests up to three **improvements** to the photo itself (framing, light,
+moment) and up to three **camera tips** for the next shot. The critic is
+told the photo's ISO, shutter speed, aperture and focal length when the
+file records them, and whether the original is a RAW file or a JPEG, so
+the tips can fit. The model judges from a small preview, so the fixability
+and the potential are advice, not a promise; they do not change the score.
+
 The built-in critic runs in a helper process that starts with the first
 critique, keeps the model loaded while you keep asking, and stops after
 five idle minutes, returning its memory (about 5 GB on the CPU). It uses
 the GPU through Vulkan (Linux) or Metal (macOS) when there is one, unless
 **AI acceleration** is *CPU only*; on Windows it uses the CPU. On a Ryzen
-7 PRO 7840HS a critique takes about 20 s on the CPU and 10 s on its
-Radeon 780M; the first one also loads the model (a few seconds). If the
-helper fails, only that critique fails.
+7 PRO 7840HS a critique takes about 16 s on its Radeon 780M; the time on
+the CPU has not been measured. The first critique also loads the model (a
+few seconds). If the helper fails, only that critique fails.
 
 .. list-table:: Suggested models for a server (all Apache-2.0)
    :header-rows: 1
@@ -257,7 +270,10 @@ helper fails, only that critique fails.
   of all metadata (no EXIF, GPS or XMP), is given to the model, and only
   when you ask. The built-in critic never uses the network. If a server's
   address is not on this computer, the photo goes to that machine;
-  Settings warn about it.
+  Settings warn about it. With a server, the photo's shot data (ISO,
+  shutter speed, aperture, focal length, and whether the original is a RAW
+  file or a JPEG) is sent as text together with the image; no GPS, file
+  path or file name is.
 - **The rubric** tells the model what to judge: by default composition,
   light, subject and moment, colour and tone, and technique. Write your own
   in Settings to focus on what you are learning; *Use the default rubric*
@@ -284,7 +300,9 @@ tells them apart as well as the milder prompt it replaced (AUC 0.90). The
 measurements are in ``spikes/llama/results.md``.
 
 Critiques written by an earlier prompt version are still counted until
-they are redone; the background critic redoes them last.
+they are redone; the background critic redoes them last. Prompt version 4
+added the advice; critiques written before show without it, marked as
+outdated.
 
 .. _features-ai-critique-background:
 
@@ -354,9 +372,10 @@ More about the background critic:
   **Settings → AI critic**.
 
 The speed depends on the hardware. On an AMD Radeon 780M with Vulkan a
-critique takes about 10 s, and on a 16-thread CPU about 20 s. A library of
-10,000 photos takes about 28 hours on the GPU and 55 hours on the CPU; that
-is why the feature is off by default and gentle by default.
+critique took 16.4 s on average and 28 s at most (prompt version 4). A
+library of 10,000 photos takes about 45 hours on that GPU. The CPU time
+was not measured again for version 4 and is longer. That is why the
+feature is off by default and gentle by default.
 
 **Settings → AI critic** shows the progress: how many photos are critiqued
 out of how many, how many are to redo, about how long is left, why it is

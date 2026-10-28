@@ -23,8 +23,8 @@ use picturesque_core::critic_protocol::{HelperReply, HelperRequest};
 
 /// How long the model stays loaded after a critique.
 pub const IDLE: Duration = Duration::from_secs(5 * 60);
-/// Longest reply, in tokens; critiques take about 120.
-const MAX_TOKENS: u32 = 512;
+/// Longest reply, in tokens; critiques with advice take about 300.
+const MAX_TOKENS: u32 = 768;
 
 const NAME: &str = "picturesque-critic";
 

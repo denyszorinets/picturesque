@@ -234,9 +234,18 @@ Commands
    or returns the stored one unless ``refresh`` or it is ``outdated``. Can
    take minutes on a CPU. Returns ``{ "model": "qwen3-vl:4b", "rating": 7.5, "score": 0.72,
    "summary": "…", "strengths": ["…"], "weaknesses": ["…"],
+   "issues": ["exposure"], "potential": 8.0, "fixable": "easy",
+   "fix_steps": ["…"], "improvements": ["…"], "camera_tips": ["…"],
    "outdated": false }`` (``rating`` 1–10, ``score`` the same as 0–1;
    ``outdated`` true when another model or rubric than the current
-   settings wrote it). ``invalid_arguments``
+   settings wrote it). ``issues`` are the kinds of the weaknesses
+   (``exposure``, ``focus``, ``composition``, ``noise``, ``colour``,
+   ``horizon``, ``light``, ``timing``, ``other``); ``potential`` is the
+   rating (1–10, never below ``rating``) after the best editing of a RAW
+   file; ``fixable`` is ``not_needed``, ``easy``, ``needs_skill`` or
+   ``not_fixable``, advisory only. The fields from ``issues`` on are
+   empty, or ``null`` for ``potential`` and ``fixable``, in critiques
+   written before prompt version 4. ``invalid_arguments``
    while critiques are off; ``internal`` with the reason when the server
    fails or the reply is not a critique.
 

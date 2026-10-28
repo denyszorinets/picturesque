@@ -1454,6 +1454,7 @@ pub struct Question {
     /// For the built-in critic, whether it may use a GPU.
     pub gpu: Option<bool>,
     pub system: String,
+    pub prompt: String,
     pub image: PathBuf,
     pub max_edge: u32,
 }
@@ -1499,6 +1500,7 @@ impl crate::ports::critic::Critic for FakeCritic {
             model,
             gpu,
             system: r.system.into(),
+            prompt: r.prompt.into(),
             image: r.image.to_path_buf(),
             max_edge: r.max_edge,
         });
