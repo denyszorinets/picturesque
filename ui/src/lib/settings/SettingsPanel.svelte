@@ -102,8 +102,11 @@
     intensity: "gentle" as CriticIntensity,
     /** Share of critiques in the aesthetic score, in percent. */
     scorePercent: 25 as number | null,
+    /** Share of a RAW file's potential in its critique rating, in percent. */
+    potentialPercent: 15 as number | null,
   });
   const scoreValid = $derived(validPercent(critic.scorePercent));
+  const potentialValid = $derived(validPercent(critic.potentialPercent));
   let criticState = $state<CriticStatus | null>(null);
   let provider = $state<ProviderChoice>("auto");
   let ai = $state<AiStatus | null>(null);
@@ -156,7 +159,11 @@
         critic.background !== saved.critic.background ||
         critic.intensity !== saved.critic.intensity ||
         (scoreValid &&
-          critic.scorePercent !== Math.round(saved.critic.score_weight * 100))),
+          critic.scorePercent !==
+            Math.round(saved.critic.score_weight * 100)) ||
+        (potentialValid &&
+          critic.potentialPercent !==
+            Math.round(saved.critic.potential_weight * 100))),
   );
   const dirty = $derived(
     saved !== null &&
@@ -246,6 +253,7 @@
       background: settings.critic.background,
       intensity: settings.critic.intensity,
       scorePercent: Math.round(settings.critic.score_weight * 100),
+      potentialPercent: Math.round(settings.critic.potential_weight * 100),
     };
     loadAi();
     loadTaste();
@@ -282,6 +290,7 @@
           background: critic.background,
           intensity: critic.intensity,
           score_weight: (critic.scorePercent ?? 0) / 100,
+          potential_weight: (critic.potentialPercent ?? 0) / 100,
         };
       if (autoPickChanged)
         update.auto_pick = {
@@ -636,6 +645,7 @@
       bind:background={critic.background}
       bind:intensity={critic.intensity}
       bind:scorePercent={critic.scorePercent}
+      bind:potentialPercent={critic.potentialPercent}
       progress={critiqueProgress}
       status={criticState}
       oncheck={loadCritic}
@@ -651,6 +661,7 @@
         saving ||
         !!preview?.error ||
         !scoreValid ||
+        !potentialValid ||
         !tasteValid}
       data-testid="save-settings"
     >

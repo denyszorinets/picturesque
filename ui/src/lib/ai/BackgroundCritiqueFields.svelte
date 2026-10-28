@@ -8,6 +8,8 @@
     intensity: CriticIntensity;
     /** Share of critiques in the aesthetic score, in percent. */
     scorePercent: number | null;
+    /** Share of a RAW file's potential in its critique rating, in percent. */
+    potentialPercent: number | null;
     /** `null` while unknown. */
     progress: BackgroundCritiqueStatus | null;
     /** Whether the critic fields differ from the saved settings. */
@@ -18,6 +20,7 @@
     background = $bindable(),
     intensity = $bindable(),
     scorePercent = $bindable(),
+    potentialPercent = $bindable(),
     progress,
     unsaved,
   }: Props = $props();
@@ -84,6 +87,27 @@
   <p class="hint muted">
     The model's ratings are compared within your library, so a 7 means better
     than most of your critiqued photos.
+  </p>
+  <label class="inline">
+    RAW potential counts for
+    <input
+      type="number"
+      min="0"
+      max="100"
+      step="5"
+      bind:value={potentialPercent}
+      data-testid="critic-potential-weight"
+    />
+    % of the critique rating
+  </label>
+  {#if !validPercent(potentialPercent)}
+    <p class="hint error-text" data-testid="critic-potential-weight-error">
+      Enter a percentage from 0 to 100.
+    </p>
+  {/if}
+  <p class="hint muted">
+    Only for RAW files. The model judges from a small preview, so this is a
+    rough guess; 0 turns it off.
   </p>
   {#if background}
     <p class="hint muted" data-testid="critic-progress">

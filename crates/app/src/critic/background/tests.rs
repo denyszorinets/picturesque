@@ -432,6 +432,83 @@ fn a_users_critique_updates_the_scores() {
     api.series_service().stop();
 }
 
+fn store_critique_with_potential(world: &TestWorld, id: PhotoId, rating: f64, potential: f64) {
+    world
+        .catalog
+        .store_analysis(
+            id,
+            ID,
+            &json!({ "model": "m", "rubric": "r",
+                     "critique": { "rating": rating, "potential": potential,
+                                   "summary": "s" } }),
+        )
+        .unwrap();
+}
+
+/// A photo with the given files, inserted without a capture time.
+fn insert_with(world: &TestWorld, files: &[(MediaFormat, &str)]) -> PhotoId {
+    let assets = files
+        .iter()
+        .map(|(format, path)| Asset {
+            format: *format,
+            path: PathBuf::from(path),
+            size: 1,
+            hash: fake_hash(path.as_bytes()),
+        })
+        .collect();
+    world
+        .catalog
+        .insert_photo(&NewPhoto {
+            metadata: CaptureMetadata::default(),
+            assets: PhotoAssets::new(assets).unwrap(),
+        })
+        .unwrap()
+}
+
+#[test]
+fn a_raw_photos_potential_lifts_its_score_by_the_weight_and_never_redoes_critiques() {
+    let (world, api, ids) = setup(&[0], CriticIntensity::Full);
+    let jpeg = ids[0];
+    let raw = insert_with(&world, &[(MediaFormat::Raw, "IMG_RAW.CR2")]);
+    // A RAW+JPEG pair still has the RAW to edit.
+    let pair = insert_with(
+        &world,
+        &[
+            (MediaFormat::Raw, "IMG_PAIR.CR2"),
+            (MediaFormat::Jpeg, "IMG_PAIR.JPG"),
+        ],
+    );
+    for id in [jpeg, raw, pair] {
+        store_critique_with_potential(&world, id, 6.0, 9.0);
+    }
+    let series = api.series_service();
+
+    api.recompute_series().unwrap();
+    let score = |id| series.critique_score(id).unwrap();
+    assert!(
+        score(raw) > score(jpeg),
+        "{} <= {}",
+        score(raw),
+        score(jpeg)
+    );
+    assert_eq!(score(pair), score(raw));
+    assert_eq!(series.critique_lift(jpeg), None);
+    assert_eq!(series.critique_lift(raw), Some((6.0, 9.0)));
+    assert_eq!(series.critique_lift(pair), Some((6.0, 9.0)));
+    let stored = world.catalog.analysis_results(ID).unwrap();
+
+    // Weight 0 turns it off: same scores, no lift, nothing to redo.
+    let mut critic = critic_json(true, true, "full", Value::Null);
+    critic["potential_weight"] = json!(0.0);
+    set_critic(&api, critic);
+    api.recompute_series().unwrap();
+    assert_eq!(score(raw), score(jpeg));
+    assert_eq!(score(pair), score(jpeg));
+    assert_eq!(series.critique_lift(raw), None);
+    assert_eq!(world.catalog.analysis_results(ID).unwrap(), stored);
+    assert!(world.critic.asked.lock().unwrap().is_empty());
+}
+
 #[test]
 fn rejected_photos_stay_out_of_the_percentiles() {
     let seconds: Vec<i64> = (0..22).map(|i| i * 1000).collect();

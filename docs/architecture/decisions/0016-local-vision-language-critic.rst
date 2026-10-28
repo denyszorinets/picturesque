@@ -251,6 +251,36 @@ Decisions:
 - **Not evaluated yet.** The presets have not been evaluated on a photo
   sample; measuring them is a follow-up.
 
+Amendment: RAW potential in the score
+-------------------------------------
+
+:Date: 2026-10-28
+
+The critic's ``potential`` now counts for RAW originals (:issue:`233`). It
+replaces the v2 decision that ``potential`` and ``fixable`` are never used
+for the score, for ``potential`` only; ``fixable`` and ``fix_steps`` stay
+advisory. Decisions:
+
+- **A ``critic.potential_weight`` setting**, 0–1, default 0.15; 0 turns it
+  off. For a RAW original the rating moves that share of the way toward the
+  potential: ``effective = rating + (max(potential, rating) - rating) *
+  weight``, clamped to 1–10, not rounded. A RAW+JPEG pair counts as RAW
+  because the RAW is still there to edit; a JPEG-only photo never does.
+  There is no effect when the potential is missing, below the rating, or the
+  weight is 0.
+- **Blend before the percentiles.** The effective ratings are the
+  population the library percentiles are computed over, so the score keeps
+  one unit.
+- **Nothing is stored.** Scores are rebuilt from the stored critiques on
+  every series recompute, so changing the weight needs no schema change,
+  never marks critiques outdated and never reruns the model.
+- **A reason.** "Why this score" adds an Info reason only when the rating
+  was raised, e.g. "Rated as a RAW file: the critic's 6 is raised toward the
+  8 it could reach after editing".
+- **Weakness.** The model sees a preview of about 768 px, not the RAW data,
+  so it cannot judge clipped highlights, noise floor or dynamic range. Its
+  potential is a guess, which is why the default is low and 0 disables it.
+
 Consequences
 ------------
 

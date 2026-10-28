@@ -185,6 +185,9 @@ pub struct CriticSettings {
     pub intensity: CriticIntensity,
     /// How much critiques count in the aesthetic score, 0–1.
     pub score_weight: f64,
+    /// How far a RAW original's critique rating moves toward the rating it
+    /// could reach after editing, 0–1; 0 turns it off.
+    pub potential_weight: f64,
 }
 
 /// Who a critique is written for (`docs/features/ai.rst`).
@@ -253,6 +256,7 @@ impl Default for CriticSettings {
             background: false,
             intensity: CriticIntensity::Gentle,
             score_weight: 0.25,
+            potential_weight: 0.15,
         }
     }
 }
@@ -283,6 +287,12 @@ impl CriticSettings {
             return Err(format!(
                 "The critique's share of the aesthetic score must be 0–100%, got {}%.",
                 (self.score_weight * 100.0).round()
+            ));
+        }
+        if !(0.0..=1.0).contains(&self.potential_weight) {
+            return Err(format!(
+                "The RAW potential's share of the critique rating must be 0–100%, got {}%.",
+                (self.potential_weight * 100.0).round()
             ));
         }
         if self
@@ -932,6 +942,13 @@ pub(crate) mod tests {
             matches!(&err, SettingsError::Invalid(m) if m.contains("200%")),
             "{err}"
         );
+        for (weight, valid) in [(-0.1, false), (1.5, false), (0.0, true), (1.0, true)] {
+            let result = update(CriticSettings {
+                potential_weight: weight,
+                ..ok.clone()
+            });
+            assert_eq!(result.is_ok(), valid, "potential_weight {weight}");
+        }
         // An empty rubric means the default one.
         let blank = CriticSettings {
             rubric: Some("  ".into()),

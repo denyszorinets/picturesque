@@ -146,6 +146,9 @@ pub struct SeriesService {
     taste: TasteService,
     /// Critique scores as last computed (`critique_score`).
     critique_scores: Mutex<HashMap<PhotoId, f32>>,
+    /// For RAW photos whose rating was raised by their potential: the
+    /// rating and the potential (`critique_lift`).
+    critique_lifts: Mutex<HashMap<PhotoId, (f32, f32)>>,
     /// The last stored series and scores; also serializes recomputes.
     last: Mutex<Option<Stored>>,
     notify: Mutex<Option<Sender<()>>>,
@@ -166,6 +169,7 @@ impl SeriesService {
         Self {
             taste: TasteService::new(Arc::clone(&catalog)),
             critique_scores: Mutex::default(),
+            critique_lifts: Mutex::default(),
             catalog,
             settings,
             events,
@@ -191,6 +195,16 @@ impl SeriesService {
         self.critique_scores
             .lock()
             .expect("critique scores lock")
+            .get(&id)
+            .copied()
+    }
+
+    /// A RAW photo's critique rating and the potential rating it was raised
+    /// toward, as last computed; `None` when the potential did not raise it.
+    pub fn critique_lift(&self, id: PhotoId) -> Option<(f32, f32)> {
+        self.critique_lifts
+            .lock()
+            .expect("critique lifts lock")
             .get(&id)
             .copied()
     }
@@ -228,7 +242,7 @@ impl SeriesService {
         let order: Vec<PhotoId> = captured.iter().map(|(id, _)| *id).collect();
         let personal = self.taste.update(&order, &embeddings)?;
         let personal_weight = settings.taste.personal_weight as f32;
-        let critiques = self.critique_scores(&settings)?;
+        let (critiques, lifts) = self.critique_scores(&settings)?;
         let critique_weight = settings.critic.score_weight as f32;
         let aesthetic: HashMap<PhotoId, f32> = embeddings
             .keys()
@@ -245,6 +259,7 @@ impl SeriesService {
             })
             .collect();
         *self.critique_scores.lock().expect("critique scores lock") = critiques;
+        *self.critique_lifts.lock().expect("critique lifts lock") = lifts;
         let found_faces: HashMap<PhotoId, Vec<FaceView>> = self
             .catalog
             .analysis_results(FaceAnalyzer::ID)?
@@ -360,28 +375,6 @@ impl SeriesService {
         Ok(count)
     }
 
-    /// Every critiqued photo's critique score, while critiques are on
-    /// (`core::critique`): old critiques count until they are redone.
-    fn critique_scores(
-        &self,
-        settings: &crate::settings::Settings,
-    ) -> Result<HashMap<PhotoId, f32>, CatalogError> {
-        if !settings.critic.enabled {
-            return Ok(HashMap::new());
-        }
-        // Rejects are not critiqued by the background critic, so they stay
-        // out of the population the percentiles and the threshold use.
-        let rejected: HashSet<PhotoId> = self.catalog.rejected_photos()?.into_iter().collect();
-        let ratings: Vec<(PhotoId, f32)> = self
-            .catalog
-            .analysis_results(crate::critic::ID)?
-            .into_iter()
-            .filter(|(id, _)| !rejected.contains(id))
-            .filter_map(|(id, r)| Some((id, r["critique"]["rating"].as_f64()? as f32)))
-            .collect();
-        Ok(picturesque_core::critique::scores(&ratings))
-    }
-
     /// The series `id` belongs to.
     pub fn view(&self, id: PhotoId) -> Result<SeriesView, CatalogError> {
         let edit = self
@@ -480,6 +473,8 @@ fn settle(rx: &Receiver<()>, quiet: Duration, max_wait: Duration) -> bool {
         }
     }
 }
+
+mod critique;
 
 #[cfg(test)]
 mod tests;

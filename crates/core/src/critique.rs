@@ -35,9 +35,45 @@ pub fn scores<K: Copy + Eq + Hash>(ratings: &[(K, f32)]) -> HashMap<K, f32> {
         .collect()
 }
 
+/// The rating a photo is scored on: for a RAW original its rating moves
+/// `weight` (0–1) of the way toward the `potential` the critic saw after
+/// editing. A JPEG, a missing or non-finite potential, a potential below the
+/// rating and a zero weight leave the rating as it is.
+pub fn effective_rating(rating: f32, potential: Option<f32>, raw: bool, weight: f32) -> f32 {
+    let Some(potential) = potential.filter(|p| raw && p.is_finite() && weight > 0.0) else {
+        return rating;
+    };
+    let potential = potential.min(10.0).max(rating);
+    (rating + (potential - rating) * weight.min(1.0)).clamp(1.0, 10.0)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn effective_rating_blends_potential_only_where_it_applies() {
+        // (rating, potential, raw, weight, expected)
+        let cases = [
+            (6.0, Some(8.0), false, 0.15, 6.0),
+            (6.0, Some(8.0), true, 0.0, 6.0),
+            (6.0, Some(8.0), true, 0.15, 6.3),
+            (6.0, Some(8.0), true, 1.0, 8.0),
+            (6.0, Some(8.0), true, 2.0, 8.0),
+            (8.0, Some(6.0), true, 0.5, 8.0),
+            (6.0, None, true, 0.5, 6.0),
+            (6.0, Some(f32::NAN), true, 0.5, 6.0),
+            (6.0, Some(12.0), true, 0.5, 8.0),
+            (9.0, Some(10.0), true, 0.5, 9.5),
+        ];
+        for (rating, potential, raw, weight, expected) in cases {
+            let got = effective_rating(rating, potential, raw, weight);
+            assert!(
+                (got - expected).abs() < 1e-5,
+                "{rating} {potential:?} raw={raw} w={weight}: {got} != {expected}"
+            );
+        }
+    }
 
     #[test]
     fn few_ratings_map_linearly() {

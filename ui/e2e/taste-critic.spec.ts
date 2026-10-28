@@ -16,6 +16,7 @@ type Settings = {
     background: boolean;
     intensity: string;
     score_weight: number;
+    potential_weight: number;
   };
 };
 
@@ -29,6 +30,7 @@ const CRITIC_DEFAULTS = {
   background: false,
   intensity: "gentle",
   score_weight: 0.25,
+  potential_weight: 0.15,
 };
 
 function body(req: IncomingMessage): Promise<string> {
@@ -239,6 +241,7 @@ test("sets up the background critic without starting it", async ({
   await expect(page.getByTestId("save-settings")).toBeDisabled();
   await page.getByTestId("critic-score-weight").fill("40");
   await expect(page.getByTestId("critic-score-weight-error")).toHaveCount(0);
+  await page.getByTestId("critic-potential-weight").fill("30");
   await expect(page.getByTestId("critic-progress")).toContainText(
     "Save to use these settings.",
   );
@@ -249,6 +252,7 @@ test("sets up the background critic without starting it", async ({
   expect(settings.critic.intensity).toBe("when_idle");
   expect(settings.critic.preset).toBe("beginner");
   expect(settings.critic.score_weight).toBeCloseTo(0.4);
+  expect(settings.critic.potential_weight).toBeCloseTo(0.3);
 });
 
 test("shows the critique pill and keeps a critique after closing the loupe", async ({
