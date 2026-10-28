@@ -35,6 +35,8 @@ pub struct Signals<'a> {
     pub aesthetic: Option<&'a AestheticView>,
     /// The personal taste score, 0–1.
     pub taste: Option<f32>,
+    /// The critique's percentile among the library's critiques, 0–1.
+    pub critique: Option<f32>,
     pub faces: Option<&'a [FaceView]>,
 }
 
@@ -180,6 +182,25 @@ pub fn reasons(photo: Signals<'_>, series: Option<SeriesPlace<'_>>) -> Vec<Reaso
             ));
         }
     }
+    if let Some(c) = photo.critique {
+        if c >= 0.8 {
+            out.push(reason(
+                Tone::Good,
+                format!(
+                    "The critic ranks it among your best (top {}%)",
+                    (((1.0 - c) * 100.0).round() as i32).max(1)
+                ),
+            ));
+        } else if c <= 0.2 {
+            out.push(reason(
+                Tone::Bad,
+                format!(
+                    "The critic ranks it below most of your photos (bottom {}%)",
+                    ((c * 100.0).round() as i32).max(1)
+                ),
+            ));
+        }
+    }
     out
 }
 
@@ -228,6 +249,7 @@ mod tests {
                 quality: Some(&q),
                 aesthetic: Some(&a),
                 taste: Some(0.81),
+                critique: Some(0.93),
                 faces: Some(&faces),
             },
             Some(SeriesPlace {
@@ -248,6 +270,7 @@ mod tests {
                 (Tone::Good, "Well exposed"),
                 (Tone::Good, "Looks appealing (aesthetic 72%)"),
                 (Tone::Good, "Like the photos you pick (your taste 81%)"),
+                (Tone::Good, "The critic ranks it among your best (top 7%)"),
             ]
         );
     }
@@ -271,6 +294,7 @@ mod tests {
                 quality: Some(&q),
                 aesthetic: Some(&a),
                 taste: Some(0.12),
+                critique: Some(0.04),
                 faces: Some(&faces),
             },
             Some(SeriesPlace {
@@ -282,6 +306,7 @@ mod tests {
                     quality: Some(&best_q),
                     aesthetic: Some(&best_a),
                     taste: None,
+                    critique: None,
                     faces: Some(&best_faces),
                 },
             }),
@@ -300,6 +325,10 @@ mod tests {
                 (Tone::Bad, "Noisy (low noise 30%)"),
                 (Tone::Bad, "Looks plain (aesthetic 20%)"),
                 (Tone::Bad, "Like the photos you reject (your taste 12%)"),
+                (
+                    Tone::Bad,
+                    "The critic ranks it below most of your photos (bottom 4%)",
+                ),
             ]
         );
     }

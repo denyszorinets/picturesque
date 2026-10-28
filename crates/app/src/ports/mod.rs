@@ -12,6 +12,7 @@ pub mod metadata;
 pub mod models;
 pub mod pipeline;
 pub mod pixels;
+pub mod power;
 pub mod settings;
 pub mod sidecars;
 pub mod watcher;

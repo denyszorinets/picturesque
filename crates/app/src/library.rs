@@ -303,6 +303,9 @@ pub struct PhotoDetail {
     /// How well the photo matches the user's taste, 0–1, once enough picks
     /// and rejects taught it (`taste_status`).
     pub taste: Option<f32>,
+    /// The critique's percentile among the library's critiques, 0–1; null
+    /// without a critique or while critiques are off.
+    pub critique_score: Option<f32>,
     /// Faces found, largest first; `null` until the face models analyzed
     /// the photo.
     pub faces: Option<Vec<crate::analysis::faces::FaceView>>,
@@ -437,6 +440,7 @@ impl PhotoDetail {
             quality: None,
             aesthetic: None,
             taste: None,
+            critique_score: None,
             faces: None,
             score: None,
             reasons: Vec::new(),

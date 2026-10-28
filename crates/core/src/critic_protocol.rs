@@ -24,6 +24,9 @@ pub struct HelperRequest {
     pub schema: String,
     /// Most tokens to write.
     pub max_tokens: u32,
+    /// Most processor threads; 0 for all.
+    #[serde(default)]
+    pub threads: u32,
 }
 
 /// The helper's answer to one request.

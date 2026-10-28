@@ -164,7 +164,7 @@ impl Default for TasteSettings {
 
 /// Photo critiques from a local vision-language model (ADR-0016,
 /// `docs/features/ai.rst`).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(default)]
 #[ts(export)]
 pub struct CriticSettings {
@@ -176,6 +176,28 @@ pub struct CriticSettings {
     pub model: String,
     /// What the model judges; `null` uses the default rubric.
     pub rubric: Option<String>,
+    /// Critique the whole library in the background.
+    pub background: bool,
+    /// How hard the background critic may use the computer.
+    pub intensity: CriticIntensity,
+    /// How much critiques count in the aesthetic score, 0–1.
+    pub score_weight: f64,
+}
+
+/// How hard the background critic may use the computer
+/// (`docs/features/ai.rst`).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export)]
+pub enum CriticIntensity {
+    /// Low priority and half the processor; pauses while importing or
+    /// analyzing, and on battery power.
+    #[default]
+    Gentle,
+    /// Full speed, but only after a few minutes without using the app.
+    WhenIdle,
+    /// Full speed whenever enabled.
+    Full,
 }
 
 /// Where critiques come from.
@@ -198,6 +220,9 @@ impl Default for CriticSettings {
             server: crate::critic::DEFAULT_SERVER.into(),
             model: crate::critic::DEFAULT_MODEL.into(),
             rubric: None,
+            background: false,
+            intensity: CriticIntensity::Gentle,
+            score_weight: 0.25,
         }
     }
 }
@@ -223,6 +248,12 @@ impl CriticSettings {
         }
         if self.model.trim().is_empty() {
             return Err("Choose a model for critiques.".into());
+        }
+        if !(0.0..=1.0).contains(&self.score_weight) {
+            return Err(format!(
+                "The critique's share of the aesthetic score must be 0–100%, got {}%.",
+                (self.score_weight * 100.0).round()
+            ));
         }
         if self
             .rubric
@@ -862,6 +893,15 @@ pub(crate) mod tests {
                 "{err}"
             );
         }
+        let err = update(CriticSettings {
+            score_weight: 2.0,
+            ..ok.clone()
+        })
+        .unwrap_err();
+        assert!(
+            matches!(&err, SettingsError::Invalid(m) if m.contains("200%")),
+            "{err}"
+        );
         // An empty rubric means the default one.
         let blank = CriticSettings {
             rubric: Some("  ".into()),

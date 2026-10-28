@@ -5,6 +5,7 @@
   import ActivityRing from "./lib/activity/ActivityRing.svelte";
   import { Pipeline } from "./lib/activity/pipeline.svelte";
   import { ringState } from "./lib/activity/ring";
+  import { trackActivity } from "./lib/activity/user-activity";
   import { AnalysisProgress } from "./lib/library/analysis.svelte";
   import FolderSwitcher from "./lib/session/FolderSwitcher.svelte";
   import LibraryView from "./lib/library/LibraryView.svelte";
@@ -123,6 +124,9 @@
       // Settings reloads itself.
     }
   }
+
+  // The background critic yields while the user works.
+  $effect(() => trackActivity(() => api.reportActivity()));
 
   // The header ring follows importing and analysis everywhere.
   $effect(() => {

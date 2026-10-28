@@ -131,7 +131,10 @@ impl Engine {
 
     fn run(&mut self, request: &HelperRequest) -> Result<(String, String), String> {
         self.load(request)?;
-        let threads = self.threads;
+        let threads = match request.threads {
+            0 => self.threads,
+            n => i32::try_from(n).unwrap_or(self.threads).min(self.threads),
+        };
         let backend = self.backend.as_ref().expect("loaded with the model");
         let loaded = self.loaded.as_mut().expect("just loaded");
         let llama = &loaded.llama;

@@ -12,6 +12,9 @@ type Settings = {
     server: string;
     model: string;
     rubric: string | null;
+    background: boolean;
+    intensity: string;
+    score_weight: number;
   };
 };
 
@@ -21,6 +24,9 @@ const CRITIC_DEFAULTS = {
   server: "http://127.0.0.1:11434/v1",
   model: "qwen3-vl:4b",
   rubric: null,
+  background: false,
+  intensity: "gentle",
+  score_weight: 0.25,
 };
 
 function body(req: IncomingMessage): Promise<string> {
@@ -62,7 +68,13 @@ test("sets how much your taste counts and says what it learned", async ({
       ? "Learned from"
       : `Pick and reject at least ${taste.needed} analyzed photos each`,
   );
+  await page.getByTestId("taste-weight").fill("");
+  await expect(page.getByTestId("taste-weight-error")).toHaveText(
+    "Enter a percentage from 0 to 100.",
+  );
+  await expect(page.getByTestId("save-settings")).toBeDisabled();
   await page.getByTestId("taste-weight").fill("80");
+  await expect(page.getByTestId("taste-weight-error")).toHaveCount(0);
   await page.getByTestId("save-settings").click();
   await expect(page.getByTestId("save-settings")).toBeDisabled();
   const settings = await call<Settings>(request, "get_settings", null);
@@ -175,4 +187,38 @@ test("sets up the critic and critiques a photo in the loupe", async ({
   } finally {
     server.close();
   }
+});
+
+test("sets up the background critic without starting it", async ({
+  page,
+  request,
+}) => {
+  await call(request, "update_settings", {
+    library_root: LIBRARY,
+    onboarding: { tour_done: true },
+  });
+  await page.goto("/");
+  await page
+    .getByRole("navigation")
+    .getByRole("button", { name: "Settings" })
+    .click();
+  await page.getByTestId("critic-enabled").check();
+  await page.getByTestId("critic-background").check();
+  await page.getByTestId("critic-intensity").selectOption("when_idle");
+  await page.getByTestId("critic-score-weight").fill("");
+  await expect(page.getByTestId("critic-score-weight-error")).toHaveText(
+    "Enter a percentage from 0 to 100.",
+  );
+  await expect(page.getByTestId("save-settings")).toBeDisabled();
+  await page.getByTestId("critic-score-weight").fill("40");
+  await expect(page.getByTestId("critic-score-weight-error")).toHaveCount(0);
+  await expect(page.getByTestId("critic-progress")).toContainText(
+    "Save to use these settings.",
+  );
+  await page.getByTestId("save-settings").click();
+  await expect(page.getByTestId("save-settings")).toBeDisabled();
+  const settings = await call<Settings>(request, "get_settings", null);
+  expect(settings.critic.background).toBe(true);
+  expect(settings.critic.intensity).toBe("when_idle");
+  expect(settings.critic.score_weight).toBeCloseTo(0.4);
 });

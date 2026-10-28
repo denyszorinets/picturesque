@@ -6,8 +6,10 @@ use serde_json::{Value, json};
 
 use super::*;
 use crate::api::{Api, ApiErrorCode};
+use crate::ports::catalog::PhotoCatalog;
 use crate::settings::Settings;
 use crate::testing::{FakeMetadata, MemFs, TestWorld, fake_hash};
+use picturesque_core::photo::PhotoId;
 
 const REPLY: &str = r#"Sure! {"rating": 7.5, "summary": " Warm light on a calm lake. ",
     "strengths": ["golden light", " ", "clean horizon"], "weaknesses": ["kayaks too small"]}"#;
@@ -146,6 +148,7 @@ fn critiques_once_and_keeps_the_critique_for_the_model_and_rubric() {
         (DEFAULT_SERVER, "qwen3-vl:4b", None)
     );
     assert!(q.system.contains("Composition: framing"));
+    assert!(q.system.contains("professor of photography"));
     // The cached preview, shrunk by the adapter.
     assert!(q.image.starts_with("/cache"), "{:?}", q.image);
     assert_eq!(q.max_edge, MAX_EDGE);
@@ -163,6 +166,24 @@ fn critiques_once_and_keeps_the_critique_for_the_model_and_rubric() {
         .unwrap();
     assert_eq!(world.critic.asked.lock().unwrap().len(), 2);
 
+    // A critique written with the earlier prompt is no longer shown.
+    world
+        .catalog
+        .store_analysis(
+            PhotoId(id),
+            ID,
+            &json!({ "model": "qwen3-vl:4b", "rubric": fingerprint(DEFAULT_RUBRIC),
+                     "critique": { "rating": 7.0, "summary": "Old." } }),
+        )
+        .unwrap();
+    assert_eq!(
+        api.call("get_critique", json!({ "photo_id": id })).unwrap(),
+        Value::Null
+    );
+    api.call("critique_photo", json!({ "photo_id": id }))
+        .unwrap();
+    assert_eq!(world.critic.asked.lock().unwrap().len(), 3);
+
     // Another rubric makes the stored critique stale.
     api.call(
         "update_settings",
@@ -177,7 +198,7 @@ fn critiques_once_and_keeps_the_critique_for_the_model_and_rubric() {
     api.call("critique_photo", json!({ "photo_id": id }))
         .unwrap();
     let asked = world.critic.asked.lock().unwrap();
-    assert!(asked[2].system.contains("Only the light."));
+    assert!(asked[3].system.contains("Only the light."));
 }
 
 #[test]
@@ -329,4 +350,11 @@ fn says_when_the_builtin_critic_is_not_installed() {
         .call("critique_photo", json!({ "photo_id": id }))
         .unwrap_err();
     assert!(err.message.contains("reinstall"), "{}", err.message);
+}
+
+#[test]
+fn schema_lists_the_flaws_first_and_the_rating_last() {
+    let schema = Critique::schema();
+    let keys: Vec<_> = schema["properties"].as_object().unwrap().keys().collect();
+    assert_eq!(keys, ["weaknesses", "strengths", "summary", "rating"]);
 }

@@ -46,6 +46,7 @@ fn request() -> HelperRequest {
         model: "m.gguf".into(),
         mmproj: "p.gguf".into(),
         gpu: false,
+        threads: 0,
         system: String::new(),
         prompt: String::new(),
         image: String::new(),
@@ -62,8 +63,8 @@ fn keeps_one_helper_for_consecutive_critiques() {
     let dir = tempfile::tempdir().unwrap();
     let critic = HelperCritic::with_helper(Some(fake(dir.path(), DONE)), Duration::from_secs(60));
     assert_eq!(critic.problem(), None);
-    assert_eq!(critic.ask(request()).unwrap(), "nice");
-    assert_eq!(critic.ask(request()).unwrap(), "nice");
+    assert_eq!(critic.ask(request(), None).unwrap(), "nice");
+    assert_eq!(critic.ask(request(), None).unwrap(), "nice");
     assert_eq!(starts(dir.path()), 1);
     assert!(critic.is_running());
 }
@@ -77,7 +78,7 @@ fn passes_on_the_helpers_errors() {
         r#"echo '{"status":"failed","message":"cannot load the model: bad file"}'"#,
     );
     let critic = HelperCritic::with_helper(Some(helper), Duration::from_secs(60));
-    let err = critic.ask(request()).unwrap_err();
+    let err = critic.ask(request(), None).unwrap_err();
     assert_eq!(
         err,
         CriticError::Server("cannot load the model: bad file".into())
@@ -97,13 +98,13 @@ fn a_crash_fails_one_critique_and_the_next_starts_a_new_helper() {
     );
     let critic =
         HelperCritic::with_helper(Some(fake(dir.path(), &crash_once)), Duration::from_secs(60));
-    let err = critic.ask(request()).unwrap_err();
+    let err = critic.ask(request(), None).unwrap_err();
     assert!(
         matches!(&err, CriticError::Server(m) if m.contains("stopped")),
         "{err:?}"
     );
     assert!(!critic.is_running());
-    assert_eq!(critic.ask(request()).unwrap(), "nice");
+    assert_eq!(critic.ask(request(), None).unwrap(), "nice");
     assert_eq!(starts(dir.path()), 2);
 }
 
@@ -113,14 +114,14 @@ fn stops_the_helper_when_idle() {
     let dir = tempfile::tempdir().unwrap();
     let critic =
         HelperCritic::with_helper(Some(fake(dir.path(), DONE)), Duration::from_millis(300));
-    critic.ask(request()).unwrap();
+    critic.ask(request(), None).unwrap();
     let deadline = Instant::now() + Duration::from_secs(10);
     while critic.is_running() {
         assert!(Instant::now() < deadline, "the helper was not stopped");
         std::thread::sleep(Duration::from_millis(50));
     }
     // And starts again when needed.
-    assert_eq!(critic.ask(request()).unwrap(), "nice");
+    assert_eq!(critic.ask(request(), None).unwrap(), "nice");
     assert_eq!(starts(dir.path()), 2);
 }
 
@@ -132,7 +133,7 @@ fn says_when_there_is_no_helper() {
     ] {
         let critic = HelperCritic::with_helper(helper, Duration::from_secs(60));
         assert!(critic.problem().unwrap().contains("Reinstall"));
-        let err = critic.ask(request()).unwrap_err();
+        let err = critic.ask(request(), None).unwrap_err();
         assert!(matches!(err, CriticError::Unreachable(_)), "{err:?}");
     }
 }
@@ -171,6 +172,7 @@ fn critiques_a_photo_with_the_real_model() {
                 mmproj: &mmproj,
                 gpu: true,
             },
+            background: None,
             system: "You are a photo editor. Reply with JSON only.",
             prompt: "Critique this photo.",
             image: photo,

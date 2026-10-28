@@ -151,15 +151,26 @@ Changing it rescores photos immediately.
 Photo critiques from a local vision-language model
 (:ref:`features-ai-critique`). In the app: **Settings → AI critic**.
 
-:Type: object with ``enabled``, ``backend``, ``server``, ``model`` and
-   ``rubric``
+:Type: object with ``enabled``, ``backend``, ``server``, ``model``,
+   ``rubric``, ``background``, ``intensity`` and ``score_weight``
 :Default: ``{ "enabled": false, "backend": "builtin", "server":
-   "http://127.0.0.1:11434/v1", "model": "qwen3-vl:4b", "rubric": null }``
+   "http://127.0.0.1:11434/v1", "model": "qwen3-vl:4b", "rubric": null,
+   "background": false, "intensity": "gentle", "score_weight": 0.25 }``
 :Values: ``backend``: ``builtin`` (the downloaded Qwen3-VL model, run by
    the app) or ``server``. ``server``: base address of an OpenAI-compatible
    API, ``http://`` or ``https://``. ``model``: a model the server has
    (``server`` only). ``rubric``: what the model judges, at most 4,000
    characters; ``null`` or empty uses the default rubric.
+   ``background``: critique the whole library in the background, one
+   photo at a time, except rejects. Needs ``enabled`` (:ref:`features-ai-critique-background`).
+   ``intensity``: ``gentle`` (low priority and half the processor threads;
+   waits during imports and analysis and on battery, Linux only for now),
+   ``when_idle`` (full speed, only after three minutes without using the
+   app) or ``full`` (full speed whenever on). Changing it restarts the
+   built-in helper. ``score_weight``: the share of the critique score in the
+   aesthetic score, 0–1, shown as a percentage in Settings
+   (:ref:`features-ai-critique-score`). Critique scores count only while
+   ``enabled`` is true.
 
 .. _reference-settings-import:
 
@@ -245,7 +256,9 @@ API
         "taste": { "personal_weight": 0.5 },
         "critic": { "enabled": false, "backend": "builtin",
                     "server": "http://127.0.0.1:11434/v1",
-                    "model": "qwen3-vl:4b", "rubric": null },
+                    "model": "qwen3-vl:4b", "rubric": null,
+                    "background": false, "intensity": "gentle",
+                    "score_weight": 0.25 },
         "onboarding": { "tour_done": false },
         "open_folder": null, "recent_folders": [],
         "labels": { "pick": "green", "auto_pick": "yellow" },

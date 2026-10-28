@@ -39,7 +39,7 @@ impl Critic for CriticAdapter {
             CriticBackend::Builtin { model, mmproj, gpu } => {
                 let jpeg = crate::images::jpeg_for_upload(r.image, r.max_edge)
                     .map_err(CriticError::Image)?;
-                self.helper.ask(HelperRequest {
+                let request = HelperRequest {
                     model: model.to_path_buf(),
                     mmproj: mmproj.to_path_buf(),
                     gpu,
@@ -48,8 +48,14 @@ impl Critic for CriticAdapter {
                     image: base64::encode(&jpeg),
                     schema: r.schema.to_string(),
                     max_tokens: 0,
-                })
+                    threads: 0,
+                };
+                self.helper.ask(request, r.background)
             }
         }
+    }
+
+    fn interrupt(&self) {
+        self.helper.interrupt();
     }
 }

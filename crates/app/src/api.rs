@@ -125,6 +125,8 @@ pub struct AppContext {
     pub watcher: Arc<dyn crate::ports::watcher::FolderWatcher>,
     /// The vision-language model server for critiques (ADR-0016).
     pub critic: Arc<dyn crate::ports::critic::Critic>,
+    /// Whether the computer runs on battery (the background critic waits).
+    pub power: Arc<dyn crate::ports::power::PowerSource>,
 }
 
 impl fmt::Debug for AppContext {
@@ -139,6 +141,8 @@ struct Analyzed {
     aesthetic: Option<AestheticView>,
     /// How well the photo matches the user's taste, once learned.
     taste: Option<f32>,
+    /// The critique's percentile among the library's critiques.
+    critique: Option<f32>,
     faces: Option<Vec<crate::analysis::faces::FaceView>>,
     score: Option<f32>,
 }
@@ -149,6 +153,7 @@ impl Analyzed {
             quality: self.quality.as_ref(),
             aesthetic: self.aesthetic.as_ref(),
             taste: self.taste,
+            critique: self.critique,
             faces: self.faces.as_deref(),
         }
     }
@@ -166,7 +171,9 @@ pub struct Api {
     analysis: Arc<AnalysisService>,
     series: Arc<SeriesService>,
     ai: AiService,
-    critic: crate::critic::CritiqueService,
+    critic: Arc<crate::critic::CritiqueService>,
+    background_critic: Arc<crate::critic::background::BackgroundCritic>,
+    activity: Arc<crate::critic::background::Activity>,
     models: Arc<ModelService>,
     embeddings: Arc<EmbeddingIndex>,
     search: TextSearch,
@@ -280,7 +287,31 @@ impl Api {
             Arc::clone(&ctx.fs),
             Arc::clone(&ctx.settings_store),
         );
+        let critic = Arc::new(crate::critic::CritiqueService::new(
+            Arc::clone(&catalog),
+            Arc::clone(&ctx.settings_store),
+            Arc::clone(&thumbnails),
+            Arc::clone(&models),
+            ctx.critic,
+        ));
+        let activity = Arc::new(crate::critic::background::Activity::default());
+        let background_critic = Arc::new(crate::critic::background::BackgroundCritic::new(
+            crate::critic::background::BackgroundDeps {
+                critiques: Arc::clone(&critic),
+                catalog: Arc::clone(&catalog),
+                settings: Arc::clone(&ctx.settings_store),
+                series: Arc::clone(&series),
+                analysis: Arc::clone(&analysis),
+                pipeline: Arc::clone(&pipeline),
+                power: ctx.power,
+                activity: Arc::clone(&activity),
+                events: Arc::clone(&events) as Arc<dyn EventSink>,
+            },
+        ));
         Ok(Self {
+            critic,
+            background_critic,
+            activity,
             clear: crate::clear::ClearService::new(
                 Arc::clone(&catalog),
                 Arc::clone(&ctx.fs),
@@ -292,13 +323,6 @@ impl Api {
             search,
             rejects,
             ai: AiService::new(ctx.inference, Arc::clone(&ctx.settings_store)),
-            critic: crate::critic::CritiqueService::new(
-                Arc::clone(&catalog),
-                Arc::clone(&ctx.settings_store),
-                Arc::clone(&thumbnails),
-                Arc::clone(&models),
-                ctx.critic,
-            ),
             settings: SettingsService::new(ctx.settings_store, ctx.fs, Arc::clone(&catalog)),
             thumbnails,
             catalog,
@@ -324,12 +348,9 @@ impl Api {
         let taste = current(ClipAnalyzer::ID)
             .and_then(ClipAnalyzer::embedding)
             .and_then(|e| self.series.taste().model()?.score(&e));
-        let personal_weight = self
-            .settings
-            .get()
-            .map_err(settings_error)?
-            .taste
-            .personal_weight;
+        let settings = self.settings.get().map_err(settings_error)?;
+        let personal_weight = settings.taste.personal_weight;
+        let critique = self.series.critique_score(id);
         let faces = current(FaceAnalyzer::ID).and_then(crate::analysis::faces::faces);
         let score = picturesque_core::ranking::photo_quality(&Candidate {
             id,
@@ -337,9 +358,13 @@ impl Api {
                 .and_then(|r| serde_json::from_value(r.clone()).ok()),
             rejected: false,
             aesthetic: picturesque_core::taste::blend(
-                aesthetic.map(|a| a.score),
-                taste,
-                personal_weight as f32,
+                picturesque_core::taste::blend(
+                    aesthetic.map(|a| a.score),
+                    taste,
+                    personal_weight as f32,
+                ),
+                critique,
+                settings.critic.score_weight as f32,
             ),
             face: faces.as_deref().and_then(crate::analysis::faces::signal),
         });
@@ -347,6 +372,7 @@ impl Api {
             quality,
             aesthetic,
             taste,
+            critique,
             faces,
             score,
         })
@@ -361,6 +387,7 @@ impl Api {
         self.analysis.start(analysis_workers());
         self.series.start();
         self.pipeline.start();
+        self.background_critic.start();
     }
 
     /// Writes pending sidecars and stops all background work, before the
@@ -372,6 +399,7 @@ impl Api {
         self.analysis.stop();
         self.series.stop();
         self.thumbnails.stop();
+        self.background_critic.stop();
     }
 
     /// Scans every import source and imports what it finds, on the calling
@@ -388,6 +416,30 @@ impl Api {
     /// Waits for background thumbnail generation (tests and tools).
     pub fn wait_for_thumbnails(&self) {
         self.thumbnails.wait_for_prefill();
+    }
+
+    /// The series service (tests).
+    #[cfg(test)]
+    pub(crate) fn series_service(&self) -> &Arc<SeriesService> {
+        &self.series
+    }
+
+    /// The background critic (tests).
+    #[cfg(test)]
+    pub(crate) fn background_critic(&self) -> &crate::critic::background::BackgroundCritic {
+        &self.background_critic
+    }
+
+    /// The critique service (tests).
+    #[cfg(test)]
+    pub(crate) fn critique_service(&self) -> &crate::critic::CritiqueService {
+        &self.critic
+    }
+
+    /// When the user was last active (tests).
+    #[cfg(test)]
+    pub(crate) fn activity(&self) -> &crate::critic::background::Activity {
+        &self.activity
     }
 
     /// Recomputes series now (tests and tools).
@@ -534,10 +586,15 @@ impl Api {
                 let series_changed = update.series.is_some()
                     || update.ranking.is_some()
                     || update.auto_pick.is_some()
-                    || update.taste.is_some();
+                    || update.taste.is_some()
+                    || update.critic.is_some();
+                let critic_changed = update.critic.is_some() || update.ai.is_some();
                 let settings = self.settings.update(update).map_err(settings_error)?;
                 if series_changed {
                     self.series.recompute().map_err(catalog_error)?;
+                }
+                if critic_changed {
+                    self.background_critic.wake();
                 }
                 respond(settings)
             }
@@ -582,6 +639,7 @@ impl Api {
                 detail.quality = analyzed.quality;
                 detail.aesthetic = analyzed.aesthetic;
                 detail.taste = analyzed.taste;
+                detail.critique_score = analyzed.critique;
                 detail.faces = analyzed.faces.clone();
                 detail.score = analyzed.score;
                 let series = self.series.view(id).map_err(catalog_error)?;
@@ -607,8 +665,10 @@ impl Api {
                 let SetDecisionsArgs { changes } = parse_args(command, args)?;
                 let decisions = self.set_decisions(&changes)?;
                 self.sidecars.notify();
-                // Rejected photos are never chosen as best.
+                // Rejected photos are never chosen as best, nor critiqued in
+                // the background.
                 self.series.notify();
+                self.background_critic.wake();
                 respond(decisions)
             }
             "photo_facets" => {
@@ -797,6 +857,15 @@ impl Api {
                 no_args(command, &args)?;
                 respond(self.series.taste().status())
             }
+            "background_critique_status" => {
+                no_args(command, &args)?;
+                respond(self.background_critic.status().map_err(catalog_error)?)
+            }
+            "report_activity" => {
+                no_args(command, &args)?;
+                self.activity.touch();
+                respond(Value::Null)
+            }
             "critic_status" => {
                 no_args(command, &args)?;
                 respond(self.critic.status().map_err(catalog_error)?)
@@ -811,11 +880,13 @@ impl Api {
             }
             "critique_photo" => {
                 let CritiqueArgs { photo_id, refresh } = parse_args(command, args)?;
-                respond(
-                    self.critic
-                        .critique(PhotoId(photo_id), refresh)
-                        .map_err(critique_error)?,
-                )
+                let view = self
+                    .critic
+                    .critique(PhotoId(photo_id), refresh)
+                    .map_err(critique_error)?;
+                // The critique counts in the scores (`photo_score`).
+                self.series.notify();
+                respond(view)
             }
             "ai_status" => {
                 no_args(command, &args)?;
@@ -853,6 +924,7 @@ impl Api {
                 let PrioritizeArgs { photo_ids } = parse_args(command, args)?;
                 let ids: Vec<PhotoId> = photo_ids.into_iter().map(PhotoId).collect();
                 self.analysis.prioritize(&ids);
+                self.background_critic.prioritize(&ids);
                 respond(self.analysis.status())
             }
             "reanalyze_photos" => {
@@ -1094,7 +1166,10 @@ mod tests {
                     "backend": "builtin",
                     "server": "http://127.0.0.1:11434/v1",
                     "model": "qwen3-vl:4b",
-                    "rubric": null
+                    "rubric": null,
+                    "background": false,
+                    "intensity": "gentle",
+                    "score_weight": 0.25
                 },
                 "onboarding": { "tour_done": false },
                 "open_folder": null,

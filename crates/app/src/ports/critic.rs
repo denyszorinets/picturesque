@@ -23,10 +23,21 @@ pub enum CriticBackend<'a> {
     Server { url: &'a str, model: &'a str },
 }
 
+/// How a background critique holds back (`critic::background`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Throttle {
+    /// Run at low operating-system priority.
+    pub low_priority: bool,
+    /// Most processor threads; `None` for all.
+    pub threads: Option<u32>,
+}
+
 /// One question about one image.
 #[derive(Debug, Clone, Copy)]
 pub struct CriticRequest<'a> {
     pub backend: CriticBackend<'a>,
+    /// Set for background critiques, which [`Critic::interrupt`] may stop.
+    pub background: Option<Throttle>,
     /// Instructions for the model.
     pub system: &'a str,
     pub prompt: &'a str,
@@ -47,6 +58,8 @@ pub enum CriticError {
     Server(String),
     /// The image could not be prepared.
     Image(String),
+    /// A background critique was stopped by [`Critic::interrupt`].
+    Interrupted,
 }
 
 impl fmt::Display for CriticError {
@@ -55,6 +68,7 @@ impl fmt::Display for CriticError {
             Self::Unreachable(e) => write!(f, "the model did not answer: {e}"),
             Self::Server(e) => write!(f, "the model failed: {e}"),
             Self::Image(e) => write!(f, "cannot prepare the photo: {e}"),
+            Self::Interrupted => f.write_str("interrupted"),
         }
     }
 }
@@ -67,4 +81,8 @@ pub trait Critic: Send + Sync {
     fn builtin_problem(&self) -> Option<String>;
     /// The model's reply text.
     fn ask(&self, request: &CriticRequest<'_>) -> Result<String, CriticError>;
+    /// Stops a background critique in progress, which then fails with
+    /// [`CriticError::Interrupted`]; does nothing otherwise, or where the
+    /// backend cannot be interrupted (servers).
+    fn interrupt(&self);
 }

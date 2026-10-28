@@ -127,7 +127,9 @@ Commands
    predictor's ``rating``, about 1–10; ``null`` until the CLIP model
    analyzed the photo, see :ref:`features-ai-aesthetic`), ``taste`` (how
    well the photo matches the user's picks, 0–1; ``null`` until enough
-   picks and rejects taught it, see :ref:`features-ai-taste`) and ``faces``
+   picks and rejects taught it, see :ref:`features-ai-taste`),
+   ``critique_score`` (0–1, ``null`` when there is none;
+   :ref:`features-ai-critique-score`) and ``faces``
    (largest first; each with ``x``, ``y``, ``width``, ``height`` as
    fractions of the photo, detector ``score``, ``eyes_closed`` —
    ``true``, ``false`` or ``null`` when undecided — ``eye_openness`` and
@@ -230,10 +232,39 @@ Commands
    ``{ "photo_id": 7, "refresh": false }``. Asks the model for a critique,
    or returns the stored one unless ``refresh``. Can take minutes on a
    CPU. Returns ``{ "model": "qwen3-vl:4b", "rating": 7.5, "score": 0.72,
-   "summary": "…", "strengths": ["…"], "weaknesses": ["…"] }`` (``rating``
-   1–10, ``score`` the same as 0–1). ``invalid_arguments`` while critiques
-   are off; ``internal`` with the reason when the server fails or the reply
-   is not a critique.
+   "summary": "…", "strengths": ["…"], "weaknesses": ["…"] }``
+   (``rating`` 1–10, ``score`` the same as 0–1). ``invalid_arguments``
+   while critiques are off; ``internal`` with the reason when the server
+   fails or the reply is not a critique.
+
+``background_critique_status``
+   No arguments. The background critic (:ref:`features-ai-critique-background`):
+
+   .. code-block:: json
+
+      { "enabled": true, "running": true, "paused": null,
+        "critiqued": 1200, "stale": 40, "missing": 8160, "failed": 0,
+        "total": 9400, "seconds_per_photo": 11.2, "seconds_left": 88000 }
+
+   ``enabled`` means the background critic is on (and critiques are on).
+   ``running`` means it is writing a critique now. ``paused`` is the reason
+   it waits, for example for the import, analysis, battery power, or a model
+   that is not downloaded, or ``null``. ``critiqued`` counts photos, rejects
+   excluded, with a critique by the current model, rubric and prompt.
+   ``stale`` counts photos critiqued by another model, rubric or prompt,
+   to be redone. ``missing`` counts photos without a critique. ``total``
+   counts every photo except rejects; ``failed`` counts the photos skipped
+   because their critique failed, reset when the critic settings change or the app restarts
+   (:ref:`features-ai-critique-background`).
+   ``seconds_per_photo`` and ``seconds_left`` are ``null`` until a critique
+   was written in this session. The same object is sent as the
+   ``background_critique_progress`` event, whenever a critique finishes or
+   starts and when the pause reason changes.
+
+``report_activity``
+   No arguments. Returns ``null``. The UI calls it at most every 30 seconds
+   while the user is active; the ``when_idle`` critique intensity
+   (:ref:`reference-settings-critic`) depends on these calls.
 
 ``ai_status``
    No arguments. Where local AI models run (:doc:`/features/ai`):
@@ -459,6 +490,9 @@ events from ``GET /api/events``.
 
 ``analysis_progress``
    The ``analysis_status``, sent after each analyzed photo.
+
+``background_critique_progress``
+   The ``background_critique_status`` object (see above).
 
 ``sidecar_progress``
    The ``sidecar_status``, sent when decisions change and after each
