@@ -26,6 +26,7 @@ const CRITIQUE: CritiqueView = {
   summary: "Warm light on a calm lake.",
   strengths: ["golden light"],
   weaknesses: ["kayaks too small"],
+  outdated: false,
 };
 
 describe("Critique", () => {
@@ -90,5 +91,36 @@ describe("Critique", () => {
     expect(run).toHaveBeenLastCalledWith(3, false);
     expect(await screen.findByTestId("critique-summary")).toBeInTheDocument();
     expect(screen.queryByTestId("critique-error")).toBeNull();
+  });
+
+  it("shows an outdated critique with a note", async () => {
+    render(Critique, {
+      photoId: 1,
+      status: STATUS,
+      load: async () => ({ ...CRITIQUE, outdated: true }),
+      run: vi.fn(),
+    });
+    expect(await screen.findByTestId("critique-summary")).toBeInTheDocument();
+    expect(screen.getByTestId("critique-outdated")).toHaveTextContent(
+      "Written by an earlier model or prompt",
+    );
+    expect(screen.getByTestId("critique-again")).toHaveTextContent(
+      "Critique again",
+    );
+  });
+
+  it("says when the stored critique could not be loaded", async () => {
+    render(Critique, {
+      photoId: 1,
+      status: STATUS,
+      load: async () => {
+        throw new ApiError("internal", "catalog is busy");
+      },
+      run: vi.fn(),
+    });
+    expect(await screen.findByTestId("critique-error")).toHaveTextContent(
+      "Could not load the critique: catalog is busy",
+    );
+    expect(screen.getByTestId("critique-run")).toBeInTheDocument();
   });
 });

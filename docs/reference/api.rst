@@ -225,15 +225,18 @@ Commands
    model.
 
 ``get_critique``
-   ``{ "photo_id": 7 }``. The stored critique by the current model and
-   rubric, or ``null``. Never contacts the server.
+   ``{ "photo_id": 7 }``. The stored critique, or ``null``. One written by
+   another model or rubric is returned too, with ``outdated`` true.
+   Never contacts the server.
 
 ``critique_photo``
    ``{ "photo_id": 7, "refresh": false }``. Asks the model for a critique,
-   or returns the stored one unless ``refresh``. Can take minutes on a
-   CPU. Returns ``{ "model": "qwen3-vl:4b", "rating": 7.5, "score": 0.72,
-   "summary": "…", "strengths": ["…"], "weaknesses": ["…"] }``
-   (``rating`` 1–10, ``score`` the same as 0–1). ``invalid_arguments``
+   or returns the stored one unless ``refresh`` or it is ``outdated``. Can
+   take minutes on a CPU. Returns ``{ "model": "qwen3-vl:4b", "rating": 7.5, "score": 0.72,
+   "summary": "…", "strengths": ["…"], "weaknesses": ["…"],
+   "outdated": false }`` (``rating`` 1–10, ``score`` the same as 0–1;
+   ``outdated`` true when another model or rubric than the current
+   settings wrote it). ``invalid_arguments``
    while critiques are off; ``internal`` with the reason when the server
    fails or the reply is not a critique.
 

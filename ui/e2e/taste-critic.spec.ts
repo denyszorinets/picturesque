@@ -222,3 +222,109 @@ test("sets up the background critic without starting it", async ({
   expect(settings.critic.intensity).toBe("when_idle");
   expect(settings.critic.score_weight).toBeCloseTo(0.4);
 });
+
+test("shows the critique pill and keeps a critique after closing the loupe", async ({
+  page,
+  request,
+}) => {
+  // Chat completions wait on this gate, so the background worker's first
+  // critique stays "running" and the critique pill stays visible (it is hidden
+  // once the queue is done). Released right before the loupe part.
+  // A model name unique to this run makes earlier critiques (from other
+  // tests or repeats) stale, so there is always work left and the pill shows.
+  const model = `tiny-vl-${Date.now()}`;
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => (release = resolve));
+  const server = createServer((req, res) => {
+    void (async () => {
+      res.writeHead(200, { "content-type": "application/json" });
+      if (req.url === "/v1/models") {
+        res.end(JSON.stringify({ data: [{ id: model }] }));
+        return;
+      }
+      await body(req);
+      await gate;
+      const critique = {
+        rating: 6,
+        summary: "Plain but clean.",
+        strengths: ["clean"],
+        weaknesses: ["flat"],
+      };
+      res.end(
+        JSON.stringify({
+          choices: [{ message: { content: JSON.stringify(critique) } }],
+        }),
+      );
+    })();
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const port = (server.address() as AddressInfo).port;
+  try {
+    await importFiles(request, {
+      "pill/a.JPG": {
+        bytes: jpeg(9310),
+        time: new Date("1985-06-06T10:00:00"),
+      },
+    });
+    await call(request, "update_settings", {
+      library_root: LIBRARY,
+      onboarding: { tour_done: true },
+      critic: {
+        ...CRITIC_DEFAULTS,
+        enabled: true,
+        backend: "server",
+        server: `http://127.0.0.1:${port}/v1`,
+        model,
+        background: true,
+        intensity: "full",
+      },
+    });
+    await page.goto("/");
+    await expect(page.getByTestId("critique-ring")).toBeVisible();
+    await expect(page.getByTestId("critique-ring-label")).toContainText(
+      /^Critique(?: paused ·)? \d+ \/ \d+/,
+    );
+    // Only one popover is open at a time.
+    const popovers = page.getByTestId("activity-popover");
+    await page.getByTestId("critique-ring").click({ timeout: 5000 });
+    await expect(popovers).toHaveCount(1);
+    await page.getByTestId("activity-ring").click({ timeout: 5000 });
+    await expect(popovers).toHaveCount(1);
+    await page.locator("h1").click();
+    await expect(popovers).toHaveCount(0);
+    await page
+      .getByRole("navigation")
+      .getByRole("button", { name: "Activity" })
+      .click();
+    await expect(page.getByTestId("activity-critique-count")).toContainText(
+      "photos critiqued",
+    );
+
+    release();
+    await page
+      .getByRole("navigation")
+      .getByRole("button", { name: "Library" })
+      .click();
+    await page.locator("[data-photo-id]").first().click();
+    await page.keyboard.press("Enter");
+    const summary = page.getByTestId("critique-summary");
+    // The background worker may store the critique before or after the loupe
+    // opens: wait for either, and run it ourselves only if it is still missing.
+    const run = page.getByTestId("critique-run");
+    await expect(summary.or(run)).toBeVisible();
+    if (await run.isVisible()) {
+      await run.click({ timeout: 5000 }).catch(() => {
+        // The background critique landed first and replaced the button.
+      });
+    }
+    await expect(summary).toContainText("Plain but clean.");
+    await page.keyboard.press("Escape");
+    await page.keyboard.press("Enter");
+    await expect(summary).toContainText("Plain but clean.");
+  } finally {
+    release();
+    // Restore first: stopping the worker may still need the server to answer.
+    await call(request, "update_settings", { critic: CRITIC_DEFAULTS });
+    server.close();
+  }
+});

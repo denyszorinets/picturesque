@@ -27,7 +27,10 @@
       .then((c) => {
         if (id === photoId) critique = c;
       })
-      .catch(() => {});
+      .catch((err: unknown) => {
+        if (id === photoId)
+          error = `Could not load the critique: ${ApiError.from(err).message}`;
+      });
   });
 
   async function ask(e: Event, refresh: boolean) {
@@ -73,11 +76,17 @@
       {/if}
       <p class="muted by">
         By {critique.model} ·
+        {#if critique.outdated}
+          <span data-testid="critique-outdated"
+            >Written by an earlier model or prompt ·
+          </span>
+        {/if}
         <button
           class="link"
           disabled={busy}
           onclick={(e) => void ask(e, true)}
-          data-testid="critique-again">Ask again</button
+          data-testid="critique-again"
+          >{critique.outdated ? "Critique again" : "Ask again"}</button
         >
       </p>
     {:else}

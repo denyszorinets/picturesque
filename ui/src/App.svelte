@@ -5,6 +5,8 @@
   import ActivityRing from "./lib/activity/ActivityRing.svelte";
   import { Pipeline } from "./lib/activity/pipeline.svelte";
   import { ringState } from "./lib/activity/ring";
+  import { critiqueRing } from "./lib/activity/critique-ring";
+  import { CritiqueProgress } from "./lib/activity/critique.svelte";
   import { trackActivity } from "./lib/activity/user-activity";
   import { AnalysisProgress } from "./lib/library/analysis.svelte";
   import FolderSwitcher from "./lib/session/FolderSwitcher.svelte";
@@ -70,6 +72,8 @@
   const pipeline = new Pipeline(api);
   const analysis = new AnalysisProgress(api);
   const ring = $derived(ringState(pipeline.status, analysis.status));
+  const critiqueProgress = new CritiqueProgress(api);
+  const critique = $derived(critiqueRing(critiqueProgress.status));
 
   const versionLabel = (i: AppInfo) => `v${i.version}`;
 
@@ -111,6 +115,7 @@
     sessionRevision += 1;
     void pipeline.loadStatus();
     void analysis.load();
+    void critiqueProgress.load();
   }
 
   async function closeSetup() {
@@ -132,9 +137,11 @@
   $effect(() => {
     void pipeline.loadStatus();
     void analysis.load();
+    void critiqueProgress.load();
     const stop = api.onAppEvent((event) => {
       pipeline.handle(event);
       analysis.handle(event);
+      critiqueProgress.handle(event);
     });
     // Events may be missed (for example while reconnecting).
     const timer = setInterval(() => {
@@ -171,6 +178,11 @@
       </nav>
       <div class="status">
         <ActivityRing {ring} onactivity={() => (tab = "activity")} />
+        <ActivityRing
+          ring={critique}
+          testid="critique-ring"
+          onactivity={() => (tab = "activity")}
+        />
         <button
           class="help"
           onclick={() => (help = true)}
@@ -215,6 +227,7 @@
         <div class="view page" hidden={tab !== "activity"}>
           <ActivityView
             {pipeline}
+            critique={critiqueProgress.status}
             visible={tab === "activity"}
             hasLibrary={settings === null || !!settings.library_root}
             {inFolder}
@@ -236,6 +249,7 @@
           {#key settingsRevision}
             <SettingsPanel
               {inFolder}
+              critiqueProgress={critiqueProgress.status}
               onchange={(s) => (settings = s)}
               onsetup={() => (setup = true)}
               ontour={() => {

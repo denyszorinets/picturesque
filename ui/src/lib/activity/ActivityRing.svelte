@@ -5,9 +5,11 @@
     ring: Ring | null;
     /** Opens the Activity tab. */
     onactivity?: () => void;
+    /** Test id of the button (its label gets `-label`). */
+    testid?: string;
   }
 
-  let { ring, onactivity }: Props = $props();
+  let { ring, onactivity, testid = "activity-ring" }: Props = $props();
 
   let open = $state(false);
   let root: HTMLElement | undefined = $state();
@@ -44,7 +46,7 @@
       aria-expanded={open}
       aria-haspopup="dialog"
       title={ring.details.join("\n")}
-      data-testid="activity-ring"
+      data-testid={testid}
     >
       <svg
         class="ring"
@@ -64,7 +66,7 @@
           transform="rotate(-90 10 10)"
         />
       </svg>
-      <span class="label" data-testid="activity-ring-label">{ring.label}</span>
+      <span class="label" data-testid="{testid}-label">{ring.label}</span>
       {#if ring.failed > 0}
         <span class="failed">{ring.failed} failed</span>
       {/if}
