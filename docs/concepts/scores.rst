@@ -46,7 +46,9 @@ How they are used:
 - The **aesthetic score** used for ranking, sorting, auto-pick and the
   **Aesthetic** filter is the general score, blended with **Your taste**,
   then blended with the **critique score**. Photos without a critique are
-  unaffected, and critique scores count only while critiques are on.
+  unaffected, and critique scores count only while critiques are on. For RAW
+  originals the critique rating is first raised a little toward the rating
+  the critic says editing could reach (``critic.potential_weight``).
 - The **best photo of a series** is ranked from sharpness (relative to
   the series, with faces counting), exposure, noise and the aesthetic
   score; closed eyes halve a photo's score. The weights are settings.

@@ -143,6 +143,8 @@ struct Analyzed {
     taste: Option<f32>,
     /// The critique's percentile among the library's critiques.
     critique: Option<f32>,
+    /// The critique rating and potential of a RAW photo raised by it.
+    raw_potential: Option<(f32, f32)>,
     faces: Option<Vec<crate::analysis::faces::FaceView>>,
     score: Option<f32>,
 }
@@ -154,6 +156,7 @@ impl Analyzed {
             aesthetic: self.aesthetic.as_ref(),
             taste: self.taste,
             critique: self.critique,
+            raw_potential: self.raw_potential,
             faces: self.faces.as_deref(),
         }
     }
@@ -351,6 +354,7 @@ impl Api {
         let settings = self.settings.get().map_err(settings_error)?;
         let personal_weight = settings.taste.personal_weight;
         let critique = self.series.critique_score(id);
+        let raw_potential = self.series.critique_lift(id);
         let faces = current(FaceAnalyzer::ID).and_then(crate::analysis::faces::faces);
         let score = picturesque_core::ranking::photo_quality(&Candidate {
             id,
@@ -373,6 +377,7 @@ impl Api {
             aesthetic,
             taste,
             critique,
+            raw_potential,
             faces,
             score,
         })
@@ -1170,7 +1175,8 @@ mod tests {
                     "rubric": null,
                     "background": false,
                     "intensity": "gentle",
-                    "score_weight": 0.25
+                    "score_weight": 0.25,
+                    "potential_weight": 0.15
                 },
                 "onboarding": { "tour_done": false },
                 "open_folder": null,

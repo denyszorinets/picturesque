@@ -53,6 +53,7 @@ function setup(props: Partial<Record<string, unknown>> = {}) {
     background: true,
     intensity: "gentle",
     scorePercent: 25,
+    potentialPercent: 15,
     progress: PROGRESS,
     status: STATUS,
     oncheck,
@@ -149,6 +150,17 @@ describe("CriticFields background critique", () => {
     expect(input).toHaveValue(25);
     await fireEvent.input(input, { target: { value: "40" } });
     expect(input).toHaveValue(40);
+  });
+
+  it("edits the RAW potential weight as a percent and flags bad values", async () => {
+    setup({ potentialPercent: 15 });
+    const input = screen.getByTestId("critic-potential-weight");
+    expect(input).toHaveValue(15);
+    expect(screen.queryByTestId("critic-potential-weight-error")).toBeNull();
+    await fireEvent.input(input, { target: { value: "30" } });
+    expect(input).toHaveValue(30);
+    await fireEvent.input(input, { target: { value: "150" } });
+    expect(screen.getByTestId("critic-potential-weight-error")).toBeVisible();
   });
 });
 

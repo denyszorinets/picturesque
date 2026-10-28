@@ -231,7 +231,9 @@ moment) and up to three **camera tips** for the next shot. The critic is
 told the photo's ISO, shutter speed, aperture and focal length when the
 file records them, and whether the original is a RAW file or a JPEG, so
 the tips can fit. The model judges from a small preview, so the fixability
-and the potential are advice, not a promise; they do not change the score.
+and the potential are advice, not a promise. The fixability does not change
+the score; the potential does for RAW originals, with a small weight
+(:ref:`features-ai-critique-score`).
 
 The built-in critic runs in a helper process that starts with the first
 critique, keeps the model loaded while you keep asking, and stops after
@@ -428,17 +430,38 @@ score of 80 % means the photo is better than 80 % of your critiqued photos.
 With fewer than 20 critiques, the rating maps linearly instead, from 1 to
 10 onto 0 to 100 %.
 
+For a RAW original (a RAW+JPEG pair counts as RAW; a JPEG-only photo
+never does) the rating first moves toward the critic's **potential**, the
+rating it could reach after editing, by ``critic.potential_weight`` (default
+15 %, 0 turns it off)::
+
+   effective = rating + (max(potential, rating) - rating) * weight
+
+The result is clamped to 1–10 and not rounded. This happens before the
+percentiles are computed, so the library's population is all effective
+ratings. It has no effect when the potential is missing (critiques from
+older prompts), is below the rating, or the weight is 0. Nothing is stored:
+scores are rebuilt from the stored critiques whenever series are
+recomputed, so changing the weight never marks critiques outdated and never
+reruns the model. The fixability and fix steps are not used. The weight is
+low because the model sees a small preview (about 768 px), not the RAW data,
+so it cannot judge clipped highlights, the noise floor or the dynamic
+range; its potential is a guess.
+
 The loupe shows it in a **Critic** row, and **Why this score** adds *The
 critic ranks it among your best (top N%)* at 80 % or more, where N is 100
 minus the critique score in percent (at least 1), and *The critic ranks it
 below most of your photos (bottom N%)* at 20 % or less, where N is the
 critique score in percent (at least 1). With fewer than 20 critiques the
 score is the rating mapped linearly, so N then reflects the rating, not a
-rank.
+rank. When the potential raised a RAW photo's rating, **Why this score**
+also says, for example, *Rated as a RAW file: the critic's 6 is raised toward
+the 8 it could reach after editing*.
 
 The critique score counts for ``critic.score_weight`` of the aesthetic
 score; the default is 25 %, and **Settings → AI critic** shows it as
-*Critique counts for N % of the aesthetic score*. The aesthetic score used
+*Critique counts for N % of the aesthetic score* and, for RAW files,
+*RAW potential counts for N % of the critique rating* (step 5). The aesthetic score used
 for ranking, sorting, auto-pick and the **Aesthetic** filter is built in
 steps: the general score, blended with **Your taste** (:ref:`features-ai-taste`),
 then blended with the critique score. Photos without a critique are not

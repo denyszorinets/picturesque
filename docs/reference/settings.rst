@@ -152,12 +152,13 @@ Photo critiques from a local vision-language model
 (:ref:`features-ai-critique`). In the app: **Settings → AI critic**.
 
 :Type: object with ``enabled``, ``backend``, ``server``, ``model``,
-   ``preset``, ``rubric``, ``background``, ``intensity`` and
-   ``score_weight``
+   ``preset``, ``rubric``, ``background``, ``intensity``,
+   ``score_weight`` and ``potential_weight``
 :Default: ``{ "enabled": false, "backend": "builtin", "server":
    "http://127.0.0.1:11434/v1", "model": "qwen3-vl:4b", "preset":
    "professional", "rubric": null,
-   "background": false, "intensity": "gentle", "score_weight": 0.25 }``
+   "background": false, "intensity": "gentle", "score_weight": 0.25,
+   "potential_weight": 0.15 }``
 :Values: ``backend``: ``builtin`` (the downloaded Qwen3-VL model, run by
    the app) or ``server``. ``server``: base address of an OpenAI-compatible
    API, ``http://`` or ``https://``. ``model``: a model the server has
@@ -177,7 +178,10 @@ Photo critiques from a local vision-language model
    built-in helper. ``score_weight``: the share of the critique score in the
    aesthetic score, 0–1, shown as a percentage in Settings
    (:ref:`features-ai-critique-score`). Critique scores count only while
-   ``enabled`` is true.
+   ``enabled`` is true. ``potential_weight``: for RAW originals, how far
+   the critique rating moves toward the rating the critic says the photo
+   could reach after editing, 0–1 (shown as a percentage, step 5, in
+   Settings); 0 turns it off (:ref:`features-ai-critique-score`).
 
 .. _reference-settings-import:
 
@@ -266,7 +270,8 @@ API
                     "model": "qwen3-vl:4b",
                     "preset": "professional", "rubric": null,
                     "background": false, "intensity": "gentle",
-                    "score_weight": 0.25 },
+                    "score_weight": 0.25,
+                    "potential_weight": 0.15 },
         "onboarding": { "tour_done": false },
         "open_folder": null, "recent_folders": [],
         "labels": { "pick": "green", "auto_pick": "yellow" },

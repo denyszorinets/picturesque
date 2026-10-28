@@ -36,4 +36,9 @@ intensity: CriticIntensity,
 /**
  * How much critiques count in the aesthetic score, 0–1.
  */
-score_weight: number, };
+score_weight: number, 
+/**
+ * How far a RAW original's critique rating moves toward the rating it
+ * could reach after editing, 0–1; 0 turns it off.
+ */
+potential_weight: number, };

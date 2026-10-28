@@ -20,6 +20,8 @@
     intensity: CriticIntensity;
     /** Share of critiques in the aesthetic score, in percent. */
     scorePercent: number | null;
+    /** Share of a RAW file's potential in its critique rating, in percent. */
+    potentialPercent: number | null;
     /** Background critique progress; `null` while unknown. */
     progress: BackgroundCritiqueStatus | null;
     /** For the saved settings; `null` while unknown. */
@@ -40,6 +42,7 @@
     background = $bindable(),
     intensity = $bindable(),
     scorePercent = $bindable(),
+    potentialPercent = $bindable(),
     progress,
     status,
     oncheck,
@@ -240,6 +243,7 @@
       bind:background
       bind:intensity
       bind:scorePercent
+      bind:potentialPercent
       {progress}
       {unsaved}
     />

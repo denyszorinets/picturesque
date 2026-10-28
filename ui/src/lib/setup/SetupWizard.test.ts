@@ -23,6 +23,7 @@ const SETTINGS: Settings = {
     background: false,
     intensity: "gentle",
     score_weight: 0.25,
+    potential_weight: 0.15,
   },
   onboarding: { tour_done: false },
   open_folder: null,
