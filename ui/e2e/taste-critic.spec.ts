@@ -227,14 +227,23 @@ test("shows the critique pill and keeps a critique after closing the loupe", asy
   page,
   request,
 }) => {
+  // Chat completions wait on this gate, so the background worker's first
+  // critique stays "running" and the critique pill stays visible (it is hidden
+  // once the queue is done). Released right before the loupe part.
+  // A model name unique to this run makes earlier critiques (from other
+  // tests or repeats) stale, so there is always work left and the pill shows.
+  const model = `tiny-vl-${Date.now()}`;
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => (release = resolve));
   const server = createServer((req, res) => {
     void (async () => {
       res.writeHead(200, { "content-type": "application/json" });
       if (req.url === "/v1/models") {
-        res.end(JSON.stringify({ data: [{ id: "tiny-vl" }] }));
+        res.end(JSON.stringify({ data: [{ id: model }] }));
         return;
       }
       await body(req);
+      await gate;
       const critique = {
         rating: 6,
         summary: "Plain but clean.",
@@ -265,10 +274,9 @@ test("shows the critique pill and keeps a critique after closing the loupe", asy
         enabled: true,
         backend: "server",
         server: `http://127.0.0.1:${port}/v1`,
-        model: "tiny-vl",
+        model,
         background: true,
-        // Not "full": keeps the pill stable (waiting or paused) for the asserts.
-        intensity: "when_idle",
+        intensity: "full",
       },
     });
     await page.goto("/");
@@ -278,9 +286,9 @@ test("shows the critique pill and keeps a critique after closing the loupe", asy
     );
     // Only one popover is open at a time.
     const popovers = page.getByTestId("activity-popover");
-    await page.getByTestId("critique-ring").click();
+    await page.getByTestId("critique-ring").click({ timeout: 5000 });
     await expect(popovers).toHaveCount(1);
-    await page.getByTestId("activity-ring").click();
+    await page.getByTestId("activity-ring").click({ timeout: 5000 });
     await expect(popovers).toHaveCount(1);
     await page.locator("h1").click();
     await expect(popovers).toHaveCount(0);
@@ -292,6 +300,7 @@ test("shows the critique pill and keeps a critique after closing the loupe", asy
       "photos critiqued",
     );
 
+    release();
     await page
       .getByRole("navigation")
       .getByRole("button", { name: "Library" })
@@ -299,15 +308,23 @@ test("shows the critique pill and keeps a critique after closing the loupe", asy
     await page.locator("[data-photo-id]").first().click();
     await page.keyboard.press("Enter");
     const summary = page.getByTestId("critique-summary");
-    if (!(await summary.isVisible())) {
-      await page.getByTestId("critique-run").click();
+    // The background worker may store the critique before or after the loupe
+    // opens: wait for either, and run it ourselves only if it is still missing.
+    const run = page.getByTestId("critique-run");
+    await expect(summary.or(run)).toBeVisible();
+    if (await run.isVisible()) {
+      await run.click({ timeout: 5000 }).catch(() => {
+        // The background critique landed first and replaced the button.
+      });
     }
     await expect(summary).toContainText("Plain but clean.");
     await page.keyboard.press("Escape");
     await page.keyboard.press("Enter");
     await expect(summary).toContainText("Plain but clean.");
   } finally {
-    server.close();
+    release();
+    // Restore first: stopping the worker may still need the server to answer.
     await call(request, "update_settings", { critic: CRITIC_DEFAULTS });
+    server.close();
   }
 });
