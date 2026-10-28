@@ -1166,6 +1166,7 @@ mod tests {
                     "backend": "builtin",
                     "server": "http://127.0.0.1:11434/v1",
                     "model": "qwen3-vl:4b",
+                    "preset": "professional",
                     "rubric": null,
                     "background": false,
                     "intensity": "gentle",
@@ -1239,6 +1240,22 @@ mod tests {
             .call("update_settings", json!({ "ai": { "provider": "tpu" } }))
             .unwrap_err();
         assert_eq!(err.code, ApiErrorCode::InvalidArguments);
+    }
+
+    #[test]
+    fn an_unknown_critic_preset_is_rejected_and_settings_stay_unchanged() {
+        let api = api();
+        let before = api.call("get_settings", json!({})).unwrap();
+
+        let err = api
+            .call(
+                "update_settings",
+                json!({ "critic": { "preset": "custom" } }),
+            )
+            .unwrap_err();
+
+        assert_eq!(err.code, ApiErrorCode::InvalidArguments);
+        assert_eq!(api.call("get_settings", json!({})).unwrap(), before);
     }
 
     #[test]

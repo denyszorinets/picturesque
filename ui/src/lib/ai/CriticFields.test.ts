@@ -48,6 +48,7 @@ function setup(props: Partial<Record<string, unknown>> = {}) {
     backend: "server",
     server: "http://127.0.0.1:11434/v1",
     model: "llava:7b",
+    preset: "amateur",
     rubric: "",
     background: true,
     intensity: "gentle",
@@ -227,5 +228,24 @@ describe("CriticFields", () => {
     setup({ backend: "builtin" });
     await fireEvent.click(screen.getByTestId("critic-use-server"));
     expect(screen.getByTestId("critic-server")).toBeVisible();
+  });
+});
+
+describe("CriticFields critique style", () => {
+  it("shows the saved style and lets another be picked", async () => {
+    setup({ preset: "professional" });
+    expect(screen.getByTestId("critic-preset-professional")).toBeChecked();
+    expect(screen.getByTestId("critic-preset-amateur")).not.toBeChecked();
+    expect(screen.getByTestId("critic-preset-hint")).toHaveTextContent(
+      "outdated",
+    );
+    await fireEvent.click(screen.getByTestId("critic-preset-beginner"));
+    expect(screen.getByTestId("critic-preset-beginner")).toBeChecked();
+    expect(screen.getByTestId("critic-preset-professional")).not.toBeChecked();
+  });
+
+  it("hides the style while critiques are off", () => {
+    setup({ enabled: false });
+    expect(screen.queryByTestId("critic-preset-amateur")).toBeNull();
   });
 });

@@ -71,7 +71,7 @@ impl Plan {
             .flat_map(|s| s.members.iter().copied())
             .collect();
         let model = CritiqueService::model_name(settings);
-        let rubric = rubric_key(settings.rubric());
+        let rubric = rubric_key(settings.preset, settings.rubric());
         // true: current; false: stale.
         let critiques: HashMap<PhotoId, bool> = catalog
             .analysis_results(ID)?

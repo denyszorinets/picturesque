@@ -11,6 +11,7 @@ type Settings = {
     backend: string;
     server: string;
     model: string;
+    preset: string;
     rubric: string | null;
     background: boolean;
     intensity: string;
@@ -23,6 +24,7 @@ const CRITIC_DEFAULTS = {
   backend: "builtin",
   server: "http://127.0.0.1:11434/v1",
   model: "qwen3-vl:4b",
+  preset: "amateur",
   rubric: null,
   background: false,
   intensity: "gentle",
@@ -228,6 +230,7 @@ test("sets up the background critic without starting it", async ({
     .click();
   await page.getByTestId("critic-enabled").check();
   await page.getByTestId("critic-background").check();
+  await page.getByTestId("critic-preset-beginner").check();
   await page.getByTestId("critic-intensity").selectOption("when_idle");
   await page.getByTestId("critic-score-weight").fill("");
   await expect(page.getByTestId("critic-score-weight-error")).toHaveText(
@@ -244,6 +247,7 @@ test("sets up the background critic without starting it", async ({
   const settings = await call<Settings>(request, "get_settings", null);
   expect(settings.critic.background).toBe(true);
   expect(settings.critic.intensity).toBe("when_idle");
+  expect(settings.critic.preset).toBe("beginner");
   expect(settings.critic.score_weight).toBeCloseTo(0.4);
 });
 

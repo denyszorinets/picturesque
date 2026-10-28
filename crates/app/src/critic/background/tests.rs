@@ -10,9 +10,11 @@ use serde_json::{Value, json};
 
 use super::*;
 use crate::api::Api;
+use crate::critic::DEFAULT_RUBRIC;
 use crate::critic::ID;
+use crate::critic::prompt::rubric_key;
 use crate::ports::catalog::PhotoCatalog;
-use crate::settings::{CriticEngine, Settings};
+use crate::settings::{CriticEngine, CriticPreset, Settings};
 use crate::testing::{FakeMetadata, MemFs, TestWorld, fake_hash};
 
 const REPLY: &str = r#"{"rating": 6, "summary": "Fine."}"#;
@@ -457,4 +459,36 @@ fn a_stopped_critic_starts_no_critique() {
     api.background_critic().stop();
     assert_eq!(api.background_critic().step().unwrap(), Step::Off);
     assert!(world.critic.asked.lock().unwrap().is_empty());
+}
+
+#[test]
+fn critiques_of_another_preset_are_stale_and_redone() {
+    let (world, api, ids) = setup(&[0], CriticIntensity::Full);
+    let stored = |preset| {
+        json!({ "model": "qwen3-vl:4b", "rubric": rubric_key(preset, DEFAULT_RUBRIC),
+                "critique": { "rating": 5.0, "summary": "Old." } })
+    };
+    // (stored preset, current preset, stale)
+    let cases = [
+        (CriticPreset::Professional, "professional", false),
+        (CriticPreset::Professional, "amateur", true),
+        (CriticPreset::Amateur, "amateur", false),
+        (CriticPreset::Amateur, "beginner", true),
+        (CriticPreset::Beginner, "professional", true),
+    ];
+    for (was, now, stale) in cases {
+        world
+            .catalog
+            .store_analysis(ids[0], ID, &stored(was))
+            .unwrap();
+        let mut critic = critic_json(true, true, "full", Value::Null);
+        critic["preset"] = json!(now);
+        set_critic(&api, critic);
+        let status = api.background_critic().status().unwrap();
+        assert_eq!(
+            (status.stale, status.critiqued),
+            (usize::from(stale), usize::from(!stale)),
+            "{was:?} -> {now}"
+        );
+    }
 }

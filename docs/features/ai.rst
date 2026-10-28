@@ -216,9 +216,9 @@ Critiques are **off by default**. Two ways to get them:
 
 Then the loupe's info panel has a **Critique this photo** button. The
 critique is kept with the photo and shown whenever you come back to it;
-**Ask again** asks for a new one. After choosing another model or rubric,
-earlier critiques stay visible, marked as written by an earlier model or
-rubric, until you ask again.
+**Ask again** asks for a new one. After choosing another model, preset or
+rubric, earlier critiques stay visible, marked as written by an earlier
+model, preset or rubric, until you ask again.
 
 The advice has four parts. Each flaw has a **category** (exposure, focus,
 composition, noise, colour, horizon, light, timing or other). For a RAW
@@ -291,7 +291,8 @@ few seconds). If the helper fails, only that critique fails.
 How strict it is
 ~~~~~~~~~~~~~~~~
 
-The critic is told to judge like a juror of a selective competition: it
+With the Professional preset (default), the critic is told to judge like a
+juror of a selective competition: it
 lists the flaws first, then the strengths, and only then rates. Ordinary
 snapshots get 3 to 5; 8 or more is rare. On a sample of 50 Wikimedia
 Commons photos, 25 featured pictures and 25 ordinary ones, the mean rating
@@ -303,6 +304,38 @@ Critiques written by an earlier prompt version are still counted until
 they are redone; the background critic redoes them last. Prompt version 4
 added the advice; critiques written before show without it, marked as
 outdated.
+
+.. _features-ai-critique-presets:
+
+Presets: who the critique is for
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+**Settings → AI critic → Critique style** chooses the audience. Every
+preset asks for the same reply (flaws first, then the rating, then the
+advice) and differs in voice, in how forgiving the rating is and in how
+the advice is worded.
+
+- **Professional** (default): a strict juror. A typical photo gets 5,
+  one clear strength 6, 7 is portfolio quality. Formal vocabulary. Use it to pick the best
+  photos from a large library.
+- **Amateur**: a demanding but fair coach for an enthusiast. A typical
+  photo gets 5, 6 needs one clear strength and 7 is a photo to be proud of.
+  One clear weakness caps the rating at 6, two or more at 5. Constructive,
+  practical wording, and concrete improvements and camera settings.
+- **Beginner**: an encouraging teacher. Plain language, photography terms
+  explained, the single easiest fix first, camera settings explained in
+  everyday words ("raise the ISO a little so the picture is less
+  blurry"). A typical photo gets 5; a photo with clear flaws is never
+  above 5, and one whose only weakness is small gets 7 at most.
+
+The preset is separate from the **rubric**, which still decides what is
+judged and works with every preset. Changing the preset marks the
+critiques already written as outdated; they stay visible, and the
+background critic redoes them slowly, after photos that have no critique
+yet. The critique score is a percentile within your library, so a softer
+or tougher preset does not distort the ranking; a library critiqued with
+several presets at once blurs it a little, because their ratings are not
+on the same scale. Let the background critic finish after a switch.
 
 .. _features-ai-critique-background:
 
@@ -332,8 +365,8 @@ It is a separate, slow pipeline. The order is:
 4. The rest of each series.
 
 Within each group, newest photos come first. A photo whose critique was
-written by another model or rubric, or with an older prompt version, keeps
-that critique and counts in the score until it is redone; such photos are
+written by another model, preset or rubric, or with an older prompt
+version, keeps that critique and counts in the score until it is redone; such photos are
 redone only after every photo without any critique.
 
 All its state is in the catalog, where critiques are stored with the

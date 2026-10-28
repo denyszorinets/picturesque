@@ -152,15 +152,22 @@ Photo critiques from a local vision-language model
 (:ref:`features-ai-critique`). In the app: **Settings → AI critic**.
 
 :Type: object with ``enabled``, ``backend``, ``server``, ``model``,
-   ``rubric``, ``background``, ``intensity`` and ``score_weight``
+   ``preset``, ``rubric``, ``background``, ``intensity`` and
+   ``score_weight``
 :Default: ``{ "enabled": false, "backend": "builtin", "server":
-   "http://127.0.0.1:11434/v1", "model": "qwen3-vl:4b", "rubric": null,
+   "http://127.0.0.1:11434/v1", "model": "qwen3-vl:4b", "preset":
+   "professional", "rubric": null,
    "background": false, "intensity": "gentle", "score_weight": 0.25 }``
 :Values: ``backend``: ``builtin`` (the downloaded Qwen3-VL model, run by
    the app) or ``server``. ``server``: base address of an OpenAI-compatible
    API, ``http://`` or ``https://``. ``model``: a model the server has
-   (``server`` only). ``rubric``: what the model judges, at most 4,000
-   characters; ``null`` or empty uses the default rubric.
+   (``server`` only). ``preset``: who the critique is written for,
+   ``professional`` (strict; the original critic), ``amateur`` or
+   ``beginner`` (:ref:`features-ai-critique-presets`); settings saved
+   before presets existed load as ``professional``. Changing it marks
+   earlier critiques as outdated. ``rubric``: the custom rubric, what the
+   model judges, at most 4,000 characters; ``null`` or empty uses the
+   default rubric. It works with every preset.
    ``background``: critique the whole library in the background, one
    photo at a time, except rejects. Needs ``enabled`` (:ref:`features-ai-critique-background`).
    ``intensity``: ``gentle`` (low priority and half the processor threads;
@@ -256,7 +263,8 @@ API
         "taste": { "personal_weight": 0.5 },
         "critic": { "enabled": false, "backend": "builtin",
                     "server": "http://127.0.0.1:11434/v1",
-                    "model": "qwen3-vl:4b", "rubric": null,
+                    "model": "qwen3-vl:4b",
+                    "preset": "professional", "rubric": null,
                     "background": false, "intensity": "gentle",
                     "score_weight": 0.25 },
         "onboarding": { "tour_done": false },

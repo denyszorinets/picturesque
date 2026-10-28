@@ -226,6 +226,31 @@ The critique also advises (:issue:`231`). Decisions:
 - **Lenient reading.** An unknown issue or fixability value is dropped, not
   a failed critique.
 
+Amendment: critique presets
+---------------------------
+
+:Date: 2026-10-28
+
+The critique can be written for different audiences (:issue:`232`).
+Decisions:
+
+- **A ``preset`` setting**: ``professional`` (the existing strict prompt,
+  unchanged and the default), ``amateur`` and ``beginner``. A preset
+  changes the voice, the different grade anchors and the wording of
+  the advice. The JSON schema, its key order and the flaws-first structure
+  are the same, since they are what made the rating discriminate.
+- **The rubric stays separate.** It remains the user's override of what is
+  judged; there is no "custom" preset.
+- **The preset is part of the stored rubric key**, so changing it marks
+  critiques outdated and the background critic redoes them. For
+  ``professional`` the key is computed as before presets, so existing
+  critiques stay current and the prompt version is not bumped.
+- **Ratings are not comparable across presets.** The critique score uses
+  percentiles within the library, which absorbs a uniform shift; mixed
+  presets blur it a little.
+- **Not evaluated yet.** The presets have not been evaluated on a photo
+  sample; measuring them is a follow-up.
+
 Consequences
 ------------
 
