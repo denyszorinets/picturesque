@@ -46,6 +46,7 @@ export type { TasteSettings } from "./generated/TasteSettings";
 export type { CriticStatus } from "./generated/CriticStatus";
 export type { BackgroundCritiqueStatus } from "./generated/BackgroundCritiqueStatus";
 export type { CriticIntensity } from "./generated/CriticIntensity";
+export type { CriticPreset } from "./generated/CriticPreset";
 export type { CritiqueView } from "./generated/CritiqueView";
 export type { Fixable } from "./generated/Fixable";
 export type { Issue } from "./generated/Issue";

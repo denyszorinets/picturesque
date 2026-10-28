@@ -13,6 +13,7 @@
     type BackgroundCritiqueStatus,
     type CriticEngine,
     type CriticIntensity,
+    type CriticPreset,
     type CriticStatus,
     type Provider,
     type ProviderChoice,
@@ -95,6 +96,7 @@
     backend: "builtin" as CriticEngine,
     server: "",
     model: "",
+    preset: "professional" as CriticPreset,
     rubric: "",
     background: false,
     intensity: "gentle" as CriticIntensity,
@@ -149,6 +151,7 @@
         critic.backend !== saved.critic.backend ||
         critic.server.trim() !== saved.critic.server ||
         critic.model.trim() !== saved.critic.model ||
+        critic.preset !== saved.critic.preset ||
         critic.rubric.trim() !== (saved.critic.rubric ?? "") ||
         critic.background !== saved.critic.background ||
         critic.intensity !== saved.critic.intensity ||
@@ -238,6 +241,7 @@
       backend: settings.critic.backend,
       server: settings.critic.server,
       model: settings.critic.model,
+      preset: settings.critic.preset,
       rubric: settings.critic.rubric ?? "",
       background: settings.critic.background,
       intensity: settings.critic.intensity,
@@ -273,6 +277,7 @@
           backend: critic.backend,
           server: critic.server.trim(),
           model: critic.model.trim(),
+          preset: critic.preset,
           rubric: critic.rubric.trim() || null,
           background: critic.background,
           intensity: critic.intensity,
@@ -626,6 +631,7 @@
       bind:backend={critic.backend}
       bind:server={critic.server}
       bind:model={critic.model}
+      bind:preset={critic.preset}
       bind:rubric={critic.rubric}
       bind:background={critic.background}
       bind:intensity={critic.intensity}

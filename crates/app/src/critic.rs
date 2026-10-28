@@ -199,7 +199,7 @@ impl CritiqueService {
         };
         let current = Self::model_name(&settings);
         let outdated = stored["model"] != current
-            || stored["rubric"] != rubric_key(settings.rubric()).as_str();
+            || stored["rubric"] != rubric_key(settings.preset, settings.rubric()).as_str();
         let model = stored["model"].as_str().unwrap_or(current);
         Ok(
             serde_json::from_value::<Critique>(stored["critique"].clone())
@@ -302,7 +302,7 @@ impl CritiqueService {
             .ask(&CriticRequest {
                 backend,
                 background,
-                system: &system_prompt(rubric),
+                system: &system_prompt(settings.preset, rubric),
                 prompt: &user_prompt(&photo),
                 image: &image,
                 max_edge: MAX_EDGE,
@@ -317,7 +317,7 @@ impl CritiqueService {
             ID,
             &json!({
                 "model": model,
-                "rubric": rubric_key(rubric),
+                "rubric": rubric_key(settings.preset, rubric),
                 "critique": critique,
             }),
         )?;

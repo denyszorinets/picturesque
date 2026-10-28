@@ -7,6 +7,7 @@ use serde_json::{Value, json};
 use super::*;
 use crate::api::{Api, ApiErrorCode};
 use crate::ports::catalog::PhotoCatalog;
+use crate::settings::CriticPreset;
 use crate::settings::Settings;
 use crate::testing::{FakeMetadata, MemFs, TestWorld, fake_hash};
 use picturesque_core::photo::{Photo, PhotoId};
@@ -564,7 +565,7 @@ fn an_older_critique_stays_visible_and_is_redone_on_request() {
     for (model, same_rubric, outdated, asks) in cases {
         let (world, api, id) = setup(true, Some(&["qwen3-vl:4b"]));
         let rubric = if same_rubric {
-            rubric_key(DEFAULT_RUBRIC)
+            rubric_key(CriticPreset::Professional, DEFAULT_RUBRIC)
         } else {
             "Only the light.".to_owned()
         };
@@ -584,5 +585,61 @@ fn an_older_critique_stays_visible_and_is_redone_on_request() {
             .unwrap();
         let asked = world.critic.asked.lock().unwrap().len();
         assert_eq!(asked, usize::from(asks), "{model} {same_rubric}");
+    }
+}
+
+#[test]
+fn changing_the_preset_makes_a_critique_outdated() {
+    // (stored preset, current preset, outdated)
+    let cases = [
+        (
+            CriticPreset::Professional,
+            CriticPreset::Professional,
+            false,
+        ),
+        (CriticPreset::Professional, CriticPreset::Amateur, true),
+        (CriticPreset::Amateur, CriticPreset::Amateur, false),
+        (CriticPreset::Amateur, CriticPreset::Beginner, true),
+    ];
+    for (was, now, outdated) in cases {
+        let critic = CriticSettings {
+            enabled: true,
+            backend: CriticEngine::Server,
+            preset: now,
+            ..Default::default()
+        };
+        let (world, api, id) = setup_with(critic, Some(&["qwen3-vl:4b"]), false);
+        let stored = json!({ "model": "qwen3-vl:4b", "rubric": rubric_key(was, DEFAULT_RUBRIC),
+            "critique": { "rating": 7.0, "summary": "Old.", "strengths": [], "weaknesses": [] } });
+        world
+            .catalog
+            .store_analysis(PhotoId(id), ID, &stored)
+            .unwrap();
+        let view = api.call("get_critique", json!({ "photo_id": id })).unwrap();
+        assert_eq!(view["outdated"], outdated, "{was:?} -> {now:?}");
+    }
+}
+
+#[test]
+fn a_new_critique_is_written_with_the_presets_prompt_and_key() {
+    for preset in [CriticPreset::Amateur, CriticPreset::Beginner] {
+        let critic = CriticSettings {
+            enabled: true,
+            backend: CriticEngine::Server,
+            preset,
+            ..Default::default()
+        };
+        let (world, api, id) = setup_with(critic, Some(&["qwen3-vl:4b"]), false);
+        api.call("critique_photo", json!({ "photo_id": id }))
+            .unwrap();
+        let asked = world.critic.asked.lock().unwrap();
+        assert!(
+            asked[0]
+                .system
+                .contains(&system_prompt(preset, DEFAULT_RUBRIC))
+        );
+        drop(asked);
+        let view = api.call("get_critique", json!({ "photo_id": id })).unwrap();
+        assert_eq!(view["outdated"], false);
     }
 }

@@ -174,7 +174,10 @@ pub struct CriticSettings {
     /// Base address of an OpenAI-compatible API (`server` backend).
     pub server: String,
     pub model: String,
-    /// What the model judges; `null` uses the default rubric.
+    /// Who the critique is written for: how strict, how simple.
+    pub preset: CriticPreset,
+    /// What the model judges (the custom rubric); `null` uses the default
+    /// rubric. Independent of the preset.
     pub rubric: Option<String>,
     /// Critique the whole library in the background.
     pub background: bool,
@@ -182,6 +185,32 @@ pub struct CriticSettings {
     pub intensity: CriticIntensity,
     /// How much critiques count in the aesthetic score, 0–1.
     pub score_weight: f64,
+}
+
+/// Who a critique is written for (`docs/features/ai.rst`).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export)]
+pub enum CriticPreset {
+    /// A strict juror; the original critic.
+    #[default]
+    Professional,
+    /// A demanding but fair coach for an enthusiast.
+    Amateur,
+    /// An encouraging teacher in plain language.
+    Beginner,
+}
+
+impl CriticPreset {
+    /// The serialized name; part of the stored critique key, so it must not
+    /// change.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Professional => "professional",
+            Self::Amateur => "amateur",
+            Self::Beginner => "beginner",
+        }
+    }
 }
 
 /// How hard the background critic may use the computer
@@ -219,6 +248,7 @@ impl Default for CriticSettings {
             backend: CriticEngine::Builtin,
             server: crate::critic::DEFAULT_SERVER.into(),
             model: crate::critic::DEFAULT_MODEL.into(),
+            preset: CriticPreset::Professional,
             rubric: None,
             background: false,
             intensity: CriticIntensity::Gentle,
@@ -908,6 +938,41 @@ pub(crate) mod tests {
             ..ok
         };
         assert_eq!(blank.rubric(), crate::critic::DEFAULT_RUBRIC);
+    }
+
+    #[test]
+    fn the_critic_preset_defaults_to_professional_and_round_trips() {
+        // Settings saved before presets existed.
+        let old: CriticSettings =
+            serde_json::from_str(r#"{"enabled": true, "rubric": "Light only."}"#).unwrap();
+        assert_eq!(old.preset, CriticPreset::Professional);
+        assert_eq!(CriticSettings::default().preset, CriticPreset::Professional);
+        // (JSON, preset)
+        let cases = [
+            ("professional", CriticPreset::Professional),
+            ("amateur", CriticPreset::Amateur),
+            ("beginner", CriticPreset::Beginner),
+        ];
+        for (name, preset) in cases {
+            let c: CriticSettings =
+                serde_json::from_str(&format!(r#"{{"preset": "{name}"}}"#)).unwrap();
+            assert_eq!(c.preset, preset);
+            assert_eq!(serde_json::to_value(&c).unwrap()["preset"], name);
+        }
+        // The custom rubric is independent of the preset.
+        let (service, _) = service(&[]);
+        let saved = service
+            .update(SettingsUpdate {
+                critic: Some(CriticSettings {
+                    preset: CriticPreset::Beginner,
+                    rubric: Some("Light only.".into()),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(saved.critic.preset, CriticPreset::Beginner);
+        assert_eq!(saved.critic.rubric(), "Light only.");
     }
 
     #[test]

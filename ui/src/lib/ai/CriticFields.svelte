@@ -3,6 +3,7 @@
     BackgroundCritiqueStatus,
     CriticEngine,
     CriticIntensity,
+    CriticPreset,
     CriticStatus,
   } from "../api";
   import BackgroundCritiqueFields from "./BackgroundCritiqueFields.svelte";
@@ -12,6 +13,7 @@
     backend: CriticEngine;
     server: string;
     model: string;
+    preset: CriticPreset;
     /** `""` uses the default rubric. */
     rubric: string;
     background: boolean;
@@ -33,6 +35,7 @@
     backend = $bindable(),
     server = $bindable(),
     model = $bindable(),
+    preset = $bindable(),
     rubric = $bindable(),
     background = $bindable(),
     intensity = $bindable(),
@@ -66,6 +69,24 @@
       /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host)
     );
   }
+
+  const presets: { value: CriticPreset; label: string; note: string }[] = [
+    {
+      value: "professional",
+      label: "Professional",
+      note: "Strict, academic juror: for professionals and competition-level critique",
+    },
+    {
+      value: "amateur",
+      label: "Amateur",
+      note: "Firm but constructive coach for enthusiasts",
+    },
+    {
+      value: "beginner",
+      label: "Beginner",
+      note: "Plain language, encouraging, easiest fix first",
+    },
+  ];
 
   function gigabytes(size: number): string {
     return `${(size / 1e9).toFixed(1)} GB`;
@@ -163,8 +184,27 @@
     {/if}
   {/if}
   {#if enabled}
+    <div class="backends" role="radiogroup" aria-label="Critique style">
+      <span class="sub">Critique style</span>
+      {#each presets as p (p.value)}
+        <label class="inline">
+          <input
+            type="radio"
+            bind:group={preset}
+            value={p.value}
+            data-testid="critic-preset-{p.value}"
+          />
+          <span><strong>{p.label}</strong>: {p.note}</span>
+        </label>
+      {/each}
+    </div>
+    <p class="hint muted" data-testid="critic-preset-hint">
+      Changing the style marks earlier critiques as outdated. They are redone
+      slowly in the background (if background critique is on) or when you ask
+      again.
+    </p>
     <label class="field">
-      <span>Rubric: what the model judges</span>
+      <span>What to judge: optional custom rubric</span>
       <textarea
         rows="6"
         bind:value={rubric}
@@ -236,6 +276,10 @@
     font: inherit;
     font-size: 0.85rem;
     resize: vertical;
+  }
+
+  .sub {
+    font-size: 0.9rem;
   }
 
   .hint {
