@@ -200,6 +200,32 @@ Alternatives considered:
   model's bias.
 - **Running at full speed always**: slows the computer.
 
+Amendment: critique v2
+----------------------
+
+:Date: 2026-10-28
+
+The critique also advises (:issue:`231`). Decisions:
+
+- **New fields**, written after the rating: ``issues`` (categories of the
+  weaknesses), ``potential`` (the rating after the best RAW editing, at
+  least the rating), ``fixable`` (``not_needed``, ``easy``, ``needs_skill``,
+  ``not_fixable``), ``fix_steps``, ``improvements`` and ``camera_tips``. The
+  schema lists them in that order, after ``rating``, so the verdict follows
+  from the flaws already written. The grade anchors are unchanged.
+- **Prompt version 4.** The bump makes the background critic redo the
+  library once; critiques of version 3 and earlier still parse (the new
+  fields default to empty or absent) and are shown as outdated.
+- **Context for the prompt.** The prompt names the shot data the catalog
+  holds (ISO, shutter speed, aperture, focal length) and whether the
+  original is a RAW file or a JPEG.
+- **Fixability is advisory.** The model sees a 768 px preview, not the
+  RAW file; ``potential`` and ``fixable`` are never used for the score.
+- **Larger limits.** The reply grew from about 120 to about 350 tokens:
+  the helper's ``max_tokens`` is 768 and its context 3072 tokens.
+- **Lenient reading.** An unknown issue or fixability value is dropped, not
+  a failed critique.
+
 Consequences
 ------------
 

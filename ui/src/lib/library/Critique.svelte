@@ -1,4 +1,5 @@
 <script lang="ts">
+  import CritiqueAdvice from "./CritiqueAdvice.svelte";
   import { ApiError, type CriticStatus, type CritiqueView } from "../api";
 
   interface Props {
@@ -74,6 +75,7 @@
           {/each}
         </ul>
       {/if}
+      <CritiqueAdvice {critique} />
       <p class="muted by">
         By {critique.model} ·
         {#if critique.outdated}

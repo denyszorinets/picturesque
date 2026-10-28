@@ -9,7 +9,7 @@ use crate::api::{Api, ApiErrorCode};
 use crate::ports::catalog::PhotoCatalog;
 use crate::settings::Settings;
 use crate::testing::{FakeMetadata, MemFs, TestWorld, fake_hash};
-use picturesque_core::photo::PhotoId;
+use picturesque_core::photo::{Photo, PhotoId};
 
 const REPLY: &str = r#"Sure! {"rating": 7.5, "summary": " Warm light on a calm lake. ",
     "strengths": ["golden light", " ", "clean horizon"], "weaknesses": ["kayaks too small"]}"#;
@@ -360,7 +360,197 @@ fn says_when_the_builtin_critic_is_not_installed() {
 fn schema_lists_the_flaws_first_and_the_rating_last() {
     let schema = Critique::schema();
     let keys: Vec<_> = schema["properties"].as_object().unwrap().keys().collect();
-    assert_eq!(keys, ["weaknesses", "strengths", "summary", "rating"]);
+    assert_eq!(
+        keys,
+        [
+            "weaknesses",
+            "issues",
+            "strengths",
+            "summary",
+            "rating",
+            "potential",
+            "fixable",
+            "fix_steps",
+            "improvements",
+            "camera_tips"
+        ]
+    );
+    let required: Vec<_> = schema["required"].as_array().unwrap().iter().collect();
+    assert_eq!(required.len(), keys.len());
+}
+
+const FULL_REPLY: &str = r#"{"weaknesses": ["blown sky", "tilted"], "issues": ["exposure", "horizon", "exposure", "mood"],
+    "strengths": ["colour"], "summary": "A tilted lake.", "rating": 4, "potential": 2,
+    "fixable": "easy", "fix_steps": ["lower highlights", " ", "rotate 2 degrees"],
+    "improvements": ["wait for clouds"], "camera_tips": ["use f/8", "ISO 100"]}"#;
+
+#[test]
+fn parses_the_advice_of_version_four() {
+    let c = Critique::parse(FULL_REPLY).unwrap();
+    // unknown category dropped, duplicate removed
+    assert_eq!(c.issues, [Issue::Exposure, Issue::Horizon]);
+    // never below the rating
+    assert_eq!(c.potential, Some(4.0));
+    assert_eq!(c.fixable, Some(Fixable::Easy));
+    assert_eq!(c.fix_steps, ["lower highlights", "rotate 2 degrees"]);
+    assert_eq!(c.improvements, ["wait for clouds"]);
+    assert_eq!(c.camera_tips, ["use f/8", "ISO 100"]);
+}
+
+#[test]
+fn clamps_and_tolerates_the_potential_and_the_verdict() {
+    // (potential, fixable, expected potential, expected fixable)
+    let cases = [
+        (
+            "9.5",
+            "\"needs_skill\"",
+            Some(9.5),
+            Some(Fixable::NeedsSkill),
+        ),
+        (
+            "15",
+            "\"not_fixable\"",
+            Some(10.0),
+            Some(Fixable::NotFixable),
+        ),
+        ("3", "\"not_needed\"", Some(5.0), Some(Fixable::NotNeeded)),
+        ("\"high\"", "\"maybe\"", None, None),
+        ("null", "7", None, None),
+    ];
+    for (potential, fixable, want_potential, want_fixable) in cases {
+        let reply = format!(
+            r#"{{"rating": 5, "summary": "Ok", "potential": {potential}, "fixable": {fixable}}}"#
+        );
+        let c = Critique::parse(&reply).expect(&reply);
+        assert_eq!(c.potential, want_potential, "{reply}");
+        assert_eq!(c.fixable, want_fixable, "{reply}");
+    }
+}
+
+#[test]
+fn an_older_stored_critique_has_no_advice_and_is_outdated() {
+    let (world, api, id) = setup(true, Some(&["qwen3-vl:4b"]));
+    // Written by prompt version 3: the rubric key differs.
+    let stored = json!({ "model": "qwen3-vl:4b", "rubric": fingerprint("v3\nx"), "critique": {
+        "rating": 6.0, "summary": "Old.", "strengths": ["a"], "weaknesses": ["b"] } });
+    world
+        .catalog
+        .store_analysis(PhotoId(id), ID, &stored)
+        .unwrap();
+    let view = api.call("get_critique", json!({ "photo_id": id })).unwrap();
+    assert_eq!(view["outdated"], true);
+    assert_eq!(view["summary"], "Old.");
+    assert_eq!(view["issues"], json!([]));
+    assert_eq!(view["potential"], Value::Null);
+    assert_eq!(view["fixable"], Value::Null);
+    assert_eq!(view["camera_tips"], json!([]));
+}
+
+#[test]
+fn a_new_critique_keeps_its_advice_when_stored_and_viewed() {
+    let (world, api, id) = setup(true, Some(&["qwen3-vl:4b"]));
+    *world.critic.reply.lock().unwrap() = FULL_REPLY.into();
+    let made = api
+        .call("critique_photo", json!({ "photo_id": id }))
+        .unwrap();
+    let shown = api.call("get_critique", json!({ "photo_id": id })).unwrap();
+    assert_eq!(made, shown);
+    assert_eq!(shown["issues"], json!(["exposure", "horizon"]));
+    assert_eq!(shown["potential"], 4.0);
+    assert_eq!(shown["fixable"], "easy");
+    assert_eq!(
+        shown["fix_steps"],
+        json!(["lower highlights", "rotate 2 degrees"])
+    );
+    assert_eq!(shown["camera_tips"], json!(["use f/8", "ISO 100"]));
+}
+
+#[test]
+fn the_prompt_names_the_shot_data_and_the_format_only_when_known() {
+    use picturesque_core::metadata::{Exposure, ExposureTime, GeoPoint};
+    let photo = |exposure: Exposure, name: &str, format: MediaFormat| Photo {
+        id: PhotoId(1),
+        metadata: picturesque_core::metadata::CaptureMetadata {
+            exposure,
+            ..Default::default()
+        },
+        assets: PhotoAssets::new(vec![Asset {
+            format,
+            path: PathBuf::from(name),
+            size: 1,
+            hash: fake_hash(b"x"),
+        }])
+        .unwrap(),
+    };
+    let full = Exposure {
+        iso: Some(800),
+        f_number: Some(2.8),
+        exposure_time: Some(ExposureTime {
+            numerator: 1,
+            denominator: 60,
+        }),
+        focal_length_mm: Some(35.0),
+    };
+    let cases = [
+        (
+            full,
+            MediaFormat::Raw,
+            "Critique this photo. Shot data: ISO 800, 1/60 s, f/2.8, 35 mm. \
+             The original is a RAW file.",
+        ),
+        (
+            Exposure {
+                iso: Some(100),
+                ..Default::default()
+            },
+            MediaFormat::Jpeg,
+            "Critique this photo. Shot data: ISO 100. \
+             The original is a JPEG; it has little room for recovery.",
+        ),
+        (
+            Exposure::default(),
+            MediaFormat::Jpeg,
+            "Critique this photo. The original is a JPEG; it has little room for recovery.",
+        ),
+        (
+            Exposure {
+                exposure_time: Some(ExposureTime {
+                    numerator: 1,
+                    denominator: 2,
+                }),
+                f_number: Some(8.0),
+                ..Default::default()
+            },
+            MediaFormat::Raw,
+            "Critique this photo. Shot data: 0.5 s, f/8. The original is a RAW file.",
+        ),
+        (
+            Exposure {
+                exposure_time: Some(ExposureTime {
+                    numerator: 2,
+                    denominator: 1,
+                }),
+                focal_length_mm: Some(50.0),
+                ..Default::default()
+            },
+            MediaFormat::Raw,
+            "Critique this photo. Shot data: 2 s, 50 mm. The original is a RAW file.",
+        ),
+    ];
+    for (exposure, format, want) in cases {
+        let name = if format == MediaFormat::Raw {
+            "secret-name.CR3"
+        } else {
+            "secret-name.JPG"
+        };
+        let mut p = photo(exposure, name, format);
+        p.metadata.gps = Some(GeoPoint::new(38.7223, -9.1393).unwrap());
+        let got = user_prompt(&p);
+        assert_eq!(got, want);
+        for leak in ["secret", "38.72", "9.13", "GPS"] {
+            assert!(!got.contains(leak), "{got}");
+        }
+    }
 }
 
 #[test]

@@ -12,9 +12,7 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 use picturesque_core::photo::PhotoId;
-use serde::Serialize;
 use serde_json::json;
-use ts_rs::TS;
 
 use crate::models::{CRITIC, CRITIC_MMPROJ_FILE, CRITIC_MODEL_FILE, ModelService};
 use crate::ports::catalog::{AnalyzerId, CatalogError, PhotoCatalog};
@@ -36,49 +34,20 @@ pub const BUILTIN_MODEL: &str = "Qwen3-VL 4B (built-in)";
 mod status;
 pub use status::{CriticStatus, SuggestedModel, suggested};
 
+mod view;
+pub use view::CritiqueView;
+
 pub mod prompt;
 #[cfg(test)]
 use prompt::fingerprint;
-pub use prompt::{Critique, DEFAULT_RUBRIC};
-use prompt::{rubric_key, system_prompt};
+pub use prompt::{Critique, DEFAULT_RUBRIC, Fixable, Issue};
+use prompt::{rubric_key, system_prompt, user_prompt};
 
 /// Where critiques are stored among the analysis results.
 pub const ID: AnalyzerId = AnalyzerId {
     name: "critique",
     version: 1,
 };
-
-/// A critique, as `get_critique` and `critique_photo` return it.
-#[derive(Debug, Clone, PartialEq, Serialize, TS)]
-#[ts(export)]
-pub struct CritiqueView {
-    /// The model that wrote it.
-    pub model: String,
-    /// 1–10.
-    pub rating: f32,
-    /// The rating as 0–1.
-    pub score: f32,
-    pub summary: String,
-    pub strengths: Vec<String>,
-    pub weaknesses: Vec<String>,
-    /// Written by another model or rubric than the current settings; shown,
-    /// but `critique_photo` makes a new one.
-    pub outdated: bool,
-}
-
-impl CritiqueView {
-    fn new(model: &str, c: Critique) -> Self {
-        Self {
-            outdated: false,
-            model: model.to_owned(),
-            score: (c.rating - 1.0) / 9.0,
-            rating: c.rating,
-            summary: c.summary,
-            strengths: c.strengths,
-            weaknesses: c.weaknesses,
-        }
-    }
-}
 
 /// Why a critique could not be made.
 #[derive(Debug)]
@@ -301,6 +270,7 @@ impl CritiqueService {
         settings: &CriticSettings,
         background: Option<Throttle>,
     ) -> Result<CritiqueView, CritiqueError> {
+        let photo = self.catalog.photo(id)?.ok_or(CritiqueError::NotFound(id))?;
         let view = self.thumbnails.pair_view().map_err(thumbnail_error(id))?;
         let image = self
             .thumbnails
@@ -333,7 +303,7 @@ impl CritiqueService {
                 backend,
                 background,
                 system: &system_prompt(rubric),
-                prompt: "Critique this photo.",
+                prompt: &user_prompt(&photo),
                 image: &image,
                 max_edge: MAX_EDGE,
                 schema: &Critique::schema(),

@@ -494,3 +494,9 @@ Project-management work is complete when:
 **Planning proposes. The human approves. GitHub records. Implementation executes.**
 
 Never silently turn a planning conversation into GitHub issues.
+
+## Standing Autonomy
+
+Issues that already exist in GitHub (an epic's tasks, or issues the maintainer pointed at) are **already approved**: implement them one by one in the epic's order, merge each PR when CI is green (see the `gitflow` skill, *Standing Autonomy*), close the issue with a summary, tick the epic, and continue with the next without asking.
+
+This does **not** relax the rule above for *creating* issues, epics or milestones: new work discovered along the way is still proposed to the human and created only after approval.

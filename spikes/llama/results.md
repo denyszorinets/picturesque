@@ -112,3 +112,28 @@ scale did. The order of the JSON keys decides what the model writes
 first, and the schema keeps its key order (serde_json `preserve_order`).
 Four of 25 ordinary photos still got an 8, so the rating is a signal, not
 a verdict; that is why the library score uses percentiles.
+
+## Critique v2 evaluation (2026-10-28)
+
+Prompt version 4 adds issues, potential, fixable, fix steps, improvements
+and camera tips after the rating (same 25 + 25 Wikimedia Commons photos,
+768 px previews, Radeon 780M through Vulkan, no EXIF; the user prompt said
+the original is a JPEG). The grade anchors are unchanged.
+
+| variant | valid replies | featured | ordinary | AUC | s/photo |
+|---|---|---|---|---|---|
+| v3 (before) | 50/50 | 7.64 / 8 | 4.24 / 4 | 0.902 | 9.5 |
+| v4, schema as is | 43/50 (7 empty objects, rating 0) | 7.95 / 8 | 4.19 / 5 | 0.95 on the 43 | 14.2 |
+| v4, at least one weakness | 50/50 | 5.16 / 5 | 3.52 / 3 | 0.810 | 20.2 |
+| final: v4, summary of at least 20 characters | 50/50 | 7.80 / 8 | 4.56 / 4 | 0.918 | 16.4 (max 28) |
+
+- Without a minimum length the model sometimes answered with an empty
+  object; requiring a summary of 20 characters fixed that. Forcing a
+  weakness made it too strict.
+- The reply is about 350 tokens (was 120), hence the slower critique. The
+  prompt plus a 768 px image takes about 1100 tokens, so the helper's
+  context went from 2048 to 3072 and `max_tokens` from 512 to 768; with
+  1024 the context check failed 40 of 50 photos.
+- `potential` was never below `rating`; `fixable` was `not_needed` 36,
+  `not_fixable` 11, `easy` 3 times. Advice is generic ("use a tripod",
+  "golden hour") for ordinary photos, specific for photos with clear flaws.

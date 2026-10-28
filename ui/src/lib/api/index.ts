@@ -47,6 +47,8 @@ export type { CriticStatus } from "./generated/CriticStatus";
 export type { BackgroundCritiqueStatus } from "./generated/BackgroundCritiqueStatus";
 export type { CriticIntensity } from "./generated/CriticIntensity";
 export type { CritiqueView } from "./generated/CritiqueView";
+export type { Fixable } from "./generated/Fixable";
+export type { Issue } from "./generated/Issue";
 export type { CriticSettings } from "./generated/CriticSettings";
 export type { CriticEngine } from "./generated/CriticEngine";
 export type { SuggestedModel } from "./generated/SuggestedModel";
