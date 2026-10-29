@@ -17,6 +17,13 @@
     light: "Light",
     timing: "Timing",
     other: "Other",
+    overexposed: "Overexposed",
+    underexposed: "Underexposed",
+    missed_focus: "Missed focus",
+    motion_blur: "Motion blur",
+    subject_placement: "Subject placement",
+    subject_cut_off: "Subject cut off",
+    busy_background: "Busy background",
   };
 
   const FIXABLE: Record<Fixable, string> = {

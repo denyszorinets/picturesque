@@ -48,6 +48,13 @@
     light: "Light",
     timing: "Timing",
     other: "Other problems",
+    overexposed: "Overexposed",
+    underexposed: "Underexposed",
+    missed_focus: "Missed focus",
+    motion_blur: "Motion blur",
+    subject_placement: "Subject placement",
+    subject_cut_off: "Subject cut off",
+    busy_background: "Busy background",
   };
 
   const percent = (share: number) => `${Math.round(share * 100)}%`;
@@ -118,6 +125,30 @@
           or in the background to see what recurs.
         </p>
       {:else}
+        {#if insights.advice.length > 0}
+          <section data-testid="insights-advice">
+            <h3>What to work on</h3>
+            <ul class="advice">
+              {#each insights.advice as item (item.issue)}
+                <li data-testid={`insights-advice-${item.issue}`}>
+                  <h4>{item.title}</h4>
+                  <p>{item.text}</p>
+                  <p class="muted note">{item.evidence}</p>
+                  <div class="examples">
+                    {#each item.examples as id (id)}
+                      <img
+                        src={imageSrc(id)}
+                        alt={`Example of ${ISSUES[item.issue].toLowerCase()}`}
+                        loading="lazy"
+                      />
+                    {/each}
+                  </div>
+                </li>
+              {/each}
+            </ul>
+          </section>
+        {/if}
+
         <section>
           <h3>Recurring problems</h3>
           <p class="muted note">
@@ -252,6 +283,22 @@
 
   .note {
     font-size: 0.85rem;
+  }
+
+  .advice li {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    padding: 0.8rem 1rem;
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    border-radius: var(--radius);
+    background: var(--surface);
+  }
+
+  h4 {
+    margin: 0;
+    font-size: 0.95rem;
   }
 
   .tiles {

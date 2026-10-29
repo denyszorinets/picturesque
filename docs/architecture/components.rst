@@ -45,7 +45,7 @@ Crates
    time, each as its own ``Api`` over its own catalog, and swaps them
    (:doc:`ADR-0013 </architecture/decisions/0013-folder-sessions>`).
    ``insights`` maps stored critiques to ``core::insights`` for the
-   ``library_insights`` command (:doc:`ADR-0016
+   ``library_insights`` command, including its rule-based ``advice`` (:doc:`ADR-0016
    </architecture/decisions/0016-local-vision-language-critic>`).
 
 ``picturesque-infra``

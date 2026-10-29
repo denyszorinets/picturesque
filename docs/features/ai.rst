@@ -220,8 +220,11 @@ critique is kept with the photo and shown whenever you come back to it;
 rubric, earlier critiques stay visible, marked as written by an earlier
 model, preset or rubric, until you ask again.
 
-The advice has four parts. Each flaw has a **category** (exposure, focus,
-composition, noise, colour, horizon, light, timing or other). For a RAW
+The advice has four parts. Each flaw has a **category** (overexposed, underexposed, missed focus,
+motion blur, subject placement, subject cut off, busy background, noise,
+colour, horizon, light, timing or other; the coarse exposure, focus and
+composition kinds of earlier critiques stay readable but are no longer
+asked for). For a RAW
 file the critic estimates the **potential**, the rating the photo could
 reach after the best editing (exposure, white balance, crop, noise
 reduction), says whether the flaws are **fixable** (not needed, easy,
@@ -229,7 +232,12 @@ needs skill, not fixable) and lists up to three **fix steps**. It also
 suggests up to three **improvements** to the photo itself (framing, light,
 moment) and up to three **camera tips** for the next shot. The critic is
 told the photo's ISO, shutter speed, aperture and focal length when the
-file records them, and whether the original is a RAW file or a JPEG, so
+file records them, and the camera body and lens from the EXIF (for
+example "Gear: Sony ILCE-7M4 with FE 35mm F1.8."). It connects the
+settings to the weaknesses, and each camera tip names the setting to
+change and a value to try for that lens and focal length, using only what
+the lens name tells it. Camera and lens go only to the local model, with no
+GPS and no file names. It is also told whether the original is a RAW file or a JPEG, so
 the tips can fit. The model judges from a small preview, so the fixability
 and the potential are advice, not a promise. The fixability does not change
 the score; the potential does for RAW originals, with a small weight
@@ -300,12 +308,16 @@ snapshots get 3 to 5; 8 or more is rare. On a sample of 50 Wikimedia
 Commons photos, 25 featured pictures and 25 ordinary ones, the mean rating
 was 7.6 for the featured pictures and 4.2 for the ordinary photos, and it
 tells them apart as well as the milder prompt it replaced (AUC 0.90). The
-measurements are in ``spikes/llama/results.md``.
+measurements are in ``spikes/llama/results.md``. They were made with
+earlier prompt versions; prompt version 5 (camera and lens in the request,
+finer problem kinds) has not been measured the same way.
 
 Critiques written by an earlier prompt version are still counted until
 they are redone; the background critic redoes them last. Prompt version 4
 added the advice; critiques written before show without it, marked as
-outdated.
+outdated. Prompt version 5 adds the gear and the finer problem tags; every
+earlier critique becomes outdated (still shown and counted in Insights)
+and is redone by the background critic or on refresh.
 
 .. _features-ai-critique-presets:
 
@@ -465,7 +477,9 @@ score; the default is 25 %, and **Settings → AI critic** shows it as
 for ranking, sorting, auto-pick and the **Aesthetic** filter is built in
 steps: the general score, blended with **Your taste** (:ref:`features-ai-taste`),
 then blended with the critique score. Photos without a critique are not
-affected. Critique scores count only while critiques are on. See
+affected. Critique scores count only while critiques are on. The library
+filter **Critique score** (Quality section) uses it directly and is
+independent of the **Aesthetic** filter. See
 :doc:`/concepts/scores`.
 
 .. _features-ai-search:
@@ -524,7 +538,8 @@ AI in the library
 
 - **Tiles** of photos where someone important has closed eyes show an
   **Eyes closed** badge.
-- **Filters** (Quality section): a minimum **Aesthetic** score, **Hide
+- **Filters** (Quality section): a minimum **Aesthetic** score, a minimum
+  **Critique score** (photos without a critique never match), **Hide
   closed eyes**, and **People**: *With* (any face found, even a small one
   in the background) or *Without* (no face found, or not analyzed by the
   face models yet).

@@ -51,6 +51,9 @@ pub struct PhotoScore {
     pub score: f32,
     /// Aesthetic score, 0–1, once the CLIP model ran.
     pub aesthetic: Option<f32>,
+    /// The critique score, 0–1: the critic's rating as a percentile of the
+    /// library's critiques; `None` without a critique.
+    pub critique: Option<f32>,
     /// Whether someone important has closed eyes; `None` when undecided.
     pub eyes_closed: Option<bool>,
     pub faces: u32,

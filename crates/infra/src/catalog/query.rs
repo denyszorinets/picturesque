@@ -184,6 +184,12 @@ fn photo_filters(
             vec![Value::Real(f64::from(min))],
         );
     }
+    if let Some(min) = query.min_critique {
+        add(
+            "(SELECT ps.critique FROM photo_score ps WHERE ps.photo_id = p.id) >= ?",
+            vec![Value::Real(f64::from(min))],
+        );
+    }
     if query.hide_closed_eyes == Some(true) {
         add(
             "NOT EXISTS (SELECT 1 FROM photo_score ps WHERE ps.photo_id = p.id AND ps.eyes_closed = 1)",

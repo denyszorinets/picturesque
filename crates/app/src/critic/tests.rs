@@ -555,6 +555,106 @@ fn the_prompt_names_the_shot_data_and_the_format_only_when_known() {
 }
 
 #[test]
+fn the_prompt_names_the_camera_and_lens_only_when_known() {
+    use picturesque_core::metadata::{Camera, CaptureMetadata};
+    // (camera make, model, lens, expected gear sentence)
+    let cases = [
+        (
+            Some(("SONY", "ILCE-7M4")),
+            Some("FE 35mm F1.8"),
+            " Gear: Sony ILCE-7M4 with FE 35mm F1.8.",
+        ),
+        (
+            Some(("Canon", "Canon EOS R5")),
+            None,
+            " Gear: Canon EOS R5.",
+        ),
+        (None, Some("  XF 23mm  "), " Gear: lens XF 23mm."),
+        (Some(("", "")), Some(" "), ""),
+        (None, Some("a\nb\0c   d"), " Gear: lens a b c d."),
+        (None, None, ""),
+    ];
+    for (camera, lens, want) in cases {
+        let photo = Photo {
+            id: PhotoId(1),
+            metadata: CaptureMetadata {
+                camera: camera.map(|(make, model)| Camera::new(make, model)),
+                lens: lens.map(str::to_owned),
+                ..Default::default()
+            },
+            assets: PhotoAssets::new(vec![Asset {
+                format: MediaFormat::Raw,
+                path: PathBuf::from("a.CR3"),
+                size: 1,
+                hash: fake_hash(b"x"),
+            }])
+            .unwrap(),
+        };
+        assert_eq!(
+            user_prompt(&photo),
+            format!("Critique this photo.{want} The original is a RAW file."),
+            "{camera:?} {lens:?}"
+        );
+    }
+}
+
+#[test]
+fn a_long_lens_name_is_cut_before_it_reaches_the_model() {
+    use picturesque_core::metadata::CaptureMetadata;
+    let photo = Photo {
+        id: PhotoId(1),
+        metadata: CaptureMetadata {
+            lens: Some("x".repeat(500)),
+            ..Default::default()
+        },
+        assets: PhotoAssets::new(vec![Asset {
+            format: MediaFormat::Raw,
+            path: PathBuf::from("a.CR3"),
+            size: 1,
+            hash: fake_hash(b"x"),
+        }])
+        .unwrap(),
+    };
+    assert!(user_prompt(&photo).len() < 150);
+}
+
+#[test]
+fn the_specific_issue_kinds_parse_and_the_schema_offers_only_them() {
+    let c = Critique::parse(
+        r#"{"summary": "A blurry, overexposed walk.", "rating": 3,
+        "issues": ["overexposed", "subject_placement", "motion_blur", "exposure"]}"#,
+    )
+    .unwrap();
+    assert_eq!(
+        c.issues,
+        [
+            Issue::Overexposed,
+            Issue::SubjectPlacement,
+            Issue::MotionBlur,
+            Issue::Exposure
+        ]
+    );
+    let offered = Critique::schema()["properties"]["issues"]["items"]["enum"].clone();
+    let offered: Vec<&str> = offered
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v.as_str().unwrap())
+        .collect();
+    assert!(offered.contains(&"underexposed") && offered.contains(&"busy_background"));
+    // The coarse kinds are only read, never asked for.
+    for old in ["exposure", "focus", "composition"] {
+        assert!(!offered.contains(&old), "{old}");
+    }
+    for name in &offered {
+        assert!(
+            serde_json::from_value::<Issue>(json!(name)).is_ok(),
+            "{name}"
+        );
+    }
+}
+
+#[test]
 fn an_older_critique_stays_visible_and_is_redone_on_request() {
     // (stored model, stored rubric is the current one, outdated, asks again)
     let cases = [

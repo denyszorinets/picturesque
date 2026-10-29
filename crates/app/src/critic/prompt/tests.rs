@@ -7,21 +7,22 @@ const PRESETS: [CriticPreset; 3] = [
 ];
 
 #[test]
-fn the_professional_prompt_and_key_are_what_they_were_before_presets() {
+fn the_prompts_and_keys_are_pinned_so_a_change_is_deliberate() {
     let prompt = system_prompt(CriticPreset::Professional, DEFAULT_RUBRIC);
     assert_eq!(
         (fingerprint(&prompt), prompt.len()),
-        ("716f635196bbf2e2".into(), 2851)
+        ("a873f34897c72aaa".into(), 3493)
     );
     assert_eq!(
         rubric_key(CriticPreset::Professional, DEFAULT_RUBRIC),
-        "09b67e2b6f1c64c4"
+        "2fda969db7eb9005"
     );
     // Other presets: the key is built from the serialized name, so it stays
-    // stable if the Rust variant is renamed.
+    // stable if the Rust variant is renamed. Professional hashes only the
+    // version and the rubric, as it did before presets.
     assert_eq!(
         rubric_key(CriticPreset::Amateur, DEFAULT_RUBRIC),
-        "9656f3e97be0f854"
+        "a3aa5a142bbe25c7"
     );
 }
 
@@ -57,6 +58,7 @@ fn each_preset_has_its_voice_and_the_shared_schema_instructions() {
             "\"fixable\"",
             "\"fix_steps\"",
             "\"improvements\"",
+            "name the setting to change",
             "\"camera_tips\"",
             "Reply with JSON only.",
         ] {

@@ -7,7 +7,10 @@ use serde::Serialize;
 use ts_rs::TS;
 
 use crate::critic::prompt::Issue;
+
+mod advice;
 use crate::ports::catalog::{CatalogError, PhotoCatalog};
+pub use advice::Advice;
 
 /// What the critiques of the library say (`library_insights`).
 #[derive(Debug, Clone, PartialEq, Serialize, TS)]
@@ -35,6 +38,9 @@ pub struct LibraryInsights {
     /// Rating points per year, once there are three quarters.
     pub trend_slope: Option<f32>,
     pub habits: Vec<SettingHabit>,
+    /// What to work on, from the recurring problems and the settings they
+    /// happen at; the most frequent first.
+    pub advice: Vec<Advice>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, TS)]
@@ -150,6 +156,30 @@ pub fn library_insights(catalog: &dyn PhotoCatalog) -> Result<LibraryInsights, C
         .max()
         .unwrap_or_default();
     let result = summarize(&samples, now, HALF_LIFE_DAYS);
+    let issues: Vec<IssueInsight> = result
+        .issues
+        .into_iter()
+        .map(|s| IssueInsight {
+            issue: s.issue,
+            count: s.count as u32,
+            share: s.share,
+            weighted_share: s.weighted_share,
+            examples: s.examples.into_iter().map(|id| id.0).collect(),
+        })
+        .collect();
+    let habits: Vec<SettingHabit> = result
+        .habits
+        .into_iter()
+        .map(|h| SettingHabit {
+            issue: h.issue,
+            setting: h.setting.into(),
+            label: h.label.to_string(),
+            critiques: h.critiques as u32,
+            share: h.share,
+            baseline: h.baseline,
+            lift: h.lift,
+        })
+        .collect();
     Ok(LibraryInsights {
         critiques: result.critiques as u32,
         with_issues: result.with_issues as u32,
@@ -161,17 +191,8 @@ pub fn library_insights(catalog: &dyn PhotoCatalog) -> Result<LibraryInsights, C
             .then(|| now.format("%Y-%m-%d").to_string()),
         mean_rating: result.mean_rating,
         weighted_rating: result.weighted_rating,
-        issues: result
-            .issues
-            .into_iter()
-            .map(|s| IssueInsight {
-                issue: s.issue,
-                count: s.count as u32,
-                share: s.share,
-                weighted_share: s.weighted_share,
-                examples: s.examples.into_iter().map(|id| id.0).collect(),
-            })
-            .collect(),
+        advice: advice::advise(&issues, &habits),
+        issues,
         trend: result
             .trend
             .into_iter()
@@ -182,19 +203,7 @@ pub fn library_insights(catalog: &dyn PhotoCatalog) -> Result<LibraryInsights, C
             })
             .collect(),
         trend_slope: result.trend_slope,
-        habits: result
-            .habits
-            .into_iter()
-            .map(|h| SettingHabit {
-                issue: h.issue,
-                setting: h.setting.into(),
-                label: h.label.to_string(),
-                critiques: h.critiques as u32,
-                share: h.share,
-                baseline: h.baseline,
-                lift: h.lift,
-            })
-            .collect(),
+        habits,
     })
 }
 

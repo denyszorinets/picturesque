@@ -199,7 +199,7 @@ The **Filters** panel beside the timeline (toggle it with the
      - Photos whose sharpness, exposure and/or low-noise score is at least
        25, 50 or 75% (:doc:`/reference/quality-scores`). Photos not analyzed
        yet are hidden while a quality filter is on.
-   * - Aesthetic, Hide closed eyes, People
+   * - Aesthetic, Critique score, Hide closed eyes, People
      - AI signals, once the models have run (:ref:`features-ai-library`)
    * - Best of each series only
      - Hides photos that are in a series but are not its best photo

@@ -258,6 +258,7 @@ impl SeriesService {
                 ))
             })
             .collect();
+        let critique_of = critiques.clone();
         *self.critique_scores.lock().expect("critique scores lock") = critiques;
         *self.critique_lifts.lock().expect("critique lifts lock") = lifts;
         let found_faces: HashMap<PhotoId, Vec<FaceView>> = self
@@ -338,6 +339,7 @@ impl SeriesService {
                     id: *id,
                     score,
                     aesthetic: aesthetic.get(id).copied(),
+                    critique: critique_of.get(id).copied(),
                     eyes_closed,
                     faces: face_counts.get(id).copied().unwrap_or(0),
                     keeper: auto_pick.enabled
