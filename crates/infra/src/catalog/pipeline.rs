@@ -25,6 +25,7 @@ fn source(row: &Row<'_>) -> rusqlite::Result<ImportSource> {
         watch: row.get(2)?,
         scanned_at: row.get(3)?,
         scan_error: row.get(4)?,
+        delete_originals: row.get(5)?,
     })
 }
 
@@ -65,7 +66,7 @@ impl PipelineStore for SqliteCatalog {
         )
         .map_err(storage)?;
         conn.query_row(
-            "SELECT id, path, watch, scanned_at, scan_error FROM import_source WHERE path = ?1",
+            "SELECT id, path, watch, scanned_at, scan_error, delete_originals FROM import_source WHERE path = ?1",
             [text(path)?],
             source,
         )
@@ -76,7 +77,7 @@ impl PipelineStore for SqliteCatalog {
         let conn = self.conn();
         let mut stmt = conn
             .prepare(
-                "SELECT id, path, watch, scanned_at, scan_error FROM import_source ORDER BY id",
+                "SELECT id, path, watch, scanned_at, scan_error, delete_originals FROM import_source ORDER BY id",
             )
             .map_err(storage)?;
         stmt.query_map([], source)
@@ -90,6 +91,20 @@ impl PipelineStore for SqliteCatalog {
             .execute(
                 "UPDATE import_source SET watch = ?1 WHERE id = ?2",
                 params![watch, id],
+            )
+            .map_err(storage)?;
+        Ok(())
+    }
+
+    fn set_source_delete_originals(
+        &self,
+        id: i64,
+        choice: Option<bool>,
+    ) -> Result<(), CatalogError> {
+        self.conn()
+            .execute(
+                "UPDATE import_source SET delete_originals = ?1 WHERE id = ?2",
+                params![choice, id],
             )
             .map_err(storage)?;
         Ok(())
@@ -162,7 +177,7 @@ impl PipelineStore for SqliteCatalog {
                 conn.execute(
                     &format!(
                         "UPDATE import_job SET files = ?1, source_id = ?2, stage = 'queued', error = NULL,
-                         updated_at = {NOW} WHERE id = ?3"
+                         source_removed_at = NULL, updated_at = {NOW} WHERE id = ?3"
                     ),
                     params![files, source_id, id],
                 )
@@ -277,6 +292,48 @@ impl PipelineStore for SqliteCatalog {
             .map_err(storage)?
             .collect::<Result<_, _>>()
             .map_err(storage)
+    }
+
+    fn cleanup_candidates(
+        &self,
+        source_id: i64,
+        through_job_id: Option<i64>,
+    ) -> Result<Vec<Job>, CatalogError> {
+        let conn = self.conn();
+        let mut stmt = conn
+            .prepare(&format!(
+                "SELECT {JOB_COLUMNS} FROM import_job
+                 WHERE source_id = ?1 AND stage IN ('imported', 'duplicate')
+                   AND photo_id IS NOT NULL AND source_removed_at IS NULL AND id <= ?2
+                 ORDER BY id"
+            ))
+            .map_err(storage)?;
+        stmt.query_map(params![source_id, through_job_id.unwrap_or(i64::MAX)], job)
+            .map_err(storage)?
+            .collect::<Result<_, _>>()
+            .map_err(storage)
+    }
+
+    fn unfinished_jobs(&self, source_id: i64) -> Result<usize, CatalogError> {
+        self.conn()
+            .query_row(
+                "SELECT count(*) FROM import_job
+                 WHERE source_id = ?1 AND stage IN ('queued', 'reading', 'copying')",
+                [source_id],
+                |r| r.get::<_, i64>(0),
+            )
+            .map(|n| n as usize)
+            .map_err(storage)
+    }
+
+    fn mark_source_removed(&self, job_id: i64) -> Result<(), CatalogError> {
+        self.conn()
+            .execute(
+                &format!("UPDATE import_job SET source_removed_at = {NOW} WHERE id = ?1"),
+                [job_id],
+            )
+            .map_err(storage)?;
+        Ok(())
     }
 
     fn job_counts(&self) -> Result<Vec<(JobStage, usize)>, CatalogError> {

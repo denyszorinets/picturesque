@@ -10,7 +10,8 @@ The library
    the XMP sidecars that carry your ratings and flags. It is ordinary
    files: back it up, browse it, open it in other tools. Picturesque only
    adds files (imports, sidecars) and moves rejects into ``_Rejected`` when
-   you ask; it never deletes a photo.
+   you ask; it never deletes a photo
+   from the library.
 
 The catalog
    A database in the application data folder with what Picturesque knows

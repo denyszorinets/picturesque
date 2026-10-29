@@ -24,6 +24,9 @@ pub struct ImportSource {
     pub scanned_at: Option<String>,
     /// Why the last scan failed.
     pub scan_error: Option<String>,
+    /// Whether to offer deleting the originals once imported; `None`
+    /// follows the `delete_after_import` setting (ADR-0017).
+    pub delete_originals: Option<bool>,
 }
 
 /// Where a photo is in the pipeline. `Queued`, `Reading` and `Copying`
@@ -147,6 +150,13 @@ pub trait PipelineStore: Send + Sync {
     -> Result<ImportSource, CatalogError>;
     fn sources(&self) -> Result<Vec<ImportSource>, CatalogError>;
     fn set_source_watch(&self, id: i64, watch: bool) -> Result<(), CatalogError>;
+    /// Sets the folder's own choice about deleting originals; `None`
+    /// follows the setting.
+    fn set_source_delete_originals(
+        &self,
+        id: i64,
+        choice: Option<bool>,
+    ) -> Result<(), CatalogError>;
     /// Removes a source and its waiting jobs; finished jobs stay as
     /// history.
     fn remove_source(&self, id: i64) -> Result<(), CatalogError>;
@@ -183,6 +193,19 @@ pub trait PipelineStore: Send + Sync {
         limit: usize,
         before_id: Option<i64>,
     ) -> Result<Vec<Job>, CatalogError>;
+    /// Jobs of a source whose originals may still be on disk: imported or
+    /// skipped as a duplicate, with a library photo, and not yet deleted
+    /// from the source. Oldest first; only jobs up to `through_job_id`
+    /// when given (ADR-0017).
+    fn cleanup_candidates(
+        &self,
+        source_id: i64,
+        through_job_id: Option<i64>,
+    ) -> Result<Vec<Job>, CatalogError>;
+    /// Jobs of a source that are queued or being worked on.
+    fn unfinished_jobs(&self, source_id: i64) -> Result<usize, CatalogError>;
+    /// Records that a job's source files were deleted.
+    fn mark_source_removed(&self, job_id: i64) -> Result<(), CatalogError>;
     /// Number of jobs per stage.
     fn job_counts(&self) -> Result<Vec<(JobStage, usize)>, CatalogError>;
 

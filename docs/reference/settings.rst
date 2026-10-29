@@ -226,6 +226,20 @@ folder culled in place (:ref:`features-folders-clear`).
    have no copy; ``never`` turns the action off. Deleting is permanent and
    only happens when asked.
 
+.. _reference-settings-delete-after-import:
+
+``delete_after_import``
+-----------------------
+
+Whether Activity offers to delete the originals of an import folder once
+its photos are imported and verified (:ref:`features-import-delete-originals`).
+Each import folder can override it (``ImportSource.delete_originals``).
+
+:Type: ``never`` or ``ask``
+:Default: ``never``
+:Behaviour: ``ask`` offers **Delete originals…** per folder; nothing is
+   deleted without a confirmation, and deleting is permanent.
+
 .. _reference-settings-folders:
 
 ``open_folder``, ``recent_folders``
@@ -275,7 +289,8 @@ API
         "onboarding": { "tour_done": false },
         "open_folder": null, "recent_folders": [],
         "labels": { "pick": "green", "auto_pick": "yellow" },
-        "delete_after_copy": "verified", "pair_view": "image" }
+        "delete_after_copy": "verified",
+        "delete_after_import": "never", "pair_view": "image" }
 
 ``update_settings``
    Arguments: any subset of the settings. Unknown fields are rejected.

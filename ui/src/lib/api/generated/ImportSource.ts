@@ -15,4 +15,9 @@ scanned_at: string | null,
 /**
  * Why the last scan failed.
  */
-scan_error: string | null, };
+scan_error: string | null, 
+/**
+ * Whether to offer deleting the originals once imported; `None`
+ * follows the `delete_after_import` setting (ADR-0017).
+ */
+delete_originals: boolean | null, };

@@ -28,8 +28,9 @@ use crate::library::{
 };
 use crate::models::{ModelArgs, ModelError, ModelService};
 use crate::pipeline::{
-    AddSourceArgs, ImportPipeline, JobsArgs, LogArgs, PipelineDeps, PipelineError, RetryArgs,
-    ScanArgs, SourceArgs, SourceWatchArgs,
+    AddSourceArgs, ImportPipeline, JobsArgs, LogArgs, OriginalsArgs, OriginalsPlanArgs,
+    PipelineDeps, PipelineError, RetryArgs, ScanArgs, SourceArgs, SourceOriginalsArgs,
+    SourceWatchArgs,
 };
 use crate::ports::catalog::{AnalyzerId, PhotoCatalog};
 use crate::ports::events::EventSink;
@@ -185,6 +186,7 @@ pub struct Api {
     pipeline: Arc<ImportPipeline>,
     finish: crate::finish::FinishService,
     clear: crate::clear::ClearService,
+    originals: Arc<crate::originals::OriginalsService>,
 }
 
 impl fmt::Debug for Api {
@@ -315,6 +317,13 @@ impl Api {
             critic,
             background_critic,
             activity,
+            originals: Arc::new(crate::originals::OriginalsService::new(
+                Arc::clone(&ctx.pipeline_store),
+                Arc::clone(&catalog),
+                Arc::clone(&ctx.fs),
+                Arc::clone(&ctx.settings_store),
+                Arc::clone(&events) as Arc<dyn EventSink>,
+            )),
             clear: crate::clear::ClearService::new(
                 Arc::clone(&catalog),
                 Arc::clone(&ctx.fs),
@@ -723,17 +732,62 @@ impl Api {
                 respond(self.pipeline.sources().map_err(pipeline_error)?)
             }
             "add_import_source" => {
-                let AddSourceArgs { path, watch } = parse_args(command, args)?;
-                respond(
-                    self.pipeline
-                        .add_source(&path, watch.unwrap_or(true))
-                        .map_err(pipeline_error)?,
-                )
+                let AddSourceArgs {
+                    path,
+                    watch,
+                    delete_originals,
+                } = parse_args(command, args)?;
+                let mut source = self
+                    .pipeline
+                    .add_source(&path, watch.unwrap_or(true))
+                    .map_err(pipeline_error)?;
+                if let Some(choice) = delete_originals {
+                    source = self
+                        .pipeline
+                        .set_delete_originals(source.id, choice)
+                        .map_err(pipeline_error)?;
+                }
+                respond(source)
             }
             "remove_import_source" => {
                 let SourceArgs { id } = parse_args(command, args)?;
                 self.pipeline.remove_source(id).map_err(pipeline_error)?;
                 respond(self.pipeline.sources().map_err(pipeline_error)?)
+            }
+            "set_import_source_delete_originals" => {
+                let SourceOriginalsArgs { id, choice } = parse_args(command, args)?;
+                respond(
+                    self.pipeline
+                        .set_delete_originals(id, choice)
+                        .map_err(pipeline_error)?,
+                )
+            }
+            "delete_originals_offers" => {
+                no_args(command, &args)?;
+                respond(self.originals.offers().map_err(originals_error)?)
+            }
+            "delete_originals_plan" => {
+                let OriginalsPlanArgs { source_id } = parse_args(command, args)?;
+                respond(self.originals.plan(source_id).map_err(originals_error)?)
+            }
+            "delete_originals" => {
+                let OriginalsArgs {
+                    source_id,
+                    through_job_id,
+                } = parse_args(command, args)?;
+                respond(
+                    self.originals
+                        .start(source_id, through_job_id)
+                        .map_err(originals_error)?,
+                )
+            }
+            "delete_originals_status" => {
+                no_args(command, &args)?;
+                respond(self.originals.status())
+            }
+            "cancel_delete_originals" => {
+                no_args(command, &args)?;
+                respond(self.originals.cancel())
             }
             "set_import_source_watch" => {
                 let SourceWatchArgs { id, watch } = parse_args(command, args)?;
@@ -1005,6 +1059,16 @@ fn export_error(e: ExportError) -> ApiError {
     }
 }
 
+fn originals_error(e: crate::originals::OriginalsError) -> ApiError {
+    use crate::originals::OriginalsError;
+    match e {
+        OriginalsError::Invalid(_) | OriginalsError::Busy => {
+            ApiError::new(ApiErrorCode::InvalidArguments, e.to_string())
+        }
+        OriginalsError::Failed(_) => ApiError::internal(e.to_string()),
+    }
+}
+
 fn rejects_error(e: RejectsError) -> ApiError {
     match e {
         RejectsError::Invalid(_) => ApiError::new(ApiErrorCode::InvalidArguments, e.to_string()),
@@ -1187,6 +1251,7 @@ mod tests {
                 "recent_folders": [],
                 "labels": { "pick": "green", "auto_pick": "yellow" },
                 "delete_after_copy": "verified",
+                "delete_after_import": "never",
                 "pair_view": "image"
             })
         );

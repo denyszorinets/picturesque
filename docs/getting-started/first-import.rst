@@ -3,8 +3,10 @@ Your First Import
 
 This walks through bringing photos from existing folders into a clean,
 organized library. Picturesque **copies** every photo into the library
-(the output folder); your original folders are only read: nothing in
-them is ever moved, renamed, edited or deleted.
+(the output folder); your original folders are only read while importing: nothing in
+them is moved, renamed or edited. Deleting the originals afterwards is
+optional, off by default and always confirmed
+(:ref:`features-import-delete-originals`).
 
 On first launch, a **setup wizard** leads through steps 1 to 3 and
 offers the AI models (:ref:`features-ai-models`): choose the output

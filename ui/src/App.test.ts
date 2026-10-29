@@ -44,6 +44,7 @@ vi.mock("./lib/api", async (importOriginal) => {
         recent_folders: [],
         labels: { pick: "green", auto_pick: "yellow" },
         delete_after_copy: "verified",
+        delete_after_import: "never",
         pair_view: "image",
       }),
     listModels: () => Promise.resolve([]),

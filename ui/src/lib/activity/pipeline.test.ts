@@ -48,8 +48,11 @@ function api() {
         watch: watch ?? true,
         scanned_at: null,
         scan_error: null,
+        delete_originals: null,
       }),
     ),
+    setImportSourceDeleteOriginals:
+      vi.fn<PipelineApi["setImportSourceDeleteOriginals"]>(),
     removeImportSource: vi.fn<PipelineApi["removeImportSource"]>(
       async () => [],
     ),
@@ -149,6 +152,18 @@ describe("Pipeline", () => {
     ).toBe(false);
   });
 
+  it("sets a folder's own choice about deleting originals", async () => {
+    const backend = api();
+    const pipeline = new Pipeline(backend);
+
+    expect(await pipeline.setDeleteOriginals(4, "never")).toBe(true);
+
+    expect(backend.setImportSourceDeleteOriginals).toHaveBeenCalledWith(
+      4,
+      "never",
+    );
+  });
+
   it("adds folders and explains errors", async () => {
     const backend = api();
     const pipeline = new Pipeline(backend);
@@ -156,8 +171,19 @@ describe("Pipeline", () => {
     expect(backend.addImportSource).not.toHaveBeenCalled();
 
     expect(await pipeline.addSource(" /card ")).toBe(true);
-    expect(backend.addImportSource).toHaveBeenCalledWith("/card", true);
+    expect(backend.addImportSource).toHaveBeenCalledWith(
+      "/card",
+      true,
+      "default",
+    );
     expect(backend.listImportSources).toHaveBeenCalled();
+
+    expect(await pipeline.addSource("/other", false, "ask")).toBe(true);
+    expect(backend.addImportSource).toHaveBeenLastCalledWith(
+      "/other",
+      false,
+      "ask",
+    );
 
     backend.addImportSource.mockRejectedValueOnce(
       new ApiError("invalid_arguments", "Cannot read `/x`: missing."),

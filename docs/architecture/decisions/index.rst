@@ -23,3 +23,4 @@ reused; superseded decisions stay in place and link to their replacement.
    0014-optional-source-deletion
    0015-onnx-runtime-loaded-at-first-use
    0016-local-vision-language-critic
+   0017-delete-originals-after-import

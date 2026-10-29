@@ -402,3 +402,90 @@ fn sidecars_are_read_on_import_and_updated_with_decisions() {
     );
     assert_eq!(api.flush_sidecars().written, 0);
 }
+
+#[test]
+fn originals_are_deleted_after_a_verified_import_and_offered_again_when_replaced() {
+    let dir = tempfile::tempdir().unwrap();
+    let card = dir.path().join("card");
+    let lib = dir.path().join("Clean");
+    std::fs::create_dir_all(&card).unwrap();
+    std::fs::create_dir_all(&lib).unwrap();
+    photo(&card.join("IMG_0001.JPG"), "2026:10:12 09:00:00");
+    photo(&card.join("IMG_0002.JPG"), "2026:10:12 09:05:00");
+    let catalog = Arc::new(SqliteCatalog::open(&dir.path().join("catalog.sqlite")).unwrap());
+    catalog
+        .save_settings(&Settings {
+            library_root: Some(lib.clone()),
+            ..Default::default()
+        })
+        .unwrap();
+    let api = api(&catalog, &dir.path().join("cache"));
+    // The setting is off, so the folder asks for itself.
+    let source = call(
+        &api,
+        "add_import_source",
+        json!({ "path": card, "delete_originals": "ask" }),
+    );
+    assert_eq!(source["delete_originals"], true);
+    assert_eq!(api.run_imports(), 2);
+
+    let offers = call(&api, "delete_originals_offers", Value::Null);
+    assert_eq!(offers[0]["photos"], 2);
+    let id = source["id"].clone();
+    let plan = call(&api, "delete_originals_plan", json!({ "source_id": id }));
+    assert_eq!(
+        (plan["photos"].clone(), plan["changed"].clone()),
+        (json!(2), json!(0))
+    );
+    call(
+        &api,
+        "delete_originals",
+        json!({ "source_id": id, "through_job_id": plan["through_job_id"] }),
+    );
+    eventually("the originals are deleted", || {
+        call(&api, "delete_originals_status", Value::Null)["state"] == "completed"
+    });
+
+    let status = call(&api, "delete_originals_status", Value::Null);
+    assert_eq!(
+        (status["deleted"].clone(), status["kept"].clone()),
+        (json!(2), json!([]))
+    );
+    assert!(!card.join("IMG_0001.JPG").exists() && !card.join("IMG_0002.JPG").exists());
+    assert!(lib.join("2026/2026-10-12/IMG_0001.JPG").exists());
+    assert_eq!(catalog.photo_count().unwrap(), 2);
+    assert_eq!(
+        call(&api, "delete_originals_offers", Value::Null),
+        json!([])
+    );
+
+    // A different photo with the same name is imported and offered again.
+    photo(&card.join("IMG_0001.JPG"), "2026:10:14 12:00:00");
+    call(&api, "scan_import_sources", json!({}));
+    assert_eq!(api.run_imports(), 1);
+    let offers = call(&api, "delete_originals_offers", Value::Null);
+    assert_eq!(offers[0]["photos"], 1);
+
+    // The library copy is damaged, so the original stays.
+    let copy = lib.join("2026/2026-10-14/IMG_0001.JPG");
+    std::fs::write(&copy, b"damaged").unwrap();
+    let plan = call(&api, "delete_originals_plan", json!({ "source_id": id }));
+    call(
+        &api,
+        "delete_originals",
+        json!({ "source_id": id, "through_job_id": plan["through_job_id"] }),
+    );
+    eventually("the run ends", || {
+        call(&api, "delete_originals_status", Value::Null)["state"] == "completed"
+    });
+    let status = call(&api, "delete_originals_status", Value::Null);
+    assert_eq!(status["deleted"], 0);
+    assert!(
+        status["kept"][0]["reason"]
+            .as_str()
+            .unwrap()
+            .contains("library copy of IMG_0001.JPG changed"),
+        "{status}"
+    );
+    assert!(card.join("IMG_0001.JPG").exists());
+}

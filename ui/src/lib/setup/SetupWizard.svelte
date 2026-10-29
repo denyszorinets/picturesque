@@ -1,7 +1,12 @@
 <script lang="ts">
   import Icon from "../components/Icon.svelte";
   import * as api from "../api";
-  import type { ImportSource, Settings, TemplatePresetView } from "../api";
+  import type {
+    DeleteAfterImport,
+    ImportSource,
+    Settings,
+    TemplatePresetView,
+  } from "../api";
   import ModelList from "../ai/ModelList.svelte";
   import PathInput from "../components/PathInput.svelte";
 
@@ -99,6 +104,13 @@
     });
   }
 
+  /** Saves the choice about offering to delete originals after importing. */
+  async function chooseOriginals(choice: DeleteAfterImport) {
+    await run(async () => {
+      saved = await api.updateSettings({ delete_after_import: choice });
+    });
+  }
+
   async function addSources(paths: string[]) {
     const added = await run(async () => {
       for (const path of paths.map((p) => p.trim()).filter(Boolean))
@@ -165,8 +177,9 @@
           an empty folder with enough free space.
         </p>
         <p class="safe" data-testid="setup-copy-only">
-          Your originals are never moved, renamed, edited or deleted:
-          Picturesque only reads them.
+          Importing never moves, renames or edits your originals: Picturesque
+          only reads them. Deleting them is a separate step that you can switch
+          on later, and that always asks first.
         </p>
         <PathInput
           label="Output folder"
@@ -229,9 +242,31 @@
           copied automatically.
         </p>
         <p class="safe">
-          These folders are only read: nothing in them is ever changed, moved or
-          deleted.
+          Importing only reads these folders. Nothing in them is changed, moved
+          or deleted unless you choose so below.
         </p>
+        <div class="originals">
+          <label for="setup-originals">After importing</label>
+          <select
+            id="setup-originals"
+            value={saved?.delete_after_import ?? "never"}
+            onchange={(e) =>
+              void chooseOriginals(e.currentTarget.value as DeleteAfterImport)}
+            disabled={busy || saved === null}
+            data-testid="setup-delete-originals"
+          >
+            <option value="never">Keep my originals</option>
+            <option value="ask"
+              >Offer to delete originals that are safely copied</option
+            >
+          </select>
+          <p class="muted">
+            With the offer, you are asked after a folder has been imported. Each
+            original is deleted only if it matches the verified copy in your
+            library, and only after you confirm. Deleting is permanent. You can
+            change this per folder in Activity and in Settings.
+          </p>
+        </div>
         {#if !hasLibrary}
           <p class="notice" data-testid="setup-needs-library">
             No output folder is set yet: photos wait until you choose one (go

@@ -19,6 +19,7 @@ pub mod info;
 pub mod insights;
 pub mod library;
 pub mod models;
+pub mod originals;
 pub mod pipeline;
 pub mod ports;
 pub mod rejects;

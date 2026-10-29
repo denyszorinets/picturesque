@@ -3,6 +3,7 @@ import type { AiSettings } from "./AiSettings";
 import type { AutoPickSettings } from "./AutoPickSettings";
 import type { CriticSettings } from "./CriticSettings";
 import type { DeleteAfterCopy } from "./DeleteAfterCopy";
+import type { DeleteAfterImport } from "./DeleteAfterImport";
 import type { ImportSettings } from "./ImportSettings";
 import type { LabelSettings } from "./LabelSettings";
 import type { OnboardingSettings } from "./OnboardingSettings";
@@ -79,6 +80,10 @@ labels: LabelSettings,
  * What clearing a folder after copying may delete (ADR-0014).
  */
 delete_after_copy: DeleteAfterCopy, 
+/**
+ * Whether to offer deleting originals once imported (ADR-0017).
+ */
+delete_after_import: DeleteAfterImport, 
 /**
  * Which file of a RAW+JPEG pair the grid and loupe show.
  */

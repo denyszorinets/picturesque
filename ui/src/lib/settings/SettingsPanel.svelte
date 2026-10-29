@@ -29,7 +29,12 @@
   import ModelList from "../ai/ModelList.svelte";
   import Reanalyze from "../analysis/Reanalyze.svelte";
   import PathInput from "../components/PathInput.svelte";
-  import type { ColorLabel, DeleteAfterCopy, PairView } from "../api";
+  import type {
+    ColorLabel,
+    DeleteAfterCopy,
+    DeleteAfterImport,
+    PairView,
+  } from "../api";
 
   const LABELS: { value: ColorLabel | ""; label: string }[] = [
     { value: "", label: "No label" },
@@ -69,6 +74,7 @@
   let pickLabel = $state<ColorLabel | null>("green");
   let autoLabel = $state<ColorLabel | null>("yellow");
   let deleteAfterCopy = $state<DeleteAfterCopy>("verified");
+  let deleteAfterImport = $state<DeleteAfterImport>("never");
   let pairView = $state<PairView>("image");
   let maxGap = $state(30);
   let maxDistance = $state(16);
@@ -175,6 +181,7 @@
         pickLabel !== saved.labels.pick ||
         autoLabel !== saved.labels.auto_pick ||
         deleteAfterCopy !== saved.delete_after_copy ||
+        deleteAfterImport !== saved.delete_after_import ||
         pairView !== saved.pair_view ||
         seriesChanged ||
         rankingChanged ||
@@ -234,6 +241,7 @@
     pickLabel = settings.labels.pick;
     autoLabel = settings.labels.auto_pick;
     deleteAfterCopy = settings.delete_after_copy;
+    deleteAfterImport = settings.delete_after_import;
     pairView = settings.pair_view;
     maxGap = settings.series.max_gap_seconds;
     maxDistance = settings.series.max_distance;
@@ -308,6 +316,8 @@
         update.labels = { pick: pickLabel, auto_pick: autoLabel };
       if (deleteAfterCopy !== saved.delete_after_copy)
         update.delete_after_copy = deleteAfterCopy;
+      if (deleteAfterImport !== saved.delete_after_import)
+        update.delete_after_import = deleteAfterImport;
       if (pairView !== saved.pair_view) update.pair_view = pairView;
       if (libraryRoot.trim() !== (saved.library_root ?? ""))
         update.library_root = libraryRoot.trim();
@@ -482,6 +492,27 @@
       and digiKam show it too). Auto-picked photos get theirs when you finish a
       folder. Labels you set in another tool are kept; changes apply to sidecars
       written from now on.
+    </p>
+  </div>
+
+  <div class="field">
+    <label class="label" for="delete-after-import">After importing</label>
+    <select
+      id="delete-after-import"
+      bind:value={deleteAfterImport}
+      data-testid="delete-after-import"
+    >
+      <option value="never">Keep my originals</option>
+      <option value="ask"
+        >Offer to delete originals that are safely copied</option
+      >
+    </select>
+    <p class="hint muted">
+      With the offer, <strong>Activity</strong> shows
+      <strong>Delete originals…</strong> once a folder has been imported. Each original
+      is deleted only if it matches the verified copy in your library, and only after
+      you confirm. Deleting is permanent. Each import folder can override this in
+      Activity.
     </p>
   </div>
 
