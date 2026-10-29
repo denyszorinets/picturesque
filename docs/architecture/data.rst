@@ -97,7 +97,9 @@ task that introduces them. The rest is in the schema today
    each source folder (watched or not, when last scanned and why the scan
    failed), one job per source photo (its files with size and modification
    time as JSON, stage, error, and the catalog photo once imported or found
-   as a duplicate, and where a failed photo stopped) and the pipeline log
+   as a duplicate, and where a failed photo stopped; ``delete_originals``
+   per source and ``source_removed_at`` per job for
+   :doc:`ADR-0017 </architecture/decisions/0017-delete-originals-after-import>`) and the pipeline log
    (newest 20,000 entries).
 
 .. _architecture-data-schema:
@@ -184,6 +186,11 @@ how many have run. Each migration runs in its own transaction.
      - ``0018_photo_critique_score.sql``
      - ``photo_score.critique`` (critique score, nullable; written with the
        other scores, NULL without a critique or while critiques are off)
+   * - 19
+     - ``0019_delete_originals.sql``
+     - ``import_source.delete_originals`` (NULL follows the setting, 0
+       never, 1 ask) and ``import_job.source_removed_at`` (originals
+       deleted; :doc:`ADR-0017 </architecture/decisions/0017-delete-originals-after-import>`)
 
 Conventions:
 

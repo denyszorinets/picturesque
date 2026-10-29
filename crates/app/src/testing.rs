@@ -1633,6 +1633,8 @@ struct PipelineState {
     sources: Vec<crate::ports::pipeline::ImportSource>,
     jobs: Vec<(String, crate::ports::pipeline::Job)>,
     log: Vec<crate::ports::pipeline::LogEntry>,
+    /// Jobs whose source files were deleted.
+    removed: std::collections::HashSet<i64>,
     next_id: i64,
 }
 
@@ -1673,6 +1675,7 @@ impl crate::ports::pipeline::PipelineStore for MemoryPipelineStore {
             watch,
             scanned_at: None,
             scan_error: None,
+            delete_originals: None,
         };
         s.sources.push(source.clone());
         Ok(source)
@@ -1686,6 +1689,18 @@ impl crate::ports::pipeline::PipelineStore for MemoryPipelineStore {
         let mut s = self.state.lock().unwrap();
         if let Some(source) = s.sources.iter_mut().find(|x| x.id == id) {
             source.watch = watch;
+        }
+        Ok(())
+    }
+
+    fn set_source_delete_originals(
+        &self,
+        id: i64,
+        choice: Option<bool>,
+    ) -> Result<(), CatalogError> {
+        let mut s = self.state.lock().unwrap();
+        if let Some(source) = s.sources.iter_mut().find(|x| x.id == id) {
+            source.delete_originals = choice;
         }
         Ok(())
     }
@@ -1721,7 +1736,8 @@ impl crate::ports::pipeline::PipelineStore for MemoryPipelineStore {
         use crate::ports::pipeline::{Job, JobStage};
         let mut s = self.state.lock().unwrap();
         let key = key.display().to_string();
-        if let Some((_, job)) = s.jobs.iter_mut().find(|(k, _)| *k == key) {
+        if let Some(index) = s.jobs.iter().position(|(k, _)| *k == key) {
+            let job = &mut s.jobs[index].1;
             if job.files == files || matches!(job.stage, JobStage::Reading | JobStage::Copying) {
                 return Ok(None);
             }
@@ -1732,7 +1748,9 @@ impl crate::ports::pipeline::PipelineStore for MemoryPipelineStore {
             job.stage = JobStage::Queued;
             job.error = None;
             job.source_id = Some(source_id);
-            return Ok(Some(job.id));
+            let id = job.id;
+            s.removed.remove(&id);
+            return Ok(Some(id));
         }
         let id = s.id();
         s.jobs.push((
@@ -1804,6 +1822,47 @@ impl crate::ports::pipeline::PipelineStore for MemoryPipelineStore {
             }
         }
         Ok(n)
+    }
+
+    fn cleanup_candidates(
+        &self,
+        source_id: i64,
+        through_job_id: Option<i64>,
+    ) -> Result<Vec<crate::ports::pipeline::Job>, CatalogError> {
+        use crate::ports::pipeline::JobStage;
+        let s = self.state.lock().unwrap();
+        let mut jobs: Vec<_> = s
+            .jobs
+            .iter()
+            .map(|(_, j)| j)
+            .filter(|j| j.source_id == Some(source_id))
+            .filter(|j| matches!(j.stage, JobStage::Imported | JobStage::Duplicate))
+            .filter(|j| j.photo_id.is_some() && !s.removed.contains(&j.id))
+            .filter(|j| through_job_id.is_none_or(|t| j.id <= t))
+            .cloned()
+            .collect();
+        jobs.sort_by_key(|j| j.id);
+        Ok(jobs)
+    }
+
+    fn unfinished_jobs(&self, source_id: i64) -> Result<usize, CatalogError> {
+        use crate::ports::pipeline::JobStage;
+        let s = self.state.lock().unwrap();
+        Ok(s.jobs
+            .iter()
+            .filter(|(_, j)| j.source_id == Some(source_id))
+            .filter(|(_, j)| {
+                matches!(
+                    j.stage,
+                    JobStage::Queued | JobStage::Reading | JobStage::Copying
+                )
+            })
+            .count())
+    }
+
+    fn mark_source_removed(&self, job_id: i64) -> Result<(), CatalogError> {
+        self.state.lock().unwrap().removed.insert(job_id);
+        Ok(())
     }
 
     fn job(&self, id: i64) -> Result<Option<crate::ports::pipeline::Job>, CatalogError> {

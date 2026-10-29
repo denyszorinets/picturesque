@@ -3,6 +3,7 @@ import type { AiSettings } from "./AiSettings";
 import type { AutoPickSettings } from "./AutoPickSettings";
 import type { CriticSettings } from "./CriticSettings";
 import type { DeleteAfterCopy } from "./DeleteAfterCopy";
+import type { DeleteAfterImport } from "./DeleteAfterImport";
 import type { ImportSettings } from "./ImportSettings";
 import type { LabelSettings } from "./LabelSettings";
 import type { OnboardingSettings } from "./OnboardingSettings";
@@ -14,4 +15,4 @@ import type { TasteSettings } from "./TasteSettings";
 /**
  * A change to some settings; absent fields are left as they are.
  */
-export type SettingsUpdate = { library_root?: string | null, path_template?: string, sidecar_naming?: SidecarNaming, series?: SeriesSettings, ranking?: RankingSettings, ai?: AiSettings, import?: ImportSettings, auto_pick?: AutoPickSettings, taste?: TasteSettings, critic?: CriticSettings, onboarding?: OnboardingSettings, labels?: LabelSettings, delete_after_copy?: DeleteAfterCopy, pair_view?: "image" | "raw", };
+export type SettingsUpdate = { library_root?: string | null, path_template?: string, sidecar_naming?: SidecarNaming, series?: SeriesSettings, ranking?: RankingSettings, ai?: AiSettings, import?: ImportSettings, auto_pick?: AutoPickSettings, taste?: TasteSettings, critic?: CriticSettings, onboarding?: OnboardingSettings, labels?: LabelSettings, delete_after_copy?: DeleteAfterCopy, delete_after_import?: DeleteAfterImport, pair_view?: "image" | "raw", };

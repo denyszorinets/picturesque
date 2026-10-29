@@ -98,7 +98,9 @@ reused rather than copied again.
 Safety
 ~~~~~~
 
-- Source files are only ever read.
+- Source files are only ever read while importing. Deleting them
+  afterwards is a separate, optional, confirmed step
+  (:ref:`features-import-delete-originals`).
 - An existing file in the library is never overwritten. If another file
   already uses a name, the photo gets a free name such as
   ``IMG_0042 (2).CR3``.
@@ -107,6 +109,63 @@ Safety
   when the folder is next scanned.
 - A copy that does not match the original is retried once; if it fails
   again, the destination disk may be failing and the photo is reported.
+
+.. _features-import-delete-originals:
+
+Deleting originals
+~~~~~~~~~~~~~~~~~~
+
+Off by default. Set **Settings → After importing**
+(:ref:`reference-settings-delete-after-import`) to *Ask*, or choose it for
+one folder in **Activity** (the select on each import folder, also shown
+when adding a folder; the first-start wizard has the same choice under
+*Your photos*). Once a folder has no queued photos, **Activity** offers
+**Delete originals…** with the number of photos imported and verified.
+The offer comes from the catalog; the card is not read until you open the
+dialog.
+
+The dialog shows the plan: photos, files and size, how many photos were
+skipped as duplicates, and how many changed since the import (those stay).
+Deletion is **permanent**: there is no trash. Confirming starts a
+background run, one at a time, that you can cancel between photos;
+progress shows in Activity.
+
+Right before deleting a photo, Picturesque checks that:
+
+- the import job is unchanged;
+- each original that still exists is inside the import folder (paths with
+  ``..`` are refused) and has the same size and modification time as at
+  import. This applies to media files too: a file that was only touched
+  stays, and the plan counts it as changed;
+- each media original hashes to a media asset of that photo in the
+  library, with the same size, and the library file hashes to the hash
+  recorded at import. A file that is the library's own copy is never
+  deleted;
+- sidecars (XMP) are checked by size and modification time only, because
+  the library rewrites its own sidecar.
+
+Otherwise the whole photo stays and is reported (the dialog lists up to
+five kept photos with the reason). Just before each file is removed it is
+looked at once more; if it changed in the meantime, the rest of that photo
+stays. Photos whose originals are already gone (for example deleted by
+hand) are counted separately and not as deleted. Photos skipped as
+duplicates follow the same rule, so a RAW+JPEG pair with only one file in
+the library stays. Media files are deleted first, then sidecars; at the
+first failure the rest of that photo stays and is reported. Each fully
+deleted photo is recorded, so a cancelled or interrupted run continues
+with the rest and the offer disappears when none is left. After a
+restart nothing is deleted without a new confirmation, and photos
+imported after the plan are never part of it.
+
+It is refused when the library folder and the import folder overlap (one
+contains the other, for example after the library folder was changed);
+nothing is deleted. It is also refused for a folder culled in place (its
+source is the library),
+for a folder that is not writable (a locked card), and while photos from
+that folder are still being imported. If the import folder is removed
+from the app while a run is going, the run stops. Importing a changed file with the
+same name again clears the marker. See
+:doc:`ADR-0017 </architecture/decisions/0017-delete-originals-after-import>`.
 
 .. _features-import-watching:
 

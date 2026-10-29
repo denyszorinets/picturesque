@@ -30,6 +30,7 @@ const SETTINGS: Settings = {
   recent_folders: [],
   labels: { pick: "green", auto_pick: "yellow" },
   delete_after_copy: "verified",
+  delete_after_import: "never",
   pair_view: "image",
 };
 
@@ -77,7 +78,14 @@ vi.mock("../api", async (importOriginal) => {
 });
 
 function source(id: number, path: string): ImportSource {
-  return { id, path, watch: true, scanned_at: null, scan_error: null };
+  return {
+    id,
+    path,
+    watch: true,
+    scanned_at: null,
+    scan_error: null,
+    delete_originals: null,
+  };
 }
 
 beforeEach(() => {
@@ -109,7 +117,7 @@ describe("SetupWizard", () => {
     const root = await screen.findByTestId("setup-library-root");
     // Photos are copied; originals are only read.
     expect(screen.getByTestId("setup-copy-only")).toHaveTextContent(
-      "Your originals are never moved, renamed, edited or deleted",
+      "Importing never moves, renames or edits your originals",
     );
     await fireEvent.input(root, { target: { value: " /photos/library " } });
     await fireEvent.click(await screen.findByLabelText(/One folder/));
@@ -126,6 +134,14 @@ describe("SetupWizard", () => {
     await fireEvent.click(screen.getByTestId("setup-add-source"));
     expect(addImportSource).toHaveBeenCalledWith("/media/card");
     expect(await screen.findByText("/media/card")).toBeInTheDocument();
+    // Originals are kept unless the user chooses otherwise.
+    const originals = screen.getByTestId("setup-delete-originals");
+    expect(originals).toHaveValue("never");
+    updateSettings.mockClear();
+    await fireEvent.change(originals, { target: { value: "ask" } });
+    expect(updateSettings).toHaveBeenCalledWith({
+      delete_after_import: "ask",
+    });
     await next();
 
     // Step 3: AI models, optional.

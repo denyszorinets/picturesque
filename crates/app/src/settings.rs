@@ -61,6 +61,8 @@ pub struct Settings {
     pub labels: LabelSettings,
     /// What clearing a folder after copying may delete (ADR-0014).
     pub delete_after_copy: DeleteAfterCopy,
+    /// Whether to offer deleting originals once imported (ADR-0017).
+    pub delete_after_import: DeleteAfterImport,
     /// Which file of a RAW+JPEG pair the grid and loupe show.
     #[ts(type = "\"image\" | \"raw\"")]
     pub pair_view: PairView,
@@ -79,6 +81,20 @@ pub enum DeleteAfterCopy {
     Verified,
     /// Those, and photos you rejected.
     VerifiedAndRejects,
+}
+
+/// Whether to offer deleting the original files of imported photos
+/// (ADR-0017); each import folder can override it.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export)]
+pub enum DeleteAfterImport {
+    /// Originals are never touched.
+    #[default]
+    Never,
+    /// When a folder is imported, offer to delete the originals whose copy
+    /// was verified; nothing is deleted without confirmation.
+    Ask,
 }
 
 /// Colour labels written to XMP sidecars, so tools without a pick flag
@@ -431,6 +447,7 @@ impl Default for Settings {
             recent_folders: Vec::new(),
             labels: LabelSettings::default(),
             delete_after_copy: DeleteAfterCopy::default(),
+            delete_after_import: DeleteAfterImport::default(),
             pair_view: PairView::default(),
         }
     }
@@ -467,6 +484,8 @@ pub struct SettingsUpdate {
     pub labels: Option<LabelSettings>,
     #[ts(optional)]
     pub delete_after_copy: Option<DeleteAfterCopy>,
+    #[ts(optional)]
+    pub delete_after_import: Option<DeleteAfterImport>,
     #[ts(type = "\"image\" | \"raw\"", optional)]
     pub pair_view: Option<PairView>,
 }
@@ -625,6 +644,9 @@ impl SettingsService {
         }
         if let Some(labels) = update.labels {
             settings.labels = labels;
+        }
+        if let Some(mode) = update.delete_after_import {
+            settings.delete_after_import = mode;
         }
         if let Some(mode) = update.delete_after_copy {
             settings.delete_after_copy = mode;

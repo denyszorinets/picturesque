@@ -29,9 +29,10 @@ System context
      app -- loads --> models
      other -- reads ratings/flags --> clean
 
-- **Source folders** are read-only inputs. Picturesque never modifies or
-  deletes them
-  (:doc:`ADR-0008 </architecture/decisions/0008-non-destructive-verified-import>`).
+- **Source folders** are read-only inputs. Picturesque never modifies
+  them, and deletes originals only in a separate, confirmed step
+  (:doc:`ADR-0008 </architecture/decisions/0008-non-destructive-verified-import>`,
+  :doc:`ADR-0017 </architecture/decisions/0017-delete-originals-after-import>`).
 - **Clean library** is the organized output: photos copied into a folder
   structure rendered from a user template, plus XMP sidecars that carry
   ratings and pick/reject flags to other tools

@@ -442,11 +442,13 @@ Commands
 
 ``list_import_sources``
    No arguments. Every ``ImportSource``: ``id``, ``path``, ``watch``,
-   ``scanned_at`` and ``scan_error``.
+   ``scanned_at``, ``scan_error`` and ``delete_originals`` (``null``
+   follows the setting, ``false`` never, ``true`` ask).
 
 ``add_import_source``
    ``{ "path": "/absolute/folder", "watch": true }`` (``watch`` defaults
-   to ``true``). Stores the folder and scans it right away; returns the
+   to ``true``; optional ``"delete_originals": "default"|"never"|"ask"``
+   sets the folder's choice). Stores the folder and scans it right away; returns the
    ``ImportSource``. Adding a stored folder again returns it unchanged.
    Fails if the path is relative, cannot be read, or is inside or contains
    the library folder.
@@ -454,6 +456,44 @@ Commands
 ``remove_import_source``
    ``{ "id": 1 }``. Forgets the folder and drops its waiting photos;
    imported photos stay. Returns the remaining sources.
+
+``set_import_source_delete_originals``
+   ``{ "id": 1, "choice": "default" }``; ``choice`` is ``default``
+   (follow the ``delete_after_import`` setting), ``never`` or ``ask``.
+   Returns the ``ImportSource``.
+
+``delete_originals_offers``
+   No arguments. Folders with imported photos whose originals can be
+   deleted: ``[{ "source_id": 1, "path": "/media/card", "photos": 120 }]``.
+   Read from the catalog only.
+
+``delete_originals_plan``
+   ``{ "source_id": 1 }``. What deleting would do: ``{ "source_id": 1,
+   "through_job_id": 340, "photos": 120, "files": 240, "bytes": 3000000000,
+   "duplicates": 4, "changed": 2 }`` (``changed`` photos stay). Reads the
+   folder, and, although shaped like a read, records photos whose
+   originals are all gone already as done (``import_job.source_removed_at``).
+   ``invalid_arguments`` for a folder culled in place, one that is
+   not writable, one still importing, or one whose folder overlaps the
+   library folder (nothing is deleted). ``changed`` also counts media files
+   whose size or modification time differ from the import.
+
+``delete_originals``
+   ``{ "source_id": 1, "through_job_id": 340 }``, the values from the
+   plan the user confirmed; photos imported later are not included. Starts
+   the background run and returns an ``OriginalsStatus``: ``{ "state":
+   "running", "source_id", "done", "total", "deleted", "gone", "files", "bytes",
+   "kept": [{ "photo_id", "reason" }] }``. ``state`` is ``idle``,
+   ``running``, ``completed`` or ``cancelled``. ``gone`` counts photos whose originals were already gone (not in
+   ``deleted``). Removing the import folder from the app stops the run
+   (``cancelled``). One run at a time
+   (``invalid_arguments`` otherwise). Permanent.
+
+``delete_originals_status``
+   No arguments. The current ``OriginalsStatus``.
+
+``cancel_delete_originals``
+   No arguments. Stops between photos; returns the ``OriginalsStatus``.
 
 ``set_import_source_watch``
    ``{ "id": 1, "watch": false }``. Returns the ``ImportSource``.
@@ -543,6 +583,10 @@ events from ``GET /api/events``.
 ``series_changed``
    ``{ "series": 12, "photos": 57 }``: series membership changed (after
    analysis, an import, an edit or a settings change).
+
+``originals_progress``
+   An ``OriginalsStatus`` (see ``delete_originals``), sent while originals
+   are deleted and when the run ends.
 
 ``export_progress``
    An ``ExportStatus`` (see ``start_export``), sent about five times a

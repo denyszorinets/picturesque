@@ -1,9 +1,15 @@
 <script lang="ts">
   import Icon from "../components/Icon.svelte";
   import { logLine } from "./log";
-  import type { BackgroundCritiqueStatus, JobFilter, LogLevel } from "../api";
+  import type {
+    BackgroundCritiqueStatus,
+    JobFilter,
+    LogLevel,
+    OriginalsChoice,
+  } from "../api";
   import PathInput from "../components/PathInput.svelte";
   import CritiqueCard from "./CritiqueCard.svelte";
+  import OriginalsOffers from "./OriginalsOffers.svelte";
   import { STEP_LABELS, steps, type Pipeline } from "./pipeline.svelte";
 
   interface Props {
@@ -31,6 +37,12 @@
     onsetup,
   }: Props = $props();
   let draft = $state("");
+  let draftOriginals = $state<OriginalsChoice>("default");
+
+  /** A folder's own choice about deleting originals, as a select value. */
+  function choiceOf(value: boolean | null): OriginalsChoice {
+    return value === null ? "default" : value ? "ask" : "never";
+  }
 
   /** How often the view reloads while visible. */
   const REFRESH_MS = 1500;
@@ -43,7 +55,7 @@
   });
 
   async function add(path: string) {
-    if (await pipeline.addSource(path)) draft = "";
+    if (await pipeline.addSource(path, true, draftOriginals)) draft = "";
   }
 
   const status = $derived(pipeline.status);
@@ -168,6 +180,24 @@
               />
               Watch
             </label>
+            {#if !inFolder}
+              <select
+                class="originals"
+                value={choiceOf(source.delete_originals)}
+                onchange={(e) =>
+                  pipeline.setDeleteOriginals(
+                    source.id,
+                    e.currentTarget.value as OriginalsChoice,
+                  )}
+                aria-label={`Originals in ${source.path}`}
+                title="Whether to offer deleting the originals once imported"
+                data-testid="source-originals"
+              >
+                <option value="default">Originals: as in Settings</option>
+                <option value="never">Originals: keep</option>
+                <option value="ask">Originals: offer to delete</option>
+              </select>
+            {/if}
             <button
               class="small"
               onclick={() => pipeline.scan(source.id)}
@@ -185,6 +215,11 @@
       </ul>
     {/if}
 
+    {#if !inFolder}<OriginalsOffers
+        {visible}
+        revision={`${pipeline.status?.imported}-${pipeline.status?.queued}-${pipeline.status?.duplicates}`}
+      />{/if}
+
     {#if !inFolder}<div class="add">
         <PathInput
           label="Folder to import from"
@@ -194,6 +229,16 @@
           onsubmit={(p) => void add(p)}
           testid="source-path"
         />
+        <select
+          class="originals"
+          bind:value={draftOriginals}
+          aria-label="Originals in the new folder"
+          data-testid="add-source-originals"
+        >
+          <option value="default">Originals: as in Settings</option>
+          <option value="never">Originals: keep</option>
+          <option value="ask">Originals: offer to delete</option>
+        </select>
         <button
           class="primary"
           onclick={() => add(draft)}
@@ -508,6 +553,11 @@
     overflow-wrap: anywhere;
   }
 
+  .originals {
+    max-width: 14rem;
+    font-size: 0.85rem;
+  }
+
   .watch {
     display: flex;
     align-items: center;
@@ -525,6 +575,7 @@
 
   .add {
     display: flex;
+    flex-wrap: wrap;
     gap: 0.5rem;
   }
 

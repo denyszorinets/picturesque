@@ -171,6 +171,10 @@ pub struct AddSourceArgs {
     /// Default true.
     #[ts(optional)]
     pub watch: Option<bool>,
+    /// Whether to offer deleting the originals once imported; follows the
+    /// setting by default (ADR-0017).
+    #[ts(optional)]
+    pub delete_originals: Option<crate::originals::OriginalsChoice>,
 }
 
 /// Arguments of commands acting on one source.
@@ -180,6 +184,37 @@ pub struct AddSourceArgs {
 pub struct SourceArgs {
     #[ts(type = "number")]
     pub id: i64,
+}
+
+/// Arguments of `set_import_source_delete_originals`.
+#[derive(Debug, Clone, Copy, Deserialize, TS)]
+#[serde(deny_unknown_fields)]
+#[ts(export)]
+pub struct SourceOriginalsArgs {
+    #[ts(type = "number")]
+    pub id: i64,
+    pub choice: crate::originals::OriginalsChoice,
+}
+
+/// Arguments of `delete_originals_plan`.
+#[derive(Debug, Clone, Deserialize, TS)]
+#[serde(deny_unknown_fields)]
+#[ts(export)]
+pub struct OriginalsPlanArgs {
+    #[ts(type = "number")]
+    pub source_id: i64,
+}
+
+/// Arguments of `delete_originals`.
+#[derive(Debug, Clone, Deserialize, TS)]
+#[serde(deny_unknown_fields)]
+#[ts(export)]
+pub struct OriginalsArgs {
+    #[ts(type = "number")]
+    pub source_id: i64,
+    /// From the plan the user confirmed.
+    #[ts(type = "number")]
+    pub through_job_id: i64,
 }
 
 /// Arguments of `set_import_source_watch`.
@@ -440,6 +475,19 @@ impl ImportPipeline {
         );
         self.emit_progress(true);
         Ok(())
+    }
+
+    /// Sets the folder's own choice about deleting originals.
+    pub fn set_delete_originals(
+        &self,
+        id: i64,
+        choice: crate::originals::OriginalsChoice,
+    ) -> Result<ImportSource, PipelineError> {
+        self.source(id)?;
+        self.deps
+            .store
+            .set_source_delete_originals(id, choice.to_option())?;
+        self.source(id)
     }
 
     pub fn set_watch(&self, id: i64, watch: bool) -> Result<ImportSource, PipelineError> {

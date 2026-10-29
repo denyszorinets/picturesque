@@ -18,6 +18,10 @@ import type { SimilarPhoto } from "./generated/SimilarPhoto";
 import type { AppEvent } from "./generated/AppEvent";
 import type { AppInfo } from "./generated/AppInfo";
 import type { ImportSource } from "./generated/ImportSource";
+import type { OriginalsChoice } from "./generated/OriginalsChoice";
+import type { OriginalsOffer } from "./generated/OriginalsOffer";
+import type { OriginalsPlan } from "./generated/OriginalsPlan";
+import type { OriginalsStatus } from "./generated/OriginalsStatus";
 import type { JobsArgs } from "./generated/JobsArgs";
 import type { JobView } from "./generated/JobView";
 import type { LogArgs } from "./generated/LogArgs";
@@ -99,6 +103,11 @@ export type { ColorLabel } from "./generated/ColorLabel";
 export type { FinishResult } from "./generated/FinishResult";
 export type { ClearPlan } from "./generated/ClearPlan";
 export type { ClearResult } from "./generated/ClearResult";
+export type { DeleteAfterImport } from "./generated/DeleteAfterImport";
+export type { OriginalsChoice } from "./generated/OriginalsChoice";
+export type { OriginalsOffer } from "./generated/OriginalsOffer";
+export type { OriginalsPlan } from "./generated/OriginalsPlan";
+export type { OriginalsStatus } from "./generated/OriginalsStatus";
 export type { DeleteAfterCopy } from "./generated/DeleteAfterCopy";
 export type { FinishStatus } from "./generated/FinishStatus";
 export type { LabelSettings } from "./generated/LabelSettings";
@@ -192,8 +201,59 @@ export function listImportSources(): Promise<ImportSource[]> {
 export function addImportSource(
   path: string,
   watch = true,
+  deleteOriginals: OriginalsChoice = "default",
 ): Promise<ImportSource> {
-  return transport.call<ImportSource>("add_import_source", { path, watch });
+  return transport.call<ImportSource>("add_import_source", {
+    path,
+    watch,
+    delete_originals: deleteOriginals,
+  });
+}
+
+/** Sets a folder's own choice about deleting originals (ADR-0017). */
+export function setImportSourceDeleteOriginals(
+  id: number,
+  choice: OriginalsChoice,
+): Promise<ImportSource> {
+  return transport.call<ImportSource>("set_import_source_delete_originals", {
+    id,
+    choice,
+  });
+}
+
+/** Folders whose imported photos' originals can be deleted. */
+export function originalsOffers(): Promise<OriginalsOffer[]> {
+  return transport.call<OriginalsOffer[]>("delete_originals_offers");
+}
+
+/** What deleting a folder's originals would do. */
+export function originalsPlan(sourceId: number): Promise<OriginalsPlan> {
+  return transport.call<OriginalsPlan>("delete_originals_plan", {
+    source_id: sourceId,
+  });
+}
+
+/**
+ * Starts deleting the originals the plan listed; permanent. The library
+ * copy of each photo is checked again first.
+ */
+export function deleteOriginals(
+  sourceId: number,
+  throughJobId: number,
+): Promise<OriginalsStatus> {
+  return transport.call<OriginalsStatus>("delete_originals", {
+    source_id: sourceId,
+    through_job_id: throughJobId,
+  });
+}
+
+export function originalsStatus(): Promise<OriginalsStatus> {
+  return transport.call<OriginalsStatus>("delete_originals_status");
+}
+
+/** Stops deleting after the photo being worked on. */
+export function cancelDeleteOriginals(): Promise<OriginalsStatus> {
+  return transport.call<OriginalsStatus>("cancel_delete_originals");
 }
 
 /** Forgets a folder (imported photos stay); returns the remaining folders. */
