@@ -281,6 +281,29 @@ advisory. Decisions:
   so it cannot judge clipped highlights, noise floor or dynamic range. Its
   potential is a guess, which is why the default is low and 0 disables it.
 
+Amendment: Library insights (#234)
+----------------------------------
+
+:Date: 2026-10-29
+
+The stored critiques are summarized for the whole library
+(:issue:`234`, :doc:`/features/insights`) by the read-only
+``library_insights`` command. Decisions:
+
+- **Pure aggregation in core, no model call.** ``core::insights`` does the
+  arithmetic; ``app::insights`` maps stored critiques in and the result
+  out. It works whether critiques are on or off and includes rejects and
+  outdated critiques.
+- **"Now" is the newest capture date** among critiqued photos. The result
+  is deterministic and needs no clock port.
+- **The half-life is a constant** (``HALF_LIFE_DAYS``, 365 days), not a
+  setting. A critique's weight halves every half-life; undated photos weigh
+  0.5 and stay out of the trend.
+- **Issue statistics only from prompt v4+ critiques**, the ones that have
+  ``issues``. Older critiques count toward ratings and the trend only.
+- **Deferred.** A coaching text summary from a text-only model is a
+  possible follow-up and is not built.
+
 Consequences
 ------------
 

@@ -39,7 +39,7 @@ pub(crate) fn rubric_key(preset: CriticPreset, rubric: &str) -> String {
 }
 
 /// The kind of flaw a weakness is.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, TS)]
 #[serde(rename_all = "snake_case")]
 #[ts(export)]
 pub enum Issue {

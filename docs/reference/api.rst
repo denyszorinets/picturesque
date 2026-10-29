@@ -178,6 +178,30 @@ Commands
    photos (``few_photos``) last. ``focal_lengths`` (cameras only) counts
    photos per focal length in whole millimetres, most used first.
 
+``library_insights``
+   No arguments, read-only. What the stored critiques say together, with
+   recent ones weighted more (:doc:`/features/insights`). It calls no
+   model and works whether critiques are on or off:
+
+   .. code-block:: json
+
+      { "critiques": 240, "with_issues": 180, "min_critiques": 10,
+        "half_life_days": 365.0, "as_of": "2026-09-30",
+        "mean_rating": 6.1, "weighted_rating": 6.5,
+        "issues": [{ "issue": "noise", "count": 60, "share": 0.33, "weighted_share": 0.29,
+                     "examples": [412, 87, 1204] }],
+        "trend": [{ "quarter": "2026-Q2", "critiques": 40, "mean_rating": 6.3 }],
+        "trend_slope": 0.4,
+        "habits": [{ "issue": "noise", "setting": "iso", "label": "ISO above 3200",
+                     "critiques": 25, "share": 0.6, "baseline": 0.29, "lift": 2.1 }] }
+
+   ``as_of`` is the newest capture date among critiqued photos (null
+   without dates). ``issues`` come most often flagged first; ``examples``
+   are photo ids, up to 6. ``trend`` is oldest quarter first;
+   ``trend_slope`` is rating points per year and null below three
+   quarters. ``setting`` is ``iso``, ``shutter``, ``aperture`` or
+   ``focal_length``; at most 10 ``habits``, highest ``lift`` first.
+
 ``reanalyze_photos``
    Optional ``{ "photo_ids": [7, 8] }``; without it, every photo. Marks
    the photos' analysis results stale so background analysis runs again

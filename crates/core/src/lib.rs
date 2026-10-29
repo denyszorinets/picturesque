@@ -14,6 +14,7 @@ pub mod decision;
 pub mod faces;
 pub mod grouping;
 pub mod hash;
+pub mod insights;
 pub mod media;
 pub mod metadata;
 pub mod photo;

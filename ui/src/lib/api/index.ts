@@ -27,6 +27,7 @@ import type { DecisionChange } from "./generated/DecisionChange";
 import type { DecisionView } from "./generated/DecisionView";
 import type { PhotoDetail } from "./generated/PhotoDetail";
 import type { LibraryStats } from "./generated/LibraryStats";
+import type { LibraryInsights } from "./generated/LibraryInsights";
 import type { PhotoFacets } from "./generated/PhotoFacets";
 import type { ReanalyzeResult } from "./generated/ReanalyzeResult";
 import type { PhotoPage } from "./generated/PhotoPage";
@@ -57,6 +58,11 @@ export type { ReanalyzeResult } from "./generated/ReanalyzeResult";
 export type { GearStats } from "./generated/GearStats";
 export type { KeeperCounts } from "./generated/KeeperCounts";
 export type { LibraryStats } from "./generated/LibraryStats";
+export type { LibraryInsights } from "./generated/LibraryInsights";
+export type { IssueInsight } from "./generated/IssueInsight";
+export type { TrendBucket } from "./generated/TrendBucket";
+export type { SettingHabit } from "./generated/SettingHabit";
+export type { InsightSetting } from "./generated/InsightSetting";
 export type { AnalysisStatus } from "./generated/AnalysisStatus";
 export type { ModelView } from "./generated/ModelView";
 export type { ExportArgs } from "./generated/ExportArgs";
@@ -279,6 +285,11 @@ export function photoFacets(filter?: PhotoQuery): Promise<PhotoFacets> {
 /** Keepers per camera and lens, and focal lengths per camera. */
 export function libraryStats(): Promise<LibraryStats> {
   return transport.call<LibraryStats>("library_stats");
+}
+
+/** What the stored critiques say together; recent ones count more. */
+export function libraryInsights(): Promise<LibraryInsights> {
+  return transport.call<LibraryInsights>("library_insights");
 }
 
 /** Changes photos' flags and/or ratings; returns the resulting decisions. */

@@ -692,6 +692,10 @@ impl Api {
                         .map_err(catalog_error)?,
                 )
             }
+            "library_insights" => {
+                no_args(command, &args)?;
+                respond(crate::insights::library_insights(&*self.catalog).map_err(catalog_error)?)
+            }
             "library_stats" => {
                 no_args(command, &args)?;
                 respond(crate::stats::summarize(

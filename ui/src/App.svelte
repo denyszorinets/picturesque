@@ -15,15 +15,17 @@
   import SettingsPanel from "./lib/settings/SettingsPanel.svelte";
   import SetupWizard from "./lib/setup/SetupWizard.svelte";
   import StatsView from "./lib/stats/StatsView.svelte";
+  import InsightsView from "./lib/insights/InsightsView.svelte";
   import HelpDialog from "./lib/help/HelpDialog.svelte";
   import Icon, { type IconName } from "./lib/components/Icon.svelte";
   import { tourWanted } from "./lib/tour/policy";
 
-  type Tab = "library" | "activity" | "statistics" | "settings";
+  type Tab = "library" | "activity" | "statistics" | "insights" | "settings";
   const TABS: { id: Tab; label: string; icon: IconName }[] = [
     { id: "library", label: "Library", icon: "photo" },
     { id: "activity", label: "Activity", icon: "arrow-path" },
     { id: "statistics", label: "Statistics", icon: "chart-bar" },
+    { id: "insights", label: "Insights", icon: "light-bulb" },
     { id: "settings", label: "Settings", icon: "cog-6-tooth" },
   ];
 
@@ -243,6 +245,13 @@
               settings && !settings.library_root
                 ? (setup = true)
                 : (tab = "activity")}
+          />
+        </div>
+        <div class="view page" hidden={tab !== "insights"}>
+          <InsightsView
+            load={api.libraryInsights}
+            visible={tab === "insights"}
+            onsettings={() => (tab = "settings")}
           />
         </div>
         <div class="view page settings" hidden={tab !== "settings"}>
