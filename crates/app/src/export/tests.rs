@@ -149,6 +149,7 @@ fn exported_sidecars_carry_the_current_decision_and_label() {
             id: ids[2],
             score: 0.9,
             aesthetic: None,
+            critique: None,
             eyes_closed: None,
             faces: 0,
             keeper: true,

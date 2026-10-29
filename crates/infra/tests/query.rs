@@ -126,6 +126,7 @@ fn score(id: i64, score: f32) -> PhotoScore {
         id: PhotoId(id),
         score,
         aesthetic: Some(score),
+        critique: None,
         eyes_closed: None,
         faces: 0,
         keeper: false,
@@ -1036,18 +1037,21 @@ fn ai_signals_filter_and_show_in_summaries() {
     c.replace_scores(&[
         PhotoScore {
             aesthetic: Some(0.8),
+            critique: None,
             eyes_closed: Some(false),
             faces: 2,
             ..score(1, 0.9)
         },
         PhotoScore {
             aesthetic: Some(0.3),
+            critique: None,
             eyes_closed: Some(true),
             faces: 1,
             ..score(2, 0.4)
         },
         PhotoScore {
             aesthetic: None,
+            critique: None,
             ..score(3, 0.5)
         },
     ])
@@ -1247,4 +1251,41 @@ fn auto_picked_works_with_stacked_series() {
     )
     .unwrap();
     assert_eq!(ids(&c, query), [2]);
+}
+
+#[test]
+fn the_critique_score_filters_and_photos_without_one_never_match() {
+    let c = sample();
+    c.replace_scores(&[
+        PhotoScore {
+            critique: Some(0.9),
+            ..score(1, 0.9)
+        },
+        PhotoScore {
+            critique: Some(0.4),
+            ..score(2, 0.4)
+        },
+        score(3, 0.5),
+    ])
+    .unwrap();
+    // (minimum, matching photos)
+    let cases = [
+        (0.0, vec![1, 2]),
+        (0.4, vec![1, 2]),
+        (0.5, vec![1]),
+        (0.9, vec![1]),
+        (1.0, vec![]),
+    ];
+    for (min, expected) in cases {
+        let got = ids(
+            &c,
+            PhotoQuery {
+                min_critique: Some(min),
+                ..Default::default()
+            },
+        );
+        let mut got_sorted = got.clone();
+        got_sorted.sort_unstable();
+        assert_eq!(got_sorted, expected, "min {min}");
+    }
 }

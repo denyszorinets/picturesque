@@ -16,6 +16,7 @@ const EMPTY: LibraryInsights = {
   trend: [],
   trend_slope: null,
   habits: [],
+  advice: [],
 };
 
 const FULL: LibraryInsights = {
@@ -56,6 +57,15 @@ const FULL: LibraryInsights = {
       share: 0.75,
       baseline: 0.4,
       lift: 1.875,
+    },
+  ],
+  advice: [
+    {
+      issue: "overexposed",
+      title: "You tend to overexpose",
+      text: "Dial in about -2/3 EV of exposure compensation.",
+      evidence: "Named in 31% of your recent critiques (12 photos)",
+      examples: [4, 5],
     },
   ],
 };
@@ -109,6 +119,24 @@ describe("InsightsView", () => {
       "rising by about 2.0 points a year",
     );
     expect(screen.queryByTestId("insights-few")).toBeNull();
+  });
+
+  it("leads with advice: what to do, the evidence and examples", async () => {
+    show(FULL);
+    const advice = await screen.findByTestId("insights-advice-overexposed");
+    expect(advice).toHaveTextContent("You tend to overexpose");
+    expect(advice).toHaveTextContent("-2/3 EV");
+    expect(advice).toHaveTextContent("31% of your recent critiques");
+    expect(advice.querySelectorAll("img")).toHaveLength(2);
+    // Before the list of recurring problems.
+    const sections = screen.getByTestId("insights").querySelectorAll("section");
+    expect(sections[0]).toHaveAttribute("data-testid", "insights-advice");
+  });
+
+  it("shows no advice section when there is none", async () => {
+    show({ ...FULL, advice: [] });
+    await screen.findByTestId("insights-issue-noise");
+    expect(screen.queryByTestId("insights-advice")).toBeNull();
   });
 
   it("says when there are few critiques or no problem categories", async () => {

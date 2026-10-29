@@ -56,6 +56,7 @@ fn keeper(id: PhotoId) -> PhotoScore {
         id,
         score: 0.8,
         aesthetic: None,
+        critique: None,
         eyes_closed: None,
         faces: 0,
         keeper: true,

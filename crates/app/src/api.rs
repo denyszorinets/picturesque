@@ -1345,6 +1345,7 @@ mod tests {
                 id: picturesque_core::photo::PhotoId(id),
                 score: 0.9,
                 aesthetic: None,
+                critique: None,
                 eyes_closed: None,
                 faces: 0,
                 keeper: true,

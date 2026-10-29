@@ -90,7 +90,8 @@ Commands
    ``min_sharpness``, ``min_exposure`` and ``min_noise`` (0–1) keep photos
    whose technical score is at least that (:doc:`quality-scores`); photos
    not analyzed yet never match. ``min_aesthetic`` (0–1) does the same for
-   the aesthetic score, ``hide_closed_eyes: true`` hides photos where
+   the aesthetic score, ``min_critique`` (0–1) for the critique score
+   (photos without a critique never match), ``hide_closed_eyes: true`` hides photos where
    someone important has closed eyes, and ``people`` keeps only photos with
    (``true``) or without (``false``) faces. ``auto_picked: true`` keeps
    auto-picked photos (:ref:`features-library-auto-pick`); with ``flags``,
@@ -191,11 +192,16 @@ Commands
         "issues": [{ "issue": "noise", "count": 60, "share": 0.33, "weighted_share": 0.29,
                      "examples": [412, 87, 1204] }],
         "trend": [{ "quarter": "2026-Q2", "critiques": 40, "mean_rating": 6.3 }],
+        "advice": [{ "issue": "noise", "title": "...", "text": "...",
+                     "evidence": "Named in 35% of your recent critiques (14 photos); 2.4x as often (ISO 801-3200)",
+                     "examples": [412, 87] }],
         "trend_slope": 0.4,
         "habits": [{ "issue": "noise", "setting": "iso", "label": "ISO above 3200",
                      "critiques": 25, "share": 0.6, "baseline": 0.29, "lift": 2.1 }] }
 
-   ``as_of`` is the newest capture date among critiqued photos (null
+   ``advice`` is the "What to work on" list (at most 5, most frequent
+   first; fields ``issue``, ``title``, ``text``, ``evidence``, ``examples``),
+   from fixed rules without a model. ``as_of`` is the newest capture date among critiqued photos (null
    without dates). ``issues`` come most often flagged first; ``examples``
    are photo ids, up to 6. ``trend`` is oldest quarter first;
    ``trend_slope`` is rating points per year and null below three

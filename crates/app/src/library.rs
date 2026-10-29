@@ -81,6 +81,10 @@ pub struct PhotoQuery {
     /// never match.
     #[ts(optional)]
     pub min_aesthetic: Option<f32>,
+    /// Minimum critique score, 0–1 (the critic's rating as a percentile of
+    /// the library's critiques); photos without a critique never match.
+    #[ts(optional)]
+    pub min_critique: Option<f32>,
     /// Hide photos where someone important has closed eyes.
     #[ts(optional)]
     pub hide_closed_eyes: Option<bool>,
@@ -123,6 +127,7 @@ impl PhotoQuery {
             ("min_exposure", self.min_exposure),
             ("min_noise", self.min_noise),
             ("min_aesthetic", self.min_aesthetic),
+            ("min_critique", self.min_critique),
         ] {
             if value.is_some_and(|v| !(0.0..=1.0).contains(&v)) {
                 return Err(format!("`{name}` must be between 0 and 1."));
@@ -492,6 +497,8 @@ mod tests {
         assert!(q(|q| q.photo_ids = Some(vec![1; 1000])).is_ok());
         assert!(q(|q| q.min_sharpness = Some(1.5)).is_err());
         assert!(q(|q| q.min_noise = Some(f32::NAN)).is_err());
+        assert!(q(|q| q.min_critique = Some(1.5)).is_err());
+        assert!(q(|q| q.min_critique = Some(0.5)).is_ok());
         assert!(q(|q| q.min_exposure = Some(0.0)).is_ok());
     }
 

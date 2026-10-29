@@ -23,7 +23,7 @@ pub const DEFAULT_RUBRIC: &str = "\
 
 /// Bumped when the prompt changes enough to make earlier critiques
 /// incomparable; it is part of the stored rubric key.
-pub(crate) const PROMPT_VERSION: u32 = 4;
+pub(crate) const PROMPT_VERSION: u32 = 5;
 
 /// The key stored with a critique to recognize the prompt, preset and
 /// rubric it was written with. The Professional preset hashes what it did
@@ -38,7 +38,9 @@ pub(crate) fn rubric_key(preset: CriticPreset, rubric: &str) -> String {
     }
 }
 
-/// The kind of flaw a weakness is.
+/// The kind of flaw a weakness is. Version 5 of the prompt asks for the
+/// specific kinds (`ISSUES`); `Exposure`, `Focus` and `Composition` are what
+/// earlier critiques said and stay readable.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, TS)]
 #[serde(rename_all = "snake_case")]
 #[ts(export)]
@@ -52,12 +54,24 @@ pub enum Issue {
     Light,
     Timing,
     Other,
+    Overexposed,
+    Underexposed,
+    MissedFocus,
+    MotionBlur,
+    SubjectPlacement,
+    SubjectCutOff,
+    BusyBackground,
 }
 
-const ISSUES: [&str; 9] = [
-    "exposure",
-    "focus",
-    "composition",
+/// The kinds the model may name. The older, coarser ones are only read.
+const ISSUES: [&str; 13] = [
+    "overexposed",
+    "underexposed",
+    "missed_focus",
+    "motion_blur",
+    "subject_placement",
+    "subject_cut_off",
+    "busy_background",
     "noise",
     "colour",
     "horizon",
@@ -211,10 +225,14 @@ impl Critique {
     }
 }
 
-/// What the model is told about this photo: how it was shot and whether
-/// the original is a RAW file. Empty parts are left out.
+/// What the model is told about this photo: the camera and lens, how it
+/// was shot and whether the original is a RAW file. Empty parts are left
+/// out.
 pub(super) fn user_prompt(photo: &Photo) -> String {
     let mut prompt = String::from("Critique this photo.");
+    if let Some(gear) = gear(&photo.metadata) {
+        prompt.push_str(&format!(" Gear: {gear}."));
+    }
     if let Some(shot) = shot_data(&photo.metadata) {
         prompt.push_str(&format!(" Shot data: {shot}."));
     }
@@ -228,6 +246,47 @@ pub(super) fn user_prompt(photo: &Photo) -> String {
         prompt.push_str(" The original is a JPEG; it has little room for recovery.");
     }
     prompt
+}
+
+/// Longest camera or lens name sent to the model.
+const MAX_GEAR_CHARS: usize = 64;
+
+/// EXIF text made safe to put in the prompt: control characters become
+/// spaces, whitespace collapses and the length is capped.
+fn tidy_gear(text: &str) -> String {
+    let cleaned: String = text
+        .chars()
+        .map(|c| if c.is_control() { ' ' } else { c })
+        .collect();
+    let words: Vec<&str> = cleaned.split_whitespace().collect();
+    words
+        .join(" ")
+        .chars()
+        .take(MAX_GEAR_CHARS)
+        .collect::<String>()
+        .trim_end()
+        .to_owned()
+}
+
+/// "Sony ILCE-7M4 with FE 35mm F1.8", with what is known.
+fn gear(m: &CaptureMetadata) -> Option<String> {
+    let camera = m.camera.as_ref().map(|c| {
+        let model = &tidy_gear(&c.model);
+        let brand = tidy_gear(&c.brand());
+        // Many models repeat the make ("Canon EOS R5").
+        if model.to_lowercase().starts_with(&brand.to_lowercase()) {
+            model.to_owned()
+        } else {
+            format!("{brand} {model}")
+        }
+    });
+    let lens = m.lens.as_deref().map(tidy_gear).filter(|l| !l.is_empty());
+    match (camera.filter(|c| !c.trim().is_empty()), lens) {
+        (Some(c), Some(l)) => Some(format!("{c} with {l}")),
+        (Some(c), None) => Some(c),
+        (None, Some(l)) => Some(format!("lens {l}")),
+        (None, None) => None,
+    }
 }
 
 /// "ISO 800, 1/60 s, f/2.8, 35 mm", with what is known.

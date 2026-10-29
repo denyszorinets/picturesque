@@ -297,6 +297,14 @@ fn aesthetic_scores(critiques_on: bool) -> (Vec<f32>, f32) {
     api.recompute_series().unwrap();
     let scores = world.catalog.scores.lock().unwrap();
     let general = crate::analysis::clip::aesthetic_score(5.0);
+    // The critique score is stored for filtering, only while critiques are on.
+    for (i, id) in ids.iter().enumerate() {
+        let want = critiques_on.then(|| (i as f32 + 0.5) / 26.0);
+        match (scores[id].critique, want) {
+            (Some(got), Some(want)) => assert!((got - want).abs() < 1e-4, "{i}: {got}"),
+            (got, want) => assert_eq!(got, want, "{i}"),
+        }
+    }
     (
         ids.iter().map(|id| scores[id].aesthetic.unwrap()).collect(),
         general,

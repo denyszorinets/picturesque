@@ -24,13 +24,15 @@ const FLAG_LABELS: Record<Flag, string> = {
 };
 
 /** A technical score that can be filtered on. */
-export type Score = "sharpness" | "exposure" | "noise" | "aesthetic";
+export type Score =
+  "sharpness" | "exposure" | "noise" | "aesthetic" | "critique";
 
 export const SCORE_LABELS: Record<Score, string> = {
   sharpness: "Sharpness",
   exposure: "Exposure",
   noise: "Low noise",
   aesthetic: "Aesthetic",
+  critique: "Critique score",
 };
 
 interface Saved {
@@ -56,6 +58,7 @@ const NO_SCORES: Record<Score, number> = {
   exposure: 0,
   noise: 0,
   aesthetic: 0,
+  critique: 0,
 };
 
 /** The library's filters. Kept for the session (sessionStorage). */
@@ -139,6 +142,7 @@ export class Filters {
     if (this.minScores.noise > 0) q.min_noise = this.minScores.noise;
     if (this.minScores.aesthetic > 0)
       q.min_aesthetic = this.minScores.aesthetic;
+    if (this.minScores.critique > 0) q.min_critique = this.minScores.critique;
     if (this.hideClosedEyes) q.hide_closed_eyes = true;
     if (this.people !== null) q.people = this.people;
     if (this.bestOnly) q.best_only = true;

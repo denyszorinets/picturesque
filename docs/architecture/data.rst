@@ -180,6 +180,10 @@ how many have run. Each migration runs in its own transaction.
      - ``0015_analysis_stale.sql``
      - ``analysis.stale`` (results to analyze again;
        :ref:`features-library-reanalyze`)
+   * - 18
+     - ``0018_photo_critique_score.sql``
+     - ``photo_score.critique`` (critique score, nullable; written with the
+       other scores, NULL without a critique or while critiques are off)
 
 Conventions:
 

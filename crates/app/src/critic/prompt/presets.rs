@@ -15,14 +15,24 @@ a subject that is unclear or unremarkable, a dull composition. List them in \"we
 
 /// The advice every preset gives, up to and including `fix_steps`.
 const ADVICE_FIX: &str = "\
-Also give advice. \"issues\": the category of each weakness you listed (exposure, focus, \
-composition, noise, colour, horizon, light, timing, other). \"potential\": the rating the photo \
+Also give advice. \"issues\": the category of each weakness you listed: overexposed, underexposed, \
+missed_focus (focus on the wrong place or soft), motion_blur (subject or camera movement), \
+subject_placement (subject awkwardly placed or unbalanced), subject_cut_off (subject or limbs \
+cut by the frame), busy_background, noise, colour, horizon, light, timing, other. \"potential\": the rating the photo \
 could reach after the best editing of a RAW file (exposure, white balance, crop, noise \
 reduction); be honest, editing cannot fix missed focus, motion blur, a bad moment or a \
 composition beyond a crop, and it is never below \"rating\". \"fixable\": \"not_needed\" when \
 there is nothing to fix, \"easy\" for a few quick adjustments, \"needs_skill\" for demanding \
 retouching, \"not_fixable\" when the flaws cannot be edited away; \"fix_steps\": up to 3 \
 concrete edits, empty when not needed or not fixable.";
+
+/// Ties the advice to the camera and lens named in the request.
+const GEAR_NOTE: &str = "\
+The request may name the camera and lens and the shot data. Connect the two: say which setting \
+likely caused a weakness and, in \"camera_tips\", name the setting to change and the value to \
+try, for this lens and focal length (its widest aperture if the lens name gives it, a shutter time \
+safe for the focal length, a lower or higher ISO than the shot used). Use only what the lens \
+name tells you; do not invent specifications.";
 
 const JPEG_NOTE: &str = "If the original is a JPEG, say little about recovery.";
 
@@ -116,6 +126,6 @@ pub(in crate::critic) fn system_prompt(preset: CriticPreset, rubric: &str) -> St
     };
     format!(
         "{intro}\n\nAssess the photograph against this rubric:\n{rubric}\n\n{FLAWS_FIRST}\n\n\
-{rating}\n\n{ADVICE_FIX} {tips} {JPEG_NOTE}\n\nReply with JSON only."
+{rating}\n\n{ADVICE_FIX} {tips} {GEAR_NOTE} {JPEG_NOTE}\n\nReply with JSON only."
     )
 }

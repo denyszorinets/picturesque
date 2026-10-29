@@ -306,6 +306,34 @@ The stored critiques are summarized for the whole library
 - **Deferred.** A coaching text summary from a text-only model is a
   possible follow-up and is not built.
 
+Amendment: gear-aware critic and insights advice
+------------------------------------------------
+
+:Date: 2026-10-29
+
+- **Prompt version 4 -> 5.** The request now names the camera body and
+  lens from the EXIF (for example "Gear: Sony ILCE-7M4 with FE 35mm
+  F1.8.") besides ISO, shutter, aperture and focal length. The system
+  prompt of all three presets (shared ``GEAR_NOTE``) tells the model to
+  connect the settings to the weaknesses and to name, in ``camera_tips``,
+  the setting to change and a value to try, using only what the lens name
+  tells it. Camera and lens are EXIF text and go only to the local model;
+  no GPS, no file names.
+- **Finer problem tags:** overexposed, underexposed, missed_focus,
+  motion_blur, subject_placement, subject_cut_off, busy_background, noise,
+  colour, horizon, light, timing, other. The coarse exposure, focus and
+  composition stay readable for stored critiques but are no longer asked
+  for. Every stored critique becomes outdated (still shown, still counted
+  in Insights) and is redone by the background critic or on refresh.
+- **Insights advice.** ``library_insights`` gains ``advice``, computed by
+  fixed rules in ``app::insights::advice`` (no model): at least 3
+  critiques and a weighted share of at least 10%, at most 5 pieces, a
+  fixed remedy per problem kind plus a settings sentence from the
+  strongest lift when the range makes it true.
+- **Not re-evaluated.** The version 5 prompt was not run on the Commons
+  set: its AUC and rating calibration are unmeasured. The figures above
+  are for earlier prompt versions.
+
 Consequences
 ------------
 
