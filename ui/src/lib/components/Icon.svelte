@@ -19,6 +19,7 @@
   import folderOpen from "heroicons/20/solid/folder-open.svg?raw";
   import funnel from "heroicons/20/solid/funnel.svg?raw";
   import informationCircle from "heroicons/20/solid/information-circle.svg?raw";
+  import lightBulb from "heroicons/20/solid/light-bulb.svg?raw";
   import magnifyingGlass from "heroicons/20/solid/magnifying-glass.svg?raw";
   import magnifyingGlassPlus from "heroicons/20/solid/magnifying-glass-plus.svg?raw";
   import photo from "heroicons/20/solid/photo.svg?raw";
@@ -38,6 +39,7 @@
     "arrow-uturn-left": arrowUturnLeft,
     "arrow-uturn-right": arrowUturnRight,
     "chart-bar": chartBar,
+    "light-bulb": lightBulb,
     check: check,
     "check-circle": checkCircle,
     "chevron-down": chevronDown,

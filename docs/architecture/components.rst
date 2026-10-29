@@ -31,7 +31,8 @@ Crates
 ``picturesque-core``
    The domain, with no I/O. Photo and metadata types, content-hash identity,
    path-template rendering and filename sanitization, series grouping, score
-   combination and best-in-series ranking. Depends only on small utility
+   combination and best-in-series ranking, and ``insights``, the weighted
+   aggregation of stored critiques. Depends only on small utility
    crates.
 
 ``picturesque-app``
@@ -43,6 +44,9 @@ Crates
    ``sessions::Host`` runs the library or one folder culled in place at a
    time, each as its own ``Api`` over its own catalog, and swaps them
    (:doc:`ADR-0013 </architecture/decisions/0013-folder-sessions>`).
+   ``insights`` maps stored critiques to ``core::insights`` for the
+   ``library_insights`` command (:doc:`ADR-0016
+   </architecture/decisions/0016-local-vision-language-critic>`).
 
 ``picturesque-infra``
    Implementations of the ports: SQLite catalog (``rusqlite``), image

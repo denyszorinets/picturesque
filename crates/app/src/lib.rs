@@ -16,6 +16,7 @@ pub mod export;
 pub mod finish;
 pub mod hooks;
 pub mod info;
+pub mod insights;
 pub mod library;
 pub mod models;
 pub mod pipeline;
