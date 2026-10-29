@@ -24,6 +24,12 @@ account, no uploads.
   photo view or side by side in Compare; every decision can be undone.
 - **Search and filters:** by flag, rating, camera, lens, place, date and
   scores, or by describing a photo ("dog on a beach").
+- **AI critic (optional):** a local vision-language model critiques a photo
+  (rating, strengths, weaknesses, how to fix it, camera tips), in the photo
+  view or in the background across the library, with Professional, Amateur
+  and Beginner presets. The critique feeds the aesthetic score.
+- **Insights:** recurring problems, rating trend by quarter and settings
+  habits across all your critiques.
 - **Statistics:** which cameras and lenses give you keepers, and the focal
   lengths you use.
 - **Interoperability:** decisions written to XMP sidecars for darktable,

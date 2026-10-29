@@ -41,6 +41,8 @@ The landing page
 
 - It follows the system's light or dark mode, and so do its screenshots
   (``*-light.webp`` and ``*-dark.webp``).
+- The AI critic section is text only (no screenshot yet); add one with
+  the other screenshots when it can be captured.
 - It loads nothing from other sites: no fonts, scripts or analytics, in
   line with an app that keeps photos private.
 - Claims about other products stay at the level of categories and say
