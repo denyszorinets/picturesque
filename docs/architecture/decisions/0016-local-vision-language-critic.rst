@@ -248,8 +248,10 @@ Decisions:
 - **Ratings are not comparable across presets.** The critique score uses
   percentiles within the library, which absorbs a uniform shift; mixed
   presets blur it a little.
-- **Not evaluated yet.** The presets have not been evaluated on a photo
-  sample; measuring them is a follow-up.
+- **Evaluation.** Measured on 25 featured and 25 ordinary photos (see
+  ``spikes/llama/results.md``): the ranking holds (AUC 0.88 for Amateur,
+  0.87 for Beginner, against 0.92 for Professional, within the noise of
+  about 0.06), and both presets are more forgiving on ordinary photos.
 
 Amendment: RAW potential in the score
 -------------------------------------

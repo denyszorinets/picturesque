@@ -105,8 +105,9 @@ means a blurry picture when the camera moves.";
 /// The Professional prompt was evaluated on 25 Wikimedia Commons featured
 /// pictures against 25 random camera photos (Qwen3-VL 4B): the flaws-first
 /// order and the grade anchors gave a ranking AUC of 0.90 and a median rating
-/// of 4 for ordinary photos (`spikes/llama/results.md`). The other presets
-/// have not been evaluated yet.
+/// of 4 for ordinary photos; Amateur (AUC 0.88) and Beginner (AUC 0.87)
+/// were measured the same way and rank as well within the noise, but rate
+/// ordinary photos higher (`spikes/llama/results.md`).
 pub(in crate::critic) fn system_prompt(preset: CriticPreset, rubric: &str) -> String {
     let (intro, rating, tips) = match preset {
         CriticPreset::Professional => (PROFESSIONAL_INTRO, PROFESSIONAL_RATING, PROFESSIONAL_TIPS),

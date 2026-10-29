@@ -137,3 +137,35 @@ the original is a JPEG). The grade anchors are unchanged.
 - `potential` was never below `rating`; `fixable` was `not_needed` 36,
   `not_fixable` 11, `easy` 3 times. Advice is generic ("use a tripod",
   "golden hour") for ordinary photos, specific for photos with clear flaws.
+
+## Critique presets (2026-10-29)
+
+The Amateur and Beginner presets on the same 25 + 25 Wikimedia Commons
+photos (768 px previews, Qwen3-VL 4B Q4_K_M through the built-in critic on
+the Radeon 780M, Vulkan RADV). Each run used the app's own
+`system_prompt(preset, default rubric)`; 0/50 JSON failures in both, and the
+driver had no retry logic. Professional is the prompt v4 row above, not
+rerun. The scripts were throwaway and are not kept.
+
+| preset | featured | ordinary | gap of means | AUC | s/photo (avg / max) |
+|---|---|---|---|---|---|
+| Professional | 7.80 / 8 | 4.56 / 4 | 3.24 | 0.918 | 16.4 / 28 |
+| Amateur | 7.52 / 8 | 5.08 / 4 | 2.44 | 0.880 | 18.0 / 44.7 |
+| Beginner | 7.08 / 7 | 4.88 / 5 | 2.20 | 0.865 | 15.6 / 29.0 |
+
+Photos per rating:
+
+- Amateur, featured: 4: 2, 5: 1, 7: 3, 8: 17, 9: 2
+- Amateur, ordinary: 3: 5, 4: 8, 5: 2, 6: 2, 7: 6, 8: 2
+- Beginner, featured: 4: 1, 5: 3, 6: 5, 7: 5, 8: 6, 9: 5
+- Beginner, ordinary: 3: 5, 4: 2, 5: 11, 6: 6, 8: 1
+
+- The ranking survives in both presets: AUC 0.88 and 0.87 are within the
+  noise (about +-0.06) of 0.92.
+- Both are more forgiving on ordinary photos than Professional. Beginner
+  is the most compressed (11 of 25 ordinary photos got a 5, 9 of 25
+  featured got 6 or lower), so it separates least.
+- Amateur's 44.7 s maximum is probably a first-call warm-up (not verified).
+- Changing the preset marks critiques outdated, and ratings only mean
+  something within one preset; do not compare scores across presets. The
+  library percentile (`core::critique`) is what makes them comparable.
