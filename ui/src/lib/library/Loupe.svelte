@@ -1,6 +1,8 @@
 <script lang="ts">
   import Icon from "../components/Icon.svelte";
   import Critique from "./Critique.svelte";
+  import SeriesRibbon from "./SeriesRibbon.svelte";
+  import { SeriesStrip, stripPrefs } from "./series-strip.svelte";
   import {
     ApiError,
     canReveal,
@@ -62,6 +64,26 @@
   let drag: { x: number; y: number; left: number; top: number } | null = null;
 
   const photo = $derived(store.photos[index]);
+
+  // The photo's series: the ribbon, and what to compare with.
+  const strip = new SeriesStrip();
+  $effect(() => {
+    // Decisions change what the ribbon shows (rejects, picks, the best).
+    void [photo?.id, photo?.flag, photo?.best_in_series, photo?.series_id];
+    void strip.load(photo);
+  });
+  const inSeries = $derived(!!photo && strip.position(photo.id) !== null);
+  const rival = $derived(
+    inSeries && stripPrefs.compareBest && photo ? strip.rival(photo.id) : null,
+  );
+  const inList = (id: number) => store.photos.some((p) => p.id === id);
+  function openFromRibbon(id: number) {
+    const at = store.photos.findIndex((p) => p.id === id);
+    if (at >= 0) onnavigate(at);
+  }
+  function toggleCompare() {
+    if (inSeries) stripPrefs.compareBest = !stripPrefs.compareBest;
+  }
   /** Whether critiques are on; checked once per loupe. */
   let critic = $state<CriticStatus | null>(null);
   $effect(() => {
@@ -198,6 +220,8 @@
       I: () => (showInfo = !showInfo),
       r: toggleView,
       R: toggleView,
+      v: toggleCompare,
+      V: toggleCompare,
     };
     const action = actions[e.key];
     if (action) {
@@ -223,7 +247,11 @@
   aria-label="Photo"
   data-testid="loupe"
 >
-  <div class="stage">
+  <div
+    class="stage"
+    class:has-ribbon={inSeries}
+    class:versus={!!rival && !zoomed}
+  >
     {#if photo}
       <!-- A new element per photo: a reused <img> keeps showing the previous
            photo until the next one has loaded. -->
@@ -273,6 +301,34 @@
       <p class="loading">Loading…</p>
     {/if}
 
+    {#if rival && !zoomed}
+      <figure class="rival" data-testid="loupe-rival">
+        {#key rival.photo.id}
+          <img
+            class="fitted"
+            src={photoUrl(rival.photo, "preview", view)}
+            alt={rival.photo.file_name}
+            draggable="false"
+            data-testid="loupe-rival-image"
+          />
+        {/key}
+        <figcaption data-testid="loupe-rival-label">
+          {rival.runnerUp ? "Runner-up" : "Best of the series"} · {rival.photo
+            .file_name}
+        </figcaption>
+      </figure>
+    {/if}
+
+    {#if inSeries && photo}
+      <SeriesRibbon
+        members={strip.members}
+        currentId={photo.id}
+        bestId={strip.bestId}
+        reachable={inList}
+        onselect={openFromRibbon}
+      />
+    {/if}
+
     <div class="toolbar">
       <button
         onclick={() => go(-1)}
@@ -291,6 +347,15 @@
       <button onclick={() => (showInfo = !showInfo)} aria-pressed={showInfo}
         ><Icon name="information-circle" /> Info</button
       >
+      {#if inSeries}
+        <button
+          onclick={(e) => act(e, toggleCompare)}
+          aria-pressed={stripPrefs.compareBest}
+          title="Show the best photo of the series beside this one (V)"
+          data-testid="loupe-compare-best"
+          ><Icon name="squares-2x2" /> Compare with best</button
+        >
+      {/if}
       {#if photo && isPair(photo)}
         <span
           class="pair"
@@ -545,6 +610,7 @@
   }
 
   .stage {
+    --ribbon-height: 0px;
     position: relative;
     flex: 1;
     min-width: 0;
@@ -553,12 +619,54 @@
     justify-content: center;
   }
 
+  .stage.has-ribbon {
+    --ribbon-height: 5.5rem;
+  }
+
   .fitted {
     max-width: calc(100% - 2rem);
-    max-height: calc(100% - 5rem);
+    max-height: calc(100% - 5rem - var(--ribbon-height));
     object-fit: contain;
     cursor: zoom-in;
     user-select: none;
+  }
+
+  /* Side by side: two equal columns between the toolbars and the ribbon. */
+  .stage.versus {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+    gap: 1rem;
+    place-items: center;
+    padding: 4.5rem 1rem calc(4.5rem + var(--ribbon-height));
+    box-sizing: border-box;
+  }
+
+  .versus .fitted {
+    max-width: 100%;
+    max-height: 100%;
+  }
+
+  .rival {
+    margin: 0;
+    height: 100%;
+    max-width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    min-width: 0;
+  }
+
+  .versus .rival .fitted {
+    max-height: calc(100% - 1.6rem);
+    cursor: default;
+  }
+
+  .rival figcaption {
+    color: #9a9a94;
+    font-size: 0.8rem;
   }
 
   .scroller {
@@ -594,13 +702,16 @@
 
   .toolbar {
     position: absolute;
-    bottom: 1rem;
+    bottom: calc(1rem + var(--ribbon-height));
     left: 50%;
     transform: translateX(-50%);
     display: flex;
     align-items: center;
     gap: 0.4rem;
     padding: 0.35rem 0.5rem;
+    width: max-content;
+    max-width: calc(100% - 2rem);
+    white-space: nowrap;
     background: rgb(30 30 28 / 0.85);
     border-radius: 10px;
     font-size: 0.85rem;
