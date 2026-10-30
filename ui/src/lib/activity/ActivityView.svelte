@@ -4,11 +4,14 @@
   import type {
     BackgroundCritiqueStatus,
     JobFilter,
+    DeleteAfterImport,
+    ImportSource,
     LogLevel,
     OriginalsChoice,
   } from "../api";
   import PathInput from "../components/PathInput.svelte";
   import CritiqueCard from "./CritiqueCard.svelte";
+  import ImmediateDeleteConfirm from "./ImmediateDeleteConfirm.svelte";
   import OriginalsOffers from "./OriginalsOffers.svelte";
   import { STEP_LABELS, steps, type Pipeline } from "./pipeline.svelte";
 
@@ -40,8 +43,41 @@
   let draftOriginals = $state<OriginalsChoice>("default");
 
   /** A folder's own choice about deleting originals, as a select value. */
-  function choiceOf(value: boolean | null): OriginalsChoice {
-    return value === null ? "default" : value ? "ask" : "never";
+  function choiceOf(value: DeleteAfterImport | null): OriginalsChoice {
+    return value ?? "default";
+  }
+
+  /** Deleting right after importing waits for the user to confirm. */
+  let confirming = $state<
+    { kind: "source"; id: number; path: string } | { kind: "new" } | null
+  >(null);
+
+  function chooseForSource(select: HTMLSelectElement, source: ImportSource) {
+    const choice = select.value as OriginalsChoice;
+    if (choice === "immediately") {
+      select.value = choiceOf(source.delete_originals);
+      confirming = { kind: "source", id: source.id, path: source.path };
+    } else {
+      void pipeline.setDeleteOriginals(source.id, choice);
+    }
+  }
+
+  function chooseForNew(select: HTMLSelectElement) {
+    const choice = select.value as OriginalsChoice;
+    if (choice === "immediately") {
+      select.value = draftOriginals;
+      confirming = { kind: "new" };
+    } else {
+      draftOriginals = choice;
+    }
+  }
+
+  function confirmed() {
+    const what = confirming;
+    confirming = null;
+    if (what?.kind === "source")
+      void pipeline.setDeleteOriginals(what.id, "immediately");
+    else if (what?.kind === "new") draftOriginals = "immediately";
   }
 
   /** How often the view reloads while visible. */
@@ -184,11 +220,7 @@
               <select
                 class="originals"
                 value={choiceOf(source.delete_originals)}
-                onchange={(e) =>
-                  pipeline.setDeleteOriginals(
-                    source.id,
-                    e.currentTarget.value as OriginalsChoice,
-                  )}
+                onchange={(e) => chooseForSource(e.currentTarget, source)}
                 aria-label={`Originals in ${source.path}`}
                 title="Whether to offer deleting the originals once imported"
                 data-testid="source-originals"
@@ -196,6 +228,9 @@
                 <option value="default">Originals: as in Settings</option>
                 <option value="never">Originals: keep</option>
                 <option value="ask">Originals: offer to delete</option>
+                <option value="immediately"
+                  >Originals: delete right after import</option
+                >
               </select>
             {/if}
             <button
@@ -231,13 +266,17 @@
         />
         <select
           class="originals"
-          bind:value={draftOriginals}
+          value={draftOriginals}
+          onchange={(e) => chooseForNew(e.currentTarget)}
           aria-label="Originals in the new folder"
           data-testid="add-source-originals"
         >
           <option value="default">Originals: as in Settings</option>
           <option value="never">Originals: keep</option>
           <option value="ask">Originals: offer to delete</option>
+          <option value="immediately"
+            >Originals: delete right after import</option
+          >
         </select>
         <button
           class="primary"
@@ -420,6 +459,14 @@
     {/if}
   </section>
 </div>
+
+{#if confirming}
+  <ImmediateDeleteConfirm
+    scope={confirming.kind === "source" ? confirming.path : null}
+    onconfirm={confirmed}
+    oncancel={() => (confirming = null)}
+  />
+{/if}
 
 <style>
   .activity {

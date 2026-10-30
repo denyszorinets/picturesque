@@ -32,6 +32,10 @@ impl SqliteCatalog {
             Connection::open(path).map_err(|e| storage(format!("open {}: {e}", path.display())))?;
         conn.pragma_update(None, "journal_mode", "WAL")
             .map_err(storage)?;
+        // A committed photo survives a power loss: originals may be deleted
+        // on the strength of it (ADR-0017).
+        conn.pragma_update(None, "synchronous", "FULL")
+            .map_err(storage)?;
         Self::init(conn)
     }
 

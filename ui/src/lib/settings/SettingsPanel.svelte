@@ -29,6 +29,7 @@
   import ModelList from "../ai/ModelList.svelte";
   import Reanalyze from "../analysis/Reanalyze.svelte";
   import PathInput from "../components/PathInput.svelte";
+  import ImmediateDeleteConfirm from "../activity/ImmediateDeleteConfirm.svelte";
   import type {
     ColorLabel,
     DeleteAfterCopy,
@@ -75,6 +76,8 @@
   let autoLabel = $state<ColorLabel | null>("yellow");
   let deleteAfterCopy = $state<DeleteAfterCopy>("verified");
   let deleteAfterImport = $state<DeleteAfterImport>("never");
+  /** Choosing deleting right after importing waits for a confirmation. */
+  let confirmingImmediate = $state(false);
   let pairView = $state<PairView>("image");
   let maxGap = $state(30);
   let maxDistance = $state(16);
@@ -499,20 +502,34 @@
     <label class="label" for="delete-after-import">After importing</label>
     <select
       id="delete-after-import"
-      bind:value={deleteAfterImport}
+      value={deleteAfterImport}
+      onchange={(e) => {
+        const choice = e.currentTarget.value as DeleteAfterImport;
+        if (choice === "immediately") {
+          // Permanent: not set before the user confirms.
+          e.currentTarget.value = deleteAfterImport;
+          confirmingImmediate = true;
+        } else deleteAfterImport = choice;
+      }}
       data-testid="delete-after-import"
     >
       <option value="never">Keep my originals</option>
       <option value="ask"
         >Offer to delete originals that are safely copied</option
       >
+      <option value="immediately"
+        >Delete each original right after it is safely copied</option
+      >
     </select>
     <p class="hint muted">
       With the offer, <strong>Activity</strong> shows
-      <strong>Delete originals…</strong> once a folder has been imported. Each original
-      is deleted only if it matches the verified copy in your library, and only after
-      you confirm. Deleting is permanent. Each import folder can override this in
-      Activity.
+      <strong>Delete originals…</strong> once a folder has been imported. Each
+      original is deleted only if it matches the verified copy in your library,
+      and only after you confirm. Deleting is permanent. Each import folder can
+      override this in Activity.
+      <strong>Delete each original right after…</strong> does the same checks for
+      every photo as it is imported, without asking, so a library larger than the
+      free disk space can be imported.
     </p>
   </div>
 
@@ -707,6 +724,16 @@
     {/if}
   </div>
 </section>
+
+{#if confirmingImmediate}
+  <ImmediateDeleteConfirm
+    onconfirm={() => {
+      deleteAfterImport = "immediately";
+      confirmingImmediate = false;
+    }}
+    oncancel={() => (confirmingImmediate = false)}
+  />
+{/if}
 
 <style>
   .title {

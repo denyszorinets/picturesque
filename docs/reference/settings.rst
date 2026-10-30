@@ -232,13 +232,17 @@ folder culled in place (:ref:`features-folders-clear`).
 -----------------------
 
 Whether Activity offers to delete the originals of an import folder once
-its photos are imported and verified (:ref:`features-import-delete-originals`).
+its photos are imported and verified, or deletes each original right after
+its verified import (:ref:`features-import-delete-originals`).
 Each import folder can override it (``ImportSource.delete_originals``).
 
-:Type: ``never`` or ``ask``
+:Type: ``never``, ``ask`` or ``immediately``
 :Default: ``never``
 :Behaviour: ``ask`` offers **Delete originals…** per folder; nothing is
    deleted without a confirmation, and deleting is permanent.
+   ``immediately`` deletes each original as soon as its photo is imported
+   (or found as a duplicate) and verified, while the import runs, with no
+   offer afterwards; switching it on asks for a confirmation in the UI.
 
 .. _reference-settings-folders:
 

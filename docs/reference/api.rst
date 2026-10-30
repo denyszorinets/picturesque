@@ -443,11 +443,12 @@ Commands
 ``list_import_sources``
    No arguments. Every ``ImportSource``: ``id``, ``path``, ``watch``,
    ``scanned_at``, ``scan_error`` and ``delete_originals`` (``null``
-   follows the setting, ``false`` never, ``true`` ask).
+   follows the setting, otherwise ``"never"``, ``"ask"`` or
+   ``"immediately"``).
 
 ``add_import_source``
    ``{ "path": "/absolute/folder", "watch": true }`` (``watch`` defaults
-   to ``true``; optional ``"delete_originals": "default"|"never"|"ask"``
+   to ``true``; optional ``"delete_originals": "default"|"never"|"ask"|"immediately"``
    sets the folder's choice). Stores the folder and scans it right away; returns the
    ``ImportSource``. Adding a stored folder again returns it unchanged.
    Fails if the path is relative, cannot be read, or is inside or contains
@@ -459,7 +460,7 @@ Commands
 
 ``set_import_source_delete_originals``
    ``{ "id": 1, "choice": "default" }``; ``choice`` is ``default``
-   (follow the ``delete_after_import`` setting), ``never`` or ``ask``.
+   (follow the ``delete_after_import`` setting), ``never``, ``ask`` or ``immediately``.
    Returns the ``ImportSource``.
 
 ``delete_originals_offers``

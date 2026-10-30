@@ -98,8 +98,18 @@ fn nothing_is_offered_unless_the_setting_or_the_folder_asks() {
     let cases = [
         (DeleteAfterImport::Never, None, false),
         (DeleteAfterImport::Ask, None, true),
-        (DeleteAfterImport::Never, Some(true), true),
-        (DeleteAfterImport::Ask, Some(false), false),
+        (DeleteAfterImport::Never, Some(DeleteAfterImport::Ask), true),
+        (
+            DeleteAfterImport::Ask,
+            Some(DeleteAfterImport::Never),
+            false,
+        ),
+        // Leftovers of a folder that deletes right away are offered too.
+        (
+            DeleteAfterImport::Never,
+            Some(DeleteAfterImport::Immediately),
+            true,
+        ),
     ];
     for (setting, choice, offered) in cases {
         let world = world_with(fs(), setting);
@@ -574,4 +584,315 @@ fn originals_deleted_by_hand_are_counted_apart() {
 
     let status = svc.status();
     assert_eq!((status.deleted, status.gone), (1, 1));
+}
+
+/// A pipeline that deletes through the service, as the app wires it.
+fn pipeline_deleting(world: &TestWorld) -> Arc<crate::pipeline::ImportPipeline> {
+    let pipeline = world.pipeline();
+    let svc = service(world);
+    pipeline.after_import(move |job| svc.after_import(job));
+    pipeline
+}
+
+fn import_deleting(world: &TestWorld, folder: &str) -> i64 {
+    let pipeline = pipeline_deleting(world);
+    let source = pipeline.add_source(Path::new(folder), true).unwrap();
+    pipeline.scan_now(&HashSet::from([Some(source.id)]));
+    pipeline.run_until_idle();
+    source.id
+}
+
+fn warnings(world: &TestWorld) -> Vec<String> {
+    world
+        .pipeline()
+        .log_entries(crate::ports::pipeline::LogLevel::Warn, 50, None)
+        .unwrap()
+        .into_iter()
+        .map(|e| e.message)
+        .collect()
+}
+
+#[test]
+fn a_folder_that_deletes_right_away_frees_each_original_once_it_is_imported() {
+    let world = world_with(fs(), DeleteAfterImport::Immediately);
+
+    let id = import_deleting(&world, "/card");
+
+    for gone in ["IMG_1.CR3", "IMG_1.JPG", "IMG_2.JPG"] {
+        assert!(!exists(&world, &format!("/card/DCIM/{gone}")), "{gone}");
+    }
+    for kept in [
+        "/lib/2026/2026-10-12/IMG_1.CR3",
+        "/lib/2026/2026-10-12/IMG_1.JPG",
+        "/lib/2026/2026-10-13/IMG_2.JPG",
+    ] {
+        assert!(exists(&world, kept), "{kept}");
+    }
+    assert_eq!(world.catalog.photo_count().unwrap(), 2);
+    // Recorded as done, so nothing is offered afterwards.
+    assert!(
+        service(&world)
+            .offers()
+            .unwrap()
+            .iter()
+            .all(|o| o.source_id != id)
+    );
+    assert!(warnings(&world).is_empty());
+}
+
+#[test]
+fn only_a_folder_set_to_immediately_deletes_during_the_import() {
+    // (setting, folder's own choice, originals survive)
+    let cases = [
+        (DeleteAfterImport::Never, None, true),
+        (DeleteAfterImport::Ask, None, true),
+        (DeleteAfterImport::Immediately, None, false),
+        (
+            DeleteAfterImport::Immediately,
+            Some(DeleteAfterImport::Never),
+            true,
+        ),
+        (
+            DeleteAfterImport::Immediately,
+            Some(DeleteAfterImport::Ask),
+            true,
+        ),
+        (
+            DeleteAfterImport::Never,
+            Some(DeleteAfterImport::Immediately),
+            false,
+        ),
+    ];
+    for (setting, choice, survive) in cases {
+        let world = world_with(fs(), setting);
+        let pipeline = pipeline_deleting(&world);
+        let source = pipeline.add_source(Path::new("/card"), true).unwrap();
+        world
+            .pipeline
+            .set_source_delete_originals(source.id, choice)
+            .unwrap();
+        pipeline.scan_now(&HashSet::from([Some(source.id)]));
+        pipeline.run_until_idle();
+
+        assert_eq!(
+            exists(&world, "/card/DCIM/IMG_1.CR3") && exists(&world, "/card/DCIM/IMG_2.JPG"),
+            survive,
+            "{setting:?} {choice:?}"
+        );
+        assert_eq!(world.catalog.photo_count().unwrap(), 2);
+    }
+}
+
+#[test]
+fn a_photo_that_failed_to_import_keeps_its_original() {
+    let mut metadata = FakeMetadata::default();
+    metadata.failing.push(PathBuf::from("/card/DCIM/IMG_2.JPG"));
+    let world = TestWorld::new(fs(), metadata);
+    world
+        .settings
+        .save_settings(&Settings {
+            library_root: Some("/lib".into()),
+            delete_after_import: DeleteAfterImport::Immediately,
+            ..Default::default()
+        })
+        .unwrap();
+
+    import_deleting(&world, "/card");
+
+    assert!(exists(&world, "/card/DCIM/IMG_2.JPG"));
+}
+
+#[test]
+fn a_duplicate_is_deleted_when_the_library_has_the_same_file() {
+    let world = world_with(fs(), DeleteAfterImport::Never);
+    import(&world, "/card");
+    let backup = pipeline_deleting(&world)
+        .add_source(Path::new("/backup"), true)
+        .unwrap();
+    world
+        .pipeline
+        .set_source_delete_originals(backup.id, Some(DeleteAfterImport::Immediately))
+        .unwrap();
+
+    let pipeline = pipeline_deleting(&world);
+    pipeline.scan_now(&HashSet::from([Some(backup.id)]));
+    pipeline.run_until_idle();
+
+    // The duplicate of IMG_2.JPG is gone; the card, set to never, is intact.
+    assert!(!exists(&world, "/backup/copy.JPG"));
+    assert!(exists(&world, "/card/DCIM/IMG_2.JPG"));
+    assert!(exists(&world, "/lib/2026/2026-10-13/IMG_2.JPG"));
+}
+
+#[test]
+fn an_original_changed_since_the_import_stays_and_is_reported_once() {
+    let world = world_with(fs(), DeleteAfterImport::Ask);
+    let id = import(&world, "/card");
+    world
+        .fs
+        .write(Path::new("/card/DCIM/IMG_2.JPG"), b"edited since");
+    world
+        .pipeline
+        .set_source_delete_originals(id, Some(DeleteAfterImport::Immediately))
+        .unwrap();
+    let svc = service(&world);
+    let jobs = world.pipeline.cleanup_candidates(id, None).unwrap();
+
+    let outcomes: Vec<AfterImport> = jobs.iter().map(|j| svc.after_import(j.id)).collect();
+
+    assert!(matches!(
+        outcomes[..],
+        [AfterImport::Deleted, AfterImport::Kept(_)]
+    ));
+    assert!(exists(&world, "/card/DCIM/IMG_2.JPG"));
+    assert!(!exists(&world, "/card/DCIM/IMG_1.CR3"));
+}
+
+#[test]
+fn a_locked_folder_is_reported_once_not_for_every_photo() {
+    let world = world_with(fs(), DeleteAfterImport::Immediately);
+    world.fs.lock_folder("/card");
+
+    import_deleting(&world, "/card");
+
+    assert!(exists(&world, "/card/DCIM/IMG_1.CR3") && exists(&world, "/card/DCIM/IMG_2.JPG"));
+    let kept: Vec<String> = warnings(&world)
+        .into_iter()
+        .filter(|m| m.contains("original kept"))
+        .collect();
+    assert_eq!(kept.len(), 1, "{kept:?}");
+    assert_eq!(world.catalog.photo_count().unwrap(), 2);
+    // Looked at once, not read twice per photo for nothing.
+    assert!(world.fs.synced().is_empty());
+}
+
+#[test]
+fn a_library_moved_inside_the_import_folder_never_deletes() {
+    let world = world_with(fs().dir("/card/out"), DeleteAfterImport::Immediately);
+    let pipeline = pipeline_deleting(&world);
+    let source = pipeline.add_source(Path::new("/card"), true).unwrap();
+    // Allowed when the folder was added, so only the settings change.
+    world
+        .settings
+        .save_settings(&Settings {
+            library_root: Some("/card/out".into()),
+            delete_after_import: DeleteAfterImport::Immediately,
+            ..Default::default()
+        })
+        .unwrap();
+
+    pipeline.scan_now(&HashSet::from([Some(source.id)]));
+    pipeline.run_until_idle();
+
+    assert!(exists(&world, "/card/DCIM/IMG_1.CR3") && exists(&world, "/card/DCIM/IMG_2.JPG"));
+    assert!(warnings(&world).iter().any(|m| m.contains("overlap")));
+}
+
+#[test]
+fn only_a_job_that_ended_as_imported_or_duplicate_is_deleted_right_away() {
+    use crate::ports::pipeline::PipelineStore;
+    // (stage the job is in, original deleted)
+    let cases = [
+        (JobStage::Imported, true),
+        (JobStage::Duplicate, true),
+        (JobStage::Queued, false),
+        (JobStage::Copying, false),
+        (JobStage::Failed, false),
+    ];
+    for (stage, deleted) in cases {
+        let world = world_with(fs(), DeleteAfterImport::Ask);
+        let id = import(&world, "/card");
+        world
+            .pipeline
+            .set_source_delete_originals(id, Some(DeleteAfterImport::Immediately))
+            .unwrap();
+        let job = world
+            .pipeline
+            .cleanup_candidates(id, None)
+            .unwrap()
+            .remove(1);
+        world
+            .pipeline
+            .set_job_stage(job.id, stage, job.photo_id, None)
+            .unwrap();
+
+        service(&world).after_import(job.id);
+
+        assert_eq!(
+            !exists(&world, "/card/DCIM/IMG_2.JPG"),
+            deleted,
+            "{stage:?}"
+        );
+    }
+}
+
+#[test]
+fn a_copy_is_made_durable_before_its_original_is_deleted() {
+    let world = world_with(fs(), DeleteAfterImport::Immediately);
+
+    import_deleting(&world, "/card");
+
+    let synced = world.fs.synced();
+    for copy in [
+        "/lib/2026/2026-10-12/IMG_1.CR3",
+        "/lib/2026/2026-10-12/IMG_1.JPG",
+        "/lib/2026/2026-10-13/IMG_2.JPG",
+    ] {
+        assert!(synced.contains(&PathBuf::from(copy)), "{copy}");
+    }
+    assert!(!exists(&world, "/card/DCIM/IMG_2.JPG"));
+}
+
+#[test]
+fn originals_stay_when_the_copy_cannot_be_made_durable() {
+    for right_away in [false, true] {
+        let world = world_with(
+            fs(),
+            if right_away {
+                DeleteAfterImport::Immediately
+            } else {
+                DeleteAfterImport::Ask
+            },
+        );
+        let id = if right_away {
+            world.fs.fail_sync();
+            import_deleting(&world, "/card")
+        } else {
+            let id = import(&world, "/card");
+            world.fs.fail_sync();
+            id
+        };
+        let svc = service(&world);
+        if !right_away {
+            let plan = svc.plan(id).unwrap();
+            let status = svc.run_now(id, plan.through_job_id).unwrap();
+            assert_eq!(status.kept.len(), 2);
+        }
+
+        assert!(
+            exists(&world, "/card/DCIM/IMG_1.CR3") && exists(&world, "/card/DCIM/IMG_2.JPG"),
+            "right away: {right_away}"
+        );
+    }
+}
+
+#[test]
+fn a_folder_culled_in_place_never_deletes_right_away() {
+    let world = world_with(fs(), DeleteAfterImport::Immediately);
+    let pipeline = pipeline_deleting(&world);
+    let source = pipeline.add_source(Path::new("/card"), true).unwrap();
+    world
+        .settings
+        .save_settings(&Settings {
+            library_root: Some("/lib".into()),
+            open_folder: Some("/card".into()),
+            delete_after_import: DeleteAfterImport::Immediately,
+            ..Default::default()
+        })
+        .unwrap();
+
+    pipeline.scan_now(&HashSet::from([Some(source.id)]));
+    pipeline.run_until_idle();
+
+    assert!(exists(&world, "/card/DCIM/IMG_1.CR3") && exists(&world, "/card/DCIM/IMG_2.JPG"));
 }

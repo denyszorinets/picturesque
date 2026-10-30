@@ -274,6 +274,17 @@ impl Api {
                 series.notify();
             });
         }
+        let originals = Arc::new(crate::originals::OriginalsService::new(
+            Arc::clone(&ctx.pipeline_store),
+            Arc::clone(&ctx.catalog),
+            Arc::clone(&ctx.fs),
+            Arc::clone(&ctx.settings_store),
+            Arc::clone(&events) as Arc<dyn EventSink>,
+        ));
+        {
+            let originals = Arc::clone(&originals);
+            pipeline.after_import(move |job_id| originals.after_import(job_id));
+        }
         let catalog = Arc::clone(&ctx.catalog);
         let sidecars = Arc::new(SidecarService::new(
             Arc::clone(&ctx.catalog),
@@ -317,13 +328,7 @@ impl Api {
             critic,
             background_critic,
             activity,
-            originals: Arc::new(crate::originals::OriginalsService::new(
-                Arc::clone(&ctx.pipeline_store),
-                Arc::clone(&catalog),
-                Arc::clone(&ctx.fs),
-                Arc::clone(&ctx.settings_store),
-                Arc::clone(&events) as Arc<dyn EventSink>,
-            )),
+            originals,
             clear: crate::clear::ClearService::new(
                 Arc::clone(&catalog),
                 Arc::clone(&ctx.fs),

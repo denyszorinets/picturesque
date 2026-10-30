@@ -4,4 +4,4 @@
  * Whether to offer deleting the original files of imported photos
  * (ADR-0017); each import folder can override it.
  */
-export type DeleteAfterImport = "never" | "ask";
+export type DeleteAfterImport = "never" | "ask" | "immediately";

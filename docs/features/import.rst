@@ -157,6 +157,24 @@ with the rest and the offer disappears when none is left. After a
 restart nothing is deleted without a new confirmation, and photos
 imported after the plan are never part of it.
 
+**Immediately.** With *Immediately* (setting or per folder), each original
+is deleted as soon as that photo has been imported or recognised as a
+duplicate, one photo at a time while the import is still running, so a
+library larger than the free disk space can be imported. There is no
+offer afterwards. The checks above apply unchanged; a photo that fails
+any of them is kept whole, and the reason goes to the import log as a
+warning, once per folder until a deletion works again (a locked card does
+not flood the log). Nothing is deleted for a folder culled in place, when
+the library and import folders overlap, for photos that failed or are
+not yet imported, or before the catalog row exists. Each photo is read
+again (original and library copy are hashed) before its original is
+deleted, so importing is slower than with *Never* or *Ask*. Switching it
+on asks for a confirmation: deletion is permanent, there is no trash and
+no undo, and afterwards the library disk holds the only copy. Cancelling
+leaves the choice unchanged. Folders set to *Immediately* still show
+**Delete originals…** for leftovers (photos kept earlier, or imported
+before the switch).
+
 It is refused when the library folder and the import folder overlap (one
 contains the other, for example after the library folder was changed);
 nothing is deleted. It is also refused for a folder culled in place (its

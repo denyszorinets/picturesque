@@ -8,6 +8,7 @@
 //! jobs and each deleted photo is recorded at once, so a cancelled or
 //! interrupted run continues with what is left.
 
+use std::collections::HashMap;
 use std::fmt;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -26,6 +27,9 @@ use crate::ports::pipeline::{ImportSource, Job, JobFile, JobStage, PipelineStore
 use crate::ports::settings::SettingsStore;
 use crate::settings::DeleteAfterImport;
 
+/// How long a folder that could not be deleted from is left alone.
+const LOCKED_RETRY: Duration = Duration::from_secs(60);
+
 /// How often progress is sent while originals are deleted.
 const PROGRESS_INTERVAL: Duration = Duration::from_millis(250);
 
@@ -39,16 +43,29 @@ pub enum OriginalsChoice {
     Default,
     Never,
     Ask,
+    Immediately,
 }
 
 impl OriginalsChoice {
-    pub fn to_option(self) -> Option<bool> {
+    pub fn to_option(self) -> Option<DeleteAfterImport> {
         match self {
             Self::Default => None,
-            Self::Never => Some(false),
-            Self::Ask => Some(true),
+            Self::Never => Some(DeleteAfterImport::Never),
+            Self::Ask => Some(DeleteAfterImport::Ask),
+            Self::Immediately => Some(DeleteAfterImport::Immediately),
         }
     }
+}
+
+/// What deleting an original right after its import came to
+/// (`OriginalsService::after_import`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AfterImport {
+    /// Not turned on for this folder, or nothing to do.
+    Skipped,
+    Deleted,
+    /// The original stays; why.
+    Kept(String),
 }
 
 /// An import folder whose originals can be deleted (`delete_originals_offers`).
@@ -216,6 +233,8 @@ pub struct OriginalsService {
     events: Arc<dyn EventSink>,
     status: Mutex<OriginalsStatus>,
     cancel: AtomicBool,
+    /// Folders that could not be deleted from, when and why.
+    locked: Mutex<HashMap<i64, (Instant, String)>>,
 }
 
 impl fmt::Debug for OriginalsService {
@@ -240,6 +259,7 @@ impl OriginalsService {
             events,
             status: Mutex::new(OriginalsStatus::idle()),
             cancel: AtomicBool::new(false),
+            locked: Mutex::new(HashMap::new()),
         }
     }
 
@@ -260,19 +280,100 @@ impl OriginalsService {
             .ok_or_else(|| OriginalsError::Invalid(format!("There is no import folder {id}.")))
     }
 
-    /// Whether this folder's originals are offered for deletion.
-    fn enabled(&self, source: &ImportSource) -> Result<bool, OriginalsError> {
+    /// How this folder's originals are dealt with after an import, or
+    /// `Never` where deleting must not happen at all.
+    fn mode(&self, source: &ImportSource) -> Result<DeleteAfterImport, OriginalsError> {
         let settings = self
             .settings
             .load_settings()
             .map_err(|e| OriginalsError::Failed(e.to_string()))?;
         if settings.open_folder.is_some() {
             // In a folder culled in place the source is the library.
-            return Ok(false);
+            return Ok(DeleteAfterImport::Never);
         }
         Ok(source
             .delete_originals
-            .unwrap_or(settings.delete_after_import == DeleteAfterImport::Ask))
+            .unwrap_or(settings.delete_after_import))
+    }
+
+    /// Whether this folder's originals are offered for deletion. A folder
+    /// that deletes right after each import still offers what that left.
+    fn enabled(&self, source: &ImportSource) -> Result<bool, OriginalsError> {
+        Ok(self.mode(source)? != DeleteAfterImport::Never)
+    }
+
+    /// An original must never be the library's own copy.
+    fn apart_from_library(&self, source: &ImportSource) -> Result<(), OriginalsError> {
+        let root = self
+            .settings
+            .load_settings()
+            .map_err(|e| OriginalsError::Failed(e.to_string()))?
+            .library_root
+            .ok_or_else(|| OriginalsError::Invalid("No library folder is set.".into()))?;
+        if root.starts_with(&source.path) || source.path.starts_with(&root) {
+            return Err(OriginalsError::Invalid(
+                "The library folder and this import folder overlap; nothing is deleted.".into(),
+            ));
+        }
+        Ok(())
+    }
+
+    /// Deletes the originals of one photo that was just imported (or found
+    /// to be a duplicate), when its folder deletes right after each import.
+    /// The checks are those of the offer: nothing else is read from the
+    /// pipeline, only the catalog's record of the job and the library.
+    pub fn after_import(&self, job_id: i64) -> AfterImport {
+        let Ok(Some(job)) = self.store.job(job_id) else {
+            return AfterImport::Skipped;
+        };
+        let (Some(source_id), Some(_)) = (job.source_id, job.photo_id) else {
+            return AfterImport::Skipped;
+        };
+        if !matches!(job.stage, JobStage::Imported | JobStage::Duplicate) {
+            return AfterImport::Skipped;
+        }
+        let Ok(source) = self.source(source_id) else {
+            return AfterImport::Skipped;
+        };
+        match self.mode(&source) {
+            Ok(DeleteAfterImport::Immediately) => {}
+            Ok(_) => return AfterImport::Skipped,
+            Err(e) => return AfterImport::Kept(e.to_string()),
+        }
+        if let Err(e) = self.apart_from_library(&source) {
+            return AfterImport::Kept(e.to_string());
+        }
+        // A locked card would otherwise be read twice per photo for nothing.
+        if let Some(reason) = self.recently_locked(&source) {
+            return AfterImport::Kept(reason);
+        }
+        match self.remove_originals(&source, &job) {
+            Ok(Outcome::Deleted { .. }) => AfterImport::Deleted,
+            Ok(Outcome::Gone) => AfterImport::Skipped,
+            Err(reason) => AfterImport::Kept(reason),
+        }
+    }
+
+    /// Why the folder cannot be deleted from, if it could not a moment ago;
+    /// it is looked at again after [`LOCKED_RETRY`].
+    fn recently_locked(&self, source: &ImportSource) -> Option<String> {
+        let mut locked = self.locked.lock().expect("locked lock");
+        if let Some((at, reason)) = locked.get(&source.id)
+            && at.elapsed() < LOCKED_RETRY
+        {
+            return Some(reason.clone());
+        }
+        match self.fs.probe_writable_dir(&source.path) {
+            Ok(()) => {
+                locked.remove(&source.id);
+                None
+            }
+            Err(why) => {
+                let reason = format!("cannot delete from {}: {why}", source.path.display());
+                locked.insert(source.id, (Instant::now(), reason.clone()));
+                Some(reason)
+            }
+        }
     }
 
     /// Folders with imported photos whose originals can be deleted. Reads
@@ -307,18 +408,7 @@ impl OriginalsService {
                 "Photos from this folder are still being imported.".into(),
             ));
         }
-        // An original must never be the library's own copy.
-        let root = self
-            .settings
-            .load_settings()
-            .map_err(|e| OriginalsError::Failed(e.to_string()))?
-            .library_root
-            .ok_or_else(|| OriginalsError::Invalid("No library folder is set.".into()))?;
-        if root.starts_with(&source.path) || source.path.starts_with(&root) {
-            return Err(OriginalsError::Invalid(
-                "The library folder and this import folder overlap; nothing is deleted.".into(),
-            ));
-        }
+        self.apart_from_library(source)?;
         self.fs.probe_writable_dir(&source.path).map_err(|why| {
             OriginalsError::Invalid(format!(
                 "Cannot delete from {}: {why}. A locked memory card cannot be cleared.",
@@ -583,7 +673,16 @@ impl OriginalsService {
                     )));
                 }
                 match self.fs.hash_file(&copy) {
-                    Ok((hash, size)) if hash == asset.hash && size == asset.size => {}
+                    Ok((hash, size)) if hash == asset.hash && size == asset.size => {
+                        // The re-read above may come from memory: the copy
+                        // must be on the disk before its original goes.
+                        if let Err(e) = self.fs.sync_durable(&copy, &root) {
+                            return Ok(Check::Keep(format!(
+                                "the library copy of {} could not be made safe: {e}",
+                                name(&file.path)
+                            )));
+                        }
+                    }
                     Ok(_) => {
                         return Ok(Check::Keep(format!(
                             "the library copy of {} changed",

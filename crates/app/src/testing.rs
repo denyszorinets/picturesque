@@ -46,6 +46,10 @@ struct State {
     /// The next copy fills the disk (someone else wrote a big file).
     fill_during_next_copy: bool,
     clock: u64,
+    /// Files made durable by `sync_durable`, in order.
+    synced: Vec<PathBuf>,
+    /// `sync_durable` fails.
+    sync_fails: bool,
 }
 
 /// In-memory file system with failure injection. Paths are absolute.
@@ -185,6 +189,16 @@ impl MemFs {
     /// The next copy fails because the disk filled up meanwhile.
     pub fn fill_during_next_copy(&self) {
         self.state.lock().unwrap().fill_during_next_copy = true;
+    }
+
+    /// Files `sync_durable` was called for.
+    pub fn synced(&self) -> Vec<PathBuf> {
+        self.state.lock().unwrap().synced.clone()
+    }
+
+    /// Making a file durable fails from now on.
+    pub fn fail_sync(&self) {
+        self.state.lock().unwrap().sync_fails = true;
     }
 
     pub fn change_after_copy(&self, path: &str) {
@@ -340,6 +354,15 @@ impl FileSystem for MemFs {
         {
             *space += bytes.len() as u64;
         }
+        Ok(())
+    }
+
+    fn sync_durable(&self, path: &Path, _up_to: &Path) -> Result<(), String> {
+        let mut s = self.state.lock().unwrap();
+        if s.sync_fails {
+            return Err("input/output error".into());
+        }
+        s.synced.push(path.to_path_buf());
         Ok(())
     }
 
@@ -1696,7 +1719,7 @@ impl crate::ports::pipeline::PipelineStore for MemoryPipelineStore {
     fn set_source_delete_originals(
         &self,
         id: i64,
-        choice: Option<bool>,
+        choice: Option<crate::settings::DeleteAfterImport>,
     ) -> Result<(), CatalogError> {
         let mut s = self.state.lock().unwrap();
         if let Some(source) = s.sources.iter_mut().find(|x| x.id == id) {

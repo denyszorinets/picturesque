@@ -5,7 +5,8 @@ This walks through bringing photos from existing folders into a clean,
 organized library. Picturesque **copies** every photo into the library
 (the output folder); your original folders are only read while importing: nothing in
 them is moved, renamed or edited. Deleting the originals afterwards is
-optional, off by default and always confirmed
+optional, off by default and always confirmed (also the
+*Immediately* mode, which deletes each original as soon as it is verified)
 (:ref:`features-import-delete-originals`).
 
 On first launch, a **setup wizard** leads through steps 1 to 3 and

@@ -17,12 +17,12 @@ test("offers to delete originals after an import, and deletes only after the con
     onboarding: { tour_done: true },
   });
   // The setting keeps originals; this folder asks for itself.
-  const source = await call<{ id: number; delete_originals: boolean | null }>(
+  const source = await call<{ id: number; delete_originals: string | null }>(
     request,
     "add_import_source",
     { path: card, watch: false, delete_originals: "ask" },
   );
-  expect(source.delete_originals).toBe(true);
+  expect(source.delete_originals).toBe("ask");
   await waitForFolder(request, card);
 
   try {
@@ -87,14 +87,12 @@ test("the folder's choice is set when adding it and can be changed", async ({
   await choice.selectOption("ask");
   await expect
     .poll(async () => {
-      const sources = await call<{ path: string; delete_originals: boolean }[]>(
-        request,
-        "list_import_sources",
-        null,
-      );
+      const sources = await call<
+        { path: string; delete_originals: string | null }[]
+      >(request, "list_import_sources", null);
       return sources.find((s) => s.path === card)?.delete_originals;
     })
-    .toBe(true);
+    .toBe("ask");
 
   const sources = await call<{ id: number; path: string }[]>(
     request,
@@ -104,4 +102,59 @@ test("the folder's choice is set when adding it and can be changed", async ({
   await call(request, "remove_import_source", {
     id: sources.find((s) => s.path === card)!.id,
   });
+});
+
+test("deleting right after import needs a confirmation and frees each original as it is copied", async ({
+  page,
+  request,
+}) => {
+  const card = folder({
+    "IMG_D.JPG": jpeg(9804),
+    "IMG_E.JPG": jpeg(9805),
+  });
+  await call(request, "update_settings", {
+    library_root: LIBRARY,
+    onboarding: { tour_done: true },
+  });
+  await page.goto("/");
+  await page
+    .getByRole("navigation")
+    .getByRole("button", { name: "Activity" })
+    .click();
+
+  // Cancelling leaves the choice as it was.
+  const choose = page.getByTestId("add-source-originals");
+  await choose.selectOption("immediately");
+  await expect(page.getByTestId("immediate-dialog")).toContainText(
+    "no trash and no undo",
+  );
+  await page.getByTestId("immediate-cancel").click();
+  await expect(choose).toHaveValue("default");
+  expect(existsSync(join(card, "IMG_D.JPG"))).toBe(true);
+
+  await choose.selectOption("immediately");
+  await page.getByTestId("immediate-confirm").click();
+  await expect(choose).toHaveValue("immediately");
+  await page.getByTestId("source-path").fill(card);
+  await page.getByTestId("add-source").click();
+
+  // Imported, verified and gone from the card without any further click.
+  await expect
+    .poll(
+      () =>
+        existsSync(join(card, "IMG_D.JPG")) ||
+        existsSync(join(card, "IMG_E.JPG")),
+    )
+    .toBe(false);
+  const found = await call<{ photos: unknown[] }>(request, "query_photos", {
+    limit: 1000,
+  });
+  expect(found.photos.length).toBeGreaterThanOrEqual(2);
+
+  const sources = await call<
+    { id: number; path: string; delete_originals: string | null }[]
+  >(request, "list_import_sources", null);
+  const mine = sources.find((s) => s.path === card)!;
+  expect(mine.delete_originals).toBe("immediately");
+  await call(request, "remove_import_source", { id: mine.id });
 });

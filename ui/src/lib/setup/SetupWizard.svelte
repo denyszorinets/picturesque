@@ -9,6 +9,7 @@
   } from "../api";
   import ModelList from "../ai/ModelList.svelte";
   import PathInput from "../components/PathInput.svelte";
+  import ImmediateDeleteConfirm from "../activity/ImmediateDeleteConfirm.svelte";
 
   interface Props {
     /** Called when the wizard is finished or closed. */
@@ -22,6 +23,8 @@
   /** Instead of a library: cull a folder where it is (ADR-0013). */
   let inPlace = $state(false);
   let folderDraft = $state("");
+  /** Choosing deleting right after importing waits for a confirmation. */
+  let confirmingImmediate = $state(false);
 
   async function openInPlace(path: string) {
     if (!path.trim()) return;
@@ -133,7 +136,8 @@
   }
 
   function onkeydown(e: KeyboardEvent) {
-    if (e.key === "Escape") {
+    // Escape closes the confirmation first, not the wizard behind it.
+    if (e.key === "Escape" && !confirmingImmediate) {
       e.stopPropagation();
       onclose();
     }
@@ -250,8 +254,13 @@
           <select
             id="setup-originals"
             value={saved?.delete_after_import ?? "never"}
-            onchange={(e) =>
-              void chooseOriginals(e.currentTarget.value as DeleteAfterImport)}
+            onchange={(e) => {
+              const choice = e.currentTarget.value as DeleteAfterImport;
+              if (choice === "immediately") {
+                e.currentTarget.value = saved?.delete_after_import ?? "never";
+                confirmingImmediate = true;
+              } else void chooseOriginals(choice);
+            }}
             disabled={busy || saved === null}
             data-testid="setup-delete-originals"
           >
@@ -259,12 +268,17 @@
             <option value="ask"
               >Offer to delete originals that are safely copied</option
             >
+            <option value="immediately"
+              >Delete each original right after it is safely copied</option
+            >
           </select>
           <p class="muted">
             With the offer, you are asked after a folder has been imported. Each
             original is deleted only if it matches the verified copy in your
             library, and only after you confirm. Deleting is permanent. You can
-            change this per folder in Activity and in Settings.
+            change this per folder in Activity and in Settings. To import more
+            photos than fit on your disk, choose to delete each original right
+            after it is copied: the space is freed as you go.
           </p>
         </div>
         {#if !hasLibrary}
@@ -332,6 +346,16 @@
     </footer>
   </div>
 </div>
+
+{#if confirmingImmediate}
+  <ImmediateDeleteConfirm
+    onconfirm={() => {
+      confirmingImmediate = false;
+      void chooseOriginals("immediately");
+    }}
+    oncancel={() => (confirmingImmediate = false)}
+  />
+{/if}
 
 <style>
   .backdrop {
