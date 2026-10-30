@@ -119,7 +119,7 @@ jobs:
       - name: Install system dependencies
         run: |
           dnf install -y git gcc gcc-c++ make rpm-build nodejs npm \
-            webkit2gtk4.1-devel gtk3-devel libsoup3-devel librsvg2-devel \
+            webkit2gtk4.1-devel gtk3-devel libsoup3-devel librsvg2-devel libayatana-appindicator-gtk3-devel \
             openssl-devel \
             vips-devel LibRaw-devel libheif-devel \
             cmake clang-devel patchelf glslc vulkan-headers vulkan-loader-devel spirv-headers-devel
