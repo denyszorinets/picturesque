@@ -502,14 +502,12 @@
     <label class="label" for="delete-after-import">After importing</label>
     <select
       id="delete-after-import"
-      value={deleteAfterImport}
+      value={confirmingImmediate ? "immediately" : deleteAfterImport}
       onchange={(e) => {
         const choice = e.currentTarget.value as DeleteAfterImport;
-        if (choice === "immediately") {
-          // Permanent: not set before the user confirms.
-          e.currentTarget.value = deleteAfterImport;
-          confirmingImmediate = true;
-        } else deleteAfterImport = choice;
+        // Permanent: confirmed before it can be saved.
+        if (choice === "immediately") confirmingImmediate = true;
+        else deleteAfterImport = choice;
       }}
       data-testid="delete-after-import"
     >

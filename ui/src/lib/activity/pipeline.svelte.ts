@@ -158,6 +158,17 @@ export class Pipeline {
     }
   }
 
+  /**
+   * Sources equal to the ones shown stay the same objects, so a refresh
+   * while a dropdown is open does not rebuild it (and close it).
+   */
+  private keepUnchanged(next: ImportSource[]): ImportSource[] {
+    return next.map((s) => {
+      const old = this.sources.find((o) => o.id === s.id);
+      return old && JSON.stringify(old) === JSON.stringify(s) ? old : s;
+    });
+  }
+
   /** Reloads sources, status, and the photos and log loaded so far. */
   async refresh(): Promise<void> {
     const generation = ++this.generation;
@@ -176,7 +187,7 @@ export class Pipeline {
       ]);
       if (generation !== this.generation) return;
       this.status = status;
-      this.sources = sources;
+      this.sources = this.keepUnchanged(sources);
       this.jobsComplete = jobs.length < Math.max(PAGE, this.jobs.length);
       this.jobs = jobs;
       this.logComplete = log.length < Math.max(PAGE, this.log.length);

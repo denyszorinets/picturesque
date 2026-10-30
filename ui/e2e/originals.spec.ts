@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import { folder, jpeg } from "./fixtures";
@@ -157,4 +157,54 @@ test("deleting right after import needs a confirmation and frees each original a
   const mine = sources.find((s) => s.path === card)!;
   expect(mine.delete_originals).toBe("immediately");
   await call(request, "remove_import_source", { id: mine.id });
+});
+
+test("the Settings choice deletes originals of a folder that follows it, also in a folder that keeps filling", async ({
+  page,
+  request,
+}) => {
+  const card = folder({ "IMG_F.JPG": jpeg(9806) });
+  await call(request, "update_settings", {
+    library_root: LIBRARY,
+    delete_after_import: "never",
+    onboarding: { tour_done: true },
+  });
+  await page.goto("/");
+  const nav = page.getByRole("navigation");
+  await nav.getByRole("button", { name: "Settings" }).click();
+  await page.getByTestId("delete-after-import").selectOption("immediately");
+  await page.getByTestId("immediate-confirm").click();
+  await page.getByTestId("save-settings").click();
+  await expect
+    .poll(
+      async () =>
+        (
+          await call<{ delete_after_import: string }>(
+            request,
+            "get_settings",
+            null,
+          )
+        ).delete_after_import,
+    )
+    .toBe("immediately");
+
+  await nav.getByRole("button", { name: "Activity" }).click();
+  await page.getByTestId("source-path").fill(card);
+  await page.getByTestId("add-source").click();
+  await expect.poll(() => existsSync(join(card, "IMG_F.JPG"))).toBe(false);
+
+  // A photo that appears later in the watched folder goes the same way.
+  const later = join(card, "IMG_G.JPG");
+  writeFileSync(later, jpeg(9807));
+  await expect.poll(() => existsSync(later), { timeout: 20_000 }).toBe(false);
+
+  const sources = await call<{ id: number; path: string }[]>(
+    request,
+    "list_import_sources",
+    null,
+  );
+  await call(request, "remove_import_source", {
+    id: sources.find((s) => s.path === card)!.id,
+  });
+  await call(request, "update_settings", { delete_after_import: "never" });
 });

@@ -47,29 +47,33 @@
     return value ?? "default";
   }
 
-  /** Deleting right after importing waits for the user to confirm. */
+  /**
+   * Deleting right after importing waits for the user to confirm. The
+   * select shows the pick meanwhile (a folder's id, or "new") and goes back
+   * to the saved value when it is cancelled.
+   */
   let confirming = $state<
     { kind: "source"; id: number; path: string } | { kind: "new" } | null
   >(null);
+  let previousNew: OriginalsChoice = "default";
 
-  function chooseForSource(select: HTMLSelectElement, source: ImportSource) {
-    const choice = select.value as OriginalsChoice;
-    if (choice === "immediately") {
-      select.value = choiceOf(source.delete_originals);
+  function chooseForSource(choice: OriginalsChoice, source: ImportSource) {
+    if (choice === "immediately")
       confirming = { kind: "source", id: source.id, path: source.path };
-    } else {
-      void pipeline.setDeleteOriginals(source.id, choice);
-    }
+    else void pipeline.setDeleteOriginals(source.id, choice);
   }
 
-  function chooseForNew(select: HTMLSelectElement) {
-    const choice = select.value as OriginalsChoice;
-    if (choice === "immediately") {
-      select.value = draftOriginals;
-      confirming = { kind: "new" };
-    } else {
-      draftOriginals = choice;
-    }
+  function chooseForNew(choice: OriginalsChoice) {
+    previousNew = draftOriginals;
+    draftOriginals = choice;
+    if (choice === "immediately") confirming = { kind: "new" };
+  }
+
+  /** What a folder's select shows: the pick waiting for confirmation. */
+  function shownFor(source: ImportSource): OriginalsChoice {
+    return confirming?.kind === "source" && confirming.id === source.id
+      ? "immediately"
+      : choiceOf(source.delete_originals);
   }
 
   function confirmed() {
@@ -77,7 +81,11 @@
     confirming = null;
     if (what?.kind === "source")
       void pipeline.setDeleteOriginals(what.id, "immediately");
-    else if (what?.kind === "new") draftOriginals = "immediately";
+  }
+
+  function cancelled() {
+    if (confirming?.kind === "new") draftOriginals = previousNew;
+    confirming = null;
   }
 
   /** How often the view reloads while visible. */
@@ -219,8 +227,12 @@
             {#if !inFolder}
               <select
                 class="originals"
-                value={choiceOf(source.delete_originals)}
-                onchange={(e) => chooseForSource(e.currentTarget, source)}
+                value={shownFor(source)}
+                onchange={(e) =>
+                  chooseForSource(
+                    e.currentTarget.value as OriginalsChoice,
+                    source,
+                  )}
                 aria-label={`Originals in ${source.path}`}
                 title="Whether to offer deleting the originals once imported"
                 data-testid="source-originals"
@@ -267,7 +279,8 @@
         <select
           class="originals"
           value={draftOriginals}
-          onchange={(e) => chooseForNew(e.currentTarget)}
+          onchange={(e) =>
+            chooseForNew(e.currentTarget.value as OriginalsChoice)}
           aria-label="Originals in the new folder"
           data-testid="add-source-originals"
         >
@@ -464,7 +477,7 @@
   <ImmediateDeleteConfirm
     scope={confirming.kind === "source" ? confirming.path : null}
     onconfirm={confirmed}
-    oncancel={() => (confirming = null)}
+    oncancel={cancelled}
   />
 {/if}
 
