@@ -205,7 +205,7 @@ describe("Pipeline", () => {
     backend.listImportSources.mockImplementation(async () => [card(null)]);
     const pipeline = new Pipeline(backend);
     await pipeline.refresh();
-    const first = pipeline.sources[0];
+    const first = pipeline.sources[0]!;
 
     // Rebuilding a row would close a dropdown the user has open.
     await pipeline.refresh();
@@ -216,7 +216,7 @@ describe("Pipeline", () => {
     ]);
     await pipeline.refresh();
     expect(pipeline.sources[0]).not.toBe(first);
-    expect(pipeline.sources[0].scanned_at).toBe("2026-10-14T10:00:00Z");
+    expect(pipeline.sources[0]?.scanned_at).toBe("2026-10-14T10:00:00Z");
   });
 
   it("filters and pages photos and the log", async () => {
