@@ -95,6 +95,26 @@ that was being copied starts over and the rest follow. A copy left at its
 destination by the interrupted attempt is recognized by its content and
 reused rather than copied again.
 
+Working in the tray
+~~~~~~~~~~~~~~~~~~~
+
+Picturesque puts an icon in the system tray. Its menu has a status line
+that names what the app is doing (for example *Importing 120 of 900*,
+*Analyzing 4 of 10*, *Exporting*, *Downloading a model*), **Show
+Picturesque** and **Quit**; the tooltip shows the same line and a left
+click brings the window back.
+
+When you close the window while such a job is running, the window is
+hidden instead and the job carries on. It stays in the tray after the job
+ends, so the finish is never lost; choose **Quit** when you are done. When
+nothing is running, closing the window quits the app as usual. A job that
+waits for a reason, such as a missing library folder, does not count.
+
+If the system shows no tray, closing the window always quits. GNOME needs
+the *AppIndicator and KStatusNotifierItem Support* extension to show tray
+icons; without it the icon is invisible, and a hidden window can only be
+brought back by ending the Picturesque process and starting it again.
+
 Safety
 ~~~~~~
 

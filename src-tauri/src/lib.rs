@@ -8,12 +8,16 @@ use std::sync::Arc;
 
 use picturesque_app::ports::events::{AppEvent, EventSink};
 use picturesque_app::sessions::Host;
+use picturesque_app::work::WorkTracker;
 use picturesque_infra::catalog::SqliteCatalog;
 use picturesque_infra::sessions::StandardSessions;
 use tauri::{AppHandle, Emitter, Manager, RunEvent};
 
 mod commands;
 mod images;
+mod tray;
+
+use tray::Tray;
 
 /// Name of the Tauri event carrying [`AppEvent`]s.
 pub const EVENT_NAME: &str = "app-event";
@@ -23,6 +27,9 @@ struct TauriEvents(AppHandle);
 impl EventSink for TauriEvents {
     fn emit(&self, event: &AppEvent) {
         let _ = self.0.emit(EVENT_NAME, event);
+        if let Some(tray) = self.0.try_state::<Arc<Tray>>() {
+            tray.observe(event);
+        }
     }
 }
 
@@ -44,7 +51,21 @@ pub fn run() {
                 responder.respond(images::image_response(&api, &path, etag.as_deref()));
             });
         })
+        .on_window_event(tray::on_window_event)
         .setup(|app| {
+            // Without a tray the window cannot be brought back, so closing it
+            // quits. A missing appindicator library panics when it loads.
+            let handle = app.handle().clone();
+            let tray = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                Tray::create(&handle, Arc::new(WorkTracker::default()))
+            }));
+            match tray {
+                Ok(Ok(tray)) => {
+                    app.manage(Arc::new(tray));
+                }
+                Ok(Err(e)) => eprintln!("no tray icon: {e}"),
+                Err(_) => eprintln!("no tray icon: appindicator library not found"),
+            }
             let data_dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&data_dir)?;
             let catalog = Arc::new(SqliteCatalog::open(&data_dir.join("catalog.sqlite"))?);

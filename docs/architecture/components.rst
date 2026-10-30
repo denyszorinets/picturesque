@@ -66,7 +66,10 @@ Crates
 ``picturesque-desktop``
    The Tauri 2 application. Builds the infrastructure, starts a ``Host``
    over it, and exposes app commands as Tauri commands and events. Serves
-   images through a custom protocol. Contains no business logic.
+   images through a custom protocol. Shows a tray icon and hides the window
+   instead of quitting while a job runs; *what* is running comes from
+   ``picturesque_app::work::WorkTracker``, which folds the progress events
+   into one line. Contains no business logic.
 
 ``picturesque-devserver``
    A development-only HTTP server exposing the same commands, events and
