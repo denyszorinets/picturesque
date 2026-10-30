@@ -253,13 +253,13 @@
           <label for="setup-originals">After importing</label>
           <select
             id="setup-originals"
-            value={saved?.delete_after_import ?? "never"}
+            value={confirmingImmediate
+              ? "immediately"
+              : (saved?.delete_after_import ?? "never")}
             onchange={(e) => {
               const choice = e.currentTarget.value as DeleteAfterImport;
-              if (choice === "immediately") {
-                e.currentTarget.value = saved?.delete_after_import ?? "never";
-                confirmingImmediate = true;
-              } else void chooseOriginals(choice);
+              if (choice === "immediately") confirmingImmediate = true;
+              else void chooseOriginals(choice);
             }}
             disabled={busy || saved === null}
             data-testid="setup-delete-originals"

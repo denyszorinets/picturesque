@@ -192,6 +192,33 @@ describe("Pipeline", () => {
     expect(pipeline.error).toBe("Cannot read `/x`: missing.");
   });
 
+  it("keeps the same source objects while a refresh brings nothing new", async () => {
+    const backend = api();
+    const card = (scanned_at: string | null) => ({
+      id: 1,
+      path: "/card",
+      watch: true,
+      scanned_at,
+      scan_error: null,
+      delete_originals: null,
+    });
+    backend.listImportSources.mockImplementation(async () => [card(null)]);
+    const pipeline = new Pipeline(backend);
+    await pipeline.refresh();
+    const first = pipeline.sources[0]!;
+
+    // Rebuilding a row would close a dropdown the user has open.
+    await pipeline.refresh();
+    expect(pipeline.sources[0]).toBe(first);
+
+    backend.listImportSources.mockImplementation(async () => [
+      card("2026-10-14T10:00:00Z"),
+    ]);
+    await pipeline.refresh();
+    expect(pipeline.sources[0]).not.toBe(first);
+    expect(pipeline.sources[0]?.scanned_at).toBe("2026-10-14T10:00:00Z");
+  });
+
   it("filters and pages photos and the log", async () => {
     const page = Array.from({ length: PAGE }, (_, i) => job({ id: 500 - i }));
     const backend = api();
