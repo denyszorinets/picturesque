@@ -6,6 +6,7 @@ use picturesque_app::ports::catalog::CatalogError;
 use picturesque_app::ports::pipeline::{
     ImportSource, Job, JobFile, JobStage, LogEntry, LogLevel, PipelineStore,
 };
+use picturesque_app::settings::DeleteAfterImport;
 use picturesque_core::photo::PhotoId;
 use rusqlite::{OptionalExtension, Row, params, params_from_iter};
 
@@ -25,7 +26,9 @@ fn source(row: &Row<'_>) -> rusqlite::Result<ImportSource> {
         watch: row.get(2)?,
         scanned_at: row.get(3)?,
         scan_error: row.get(4)?,
-        delete_originals: row.get(5)?,
+        delete_originals: row
+            .get::<_, Option<String>>(5)?
+            .and_then(|name| DeleteAfterImport::parse(&name)),
     })
 }
 
@@ -99,12 +102,12 @@ impl PipelineStore for SqliteCatalog {
     fn set_source_delete_originals(
         &self,
         id: i64,
-        choice: Option<bool>,
+        choice: Option<DeleteAfterImport>,
     ) -> Result<(), CatalogError> {
         self.conn()
             .execute(
                 "UPDATE import_source SET delete_originals = ?1 WHERE id = ?2",
-                params![choice, id],
+                params![choice.map(DeleteAfterImport::as_str), id],
             )
             .map_err(storage)?;
         Ok(())

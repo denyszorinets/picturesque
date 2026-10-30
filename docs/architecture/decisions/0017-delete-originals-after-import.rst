@@ -140,6 +140,67 @@ the photo; duplicates and incomplete RAW+JPEG pairs; failure in the middle
 of a photo; cancel and resume; photos imported after the plan; and the
 refused cases.
 
+Amendment: delete right after each verified copy
+------------------------------------------------
+
+Context
+~~~~~~~
+
+Deleting after the import cannot import a library bigger than the free
+disk space (for example 900 GB of photos on a 1 TB disk): the originals
+are only removed once everything is copied.
+
+Decision
+~~~~~~~~
+
+``delete_after_import`` and each folder's own choice gain a third value,
+``immediately`` (the folder choice is now ``default``, ``never``, ``ask``
+or ``immediately``).
+
+- Each original is deleted as soon as its photo is imported or recognised
+  as a duplicate (stage ``imported`` or ``duplicate``) and verified, one
+  photo at a time while the import is still running. No offer or dialog
+  follows. Nothing is deleted before the catalog row exists.
+- The per-photo checks are those above, in the same order: media first,
+  then sidecars; a photo stays whole if any check fails.
+- A file that fails stays, and the reason goes to the import log as a
+  warning, once per folder until a deletion works again.
+- Not applied for a folder culled in place, when the library and import
+  folders overlap, and for photos that failed or are not yet imported.
+- Durable before deleted: the re-read of the library copy may come from
+  memory, so before any original is deleted (in both routes) the copy is
+  flushed with its folders up to the library root
+  (``FileSystem::sync_durable``). If that fails the original stays. The
+  catalog commits with ``synchronous=FULL``, so a power loss or a pulled
+  disk seconds after a deletion cannot lose the photo.
+- A folder that cannot be deleted from (a locked card) is checked once
+  and left alone for a minute, instead of reading every photo twice for
+  nothing.
+- Switching it on (wizard, Settings, Activity, add-folder select) needs a
+  confirmation: permanent, no trash, no undo, the library disk is the
+  only copy. Cancelling leaves the choice unchanged. Folders set to
+  ``immediately`` still show **Delete originals…** for leftovers.
+- The pipeline has an ``after_import(job_id)`` hook, set in ``api.rs`` to
+  ``OriginalsService::after_import`` and called after ``process()`` for
+  each job. The pipeline names no deletion logic; layering is unchanged
+  (:doc:`ADR-0003 <0003-layered-cargo-workspace>`).
+- Migration ``0020_delete_originals_mode`` turns
+  ``import_source.delete_originals`` from INTEGER 0/1 into TEXT (NULL,
+  ``never``, ``ask``, ``immediately``; 0 became ``never``, 1 ``ask``).
+  ``import_job.source_removed_at`` is unchanged and is set when the
+  originals are deleted. The API accepts ``immediately``;
+  ``ImportSource.delete_originals`` is a string or null instead of a
+  boolean or null. No new commands or events.
+
+Consequences
+~~~~~~~~~~~~
+
+- Libraries larger than the free disk space can be imported.
+- Each photo is read again (original and library copy hashed) before its
+  original is deleted, so importing is slower.
+- The original may be the only other copy until the library copy is
+  verified; that is why the same checks run before every deletion.
+
 References
 ----------
 

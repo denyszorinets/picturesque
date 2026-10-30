@@ -71,6 +71,12 @@ pub trait FileSystem: Send + Sync {
     /// Removes a file; succeeds if it does not exist.
     fn remove_file(&self, path: &Path) -> Result<(), String>;
 
+    /// Makes a file and its place in the folders from `up_to` down to it
+    /// durable: after this returns, a power loss or a pulled disk cannot
+    /// lose the file or its directory entries. Called before an original
+    /// is deleted on the strength of this copy.
+    fn sync_durable(&self, path: &Path, up_to: &Path) -> Result<(), String>;
+
     /// Bytes free for this user on the disk holding `path`.
     fn available_space(&self, path: &Path) -> Result<u64, String>;
 }

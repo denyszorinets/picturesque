@@ -95,6 +95,27 @@ pub enum DeleteAfterImport {
     /// When a folder is imported, offer to delete the originals whose copy
     /// was verified; nothing is deleted without confirmation.
     Ask,
+    /// Delete each original as soon as its copy is imported and verified,
+    /// so a library larger than the free space can still be imported.
+    /// Permanent, and confirmed once when it is turned on.
+    Immediately,
+}
+
+impl DeleteAfterImport {
+    /// The name stored in the catalog for a folder's own choice.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Never => "never",
+            Self::Ask => "ask",
+            Self::Immediately => "immediately",
+        }
+    }
+
+    pub fn parse(name: &str) -> Option<Self> {
+        [Self::Never, Self::Ask, Self::Immediately]
+            .into_iter()
+            .find(|m| m.as_str() == name)
+    }
 }
 
 /// Colour labels written to XMP sidecars, so tools without a pick flag

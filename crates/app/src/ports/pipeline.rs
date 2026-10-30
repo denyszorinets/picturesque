@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use super::catalog::CatalogError;
+use crate::settings::DeleteAfterImport;
 
 /// A folder photos are imported from.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
@@ -26,7 +27,7 @@ pub struct ImportSource {
     pub scan_error: Option<String>,
     /// Whether to offer deleting the originals once imported; `None`
     /// follows the `delete_after_import` setting (ADR-0017).
-    pub delete_originals: Option<bool>,
+    pub delete_originals: Option<DeleteAfterImport>,
 }
 
 /// Where a photo is in the pipeline. `Queued`, `Reading` and `Copying`
@@ -155,7 +156,7 @@ pub trait PipelineStore: Send + Sync {
     fn set_source_delete_originals(
         &self,
         id: i64,
-        choice: Option<bool>,
+        choice: Option<DeleteAfterImport>,
     ) -> Result<(), CatalogError>;
     /// Removes a source and its waiting jobs; finished jobs stay as
     /// history.

@@ -426,7 +426,7 @@ fn originals_are_deleted_after_a_verified_import_and_offered_again_when_replaced
         "add_import_source",
         json!({ "path": card, "delete_originals": "ask" }),
     );
-    assert_eq!(source["delete_originals"], true);
+    assert_eq!(source["delete_originals"], "ask");
     assert_eq!(api.run_imports(), 2);
 
     let offers = call(&api, "delete_originals_offers", Value::Null);

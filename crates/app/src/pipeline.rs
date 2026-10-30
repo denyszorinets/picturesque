@@ -30,6 +30,7 @@ use picturesque_core::template::{PathTemplate, TemplateValues, unique_stem};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
+use crate::originals::AfterImport;
 use crate::ports::catalog::{CatalogError, PhotoCatalog};
 use crate::ports::events::{AppEvent, EventSink};
 use crate::ports::fs::FileSystem;
@@ -52,6 +53,8 @@ use read::{Readers, read_one};
 use schedule::Schedule;
 
 /// Log entries kept.
+type AfterImportHook = Arc<dyn Fn(i64) -> AfterImport + Send + Sync>;
+
 const LOG_KEEP: usize = 20_000;
 /// While paused (no usable library folder, a disk full), how often to
 /// look again.
@@ -328,6 +331,12 @@ pub struct ImportPipeline {
     media_sizes: Mutex<Option<HashSet<u64>>>,
     /// Called after a photo was catalogued (thumbnails, analysis, series).
     on_imported: Mutex<Option<Box<dyn Fn() + Send + Sync>>>,
+    /// Called with a job once it ended as imported or duplicate: deletes
+    /// the original where its folder does that (ADR-0017).
+    after_import: Mutex<Option<AfterImportHook>>,
+    /// Folders whose kept originals were reported in the log already, so
+    /// a locked card does not fill it with one line per photo.
+    reported_kept: Mutex<HashSet<i64>>,
     /// Set once started, for the watcher's callback.
     me: OnceLock<Weak<Self>>,
 }
@@ -395,6 +404,8 @@ impl ImportPipeline {
             last_progress: Mutex::new(None),
             media_sizes: Mutex::new(None),
             on_imported: Mutex::new(None),
+            after_import: Mutex::new(None),
+            reported_kept: Mutex::new(HashSet::new()),
             me: OnceLock::new(),
         }
     }
@@ -402,6 +413,11 @@ impl ImportPipeline {
     /// Sets what runs after each catalogued photo.
     pub fn on_imported(&self, f: impl Fn() + Send + Sync + 'static) {
         *self.on_imported.lock().expect("hook lock") = Some(Box::new(f));
+    }
+
+    /// Sets what deletes the original of a photo that was just imported.
+    pub fn after_import(&self, f: impl Fn(i64) -> AfterImport + Send + Sync + 'static) {
+        *self.after_import.lock().expect("hook lock") = Some(Arc::new(f));
     }
 
     fn log(&self, level: LogLevel, job_id: Option<i64>, photo_id: Option<PhotoId>, message: &str) {
@@ -984,7 +1000,48 @@ impl ImportPipeline {
             self.pause(reason, None);
             return false;
         }
+        self.delete_original(&job);
         true
+    }
+
+    /// Frees the space of an original whose copy was just verified, in
+    /// folders that delete right after each import.
+    fn delete_original(&self, job: &Job) {
+        // Cloned out: the hook reads files and must not hold the lock.
+        let hook = self.after_import.lock().expect("hook lock").clone();
+        let Some(hook) = hook else { return };
+        let outcome = hook(job.id);
+        let Some(source_id) = job.source_id else {
+            return;
+        };
+        let reason = match outcome {
+            AfterImport::Kept(reason) => reason,
+            AfterImport::Deleted => {
+                // Working again: a new problem is worth a new line.
+                self.reported_kept
+                    .lock()
+                    .expect("kept lock")
+                    .remove(&source_id);
+                return;
+            }
+            AfterImport::Skipped => return,
+        };
+        if self
+            .reported_kept
+            .lock()
+            .expect("kept lock")
+            .insert(source_id)
+        {
+            self.log(
+                LogLevel::Warn,
+                Some(job.id),
+                None,
+                &format!(
+                    "{}: original kept, {reason}. Later originals that cannot be deleted are not listed.",
+                    file_name(job_path(&job.files))
+                ),
+            );
+        }
     }
 
     /// Stops taking photos until the cause is gone; logs a new cause once.

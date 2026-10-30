@@ -71,6 +71,10 @@ const MIGRATIONS: &[(&str, &str)] = &[
         "0019_delete_originals",
         include_str!("migrations/0019_delete_originals.sql"),
     ),
+    (
+        "0020_delete_originals_mode",
+        include_str!("migrations/0020_delete_originals_mode.sql"),
+    ),
 ];
 
 /// Schema version after all migrations have run.
@@ -100,4 +104,48 @@ pub fn migrate(conn: &mut Connection) -> Result<(), String> {
             .map_err(|e| format!("commit migration {name}: {e}"))?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The 0/1 flag of 0019 becomes 'never' / 'ask'; no choice stays none.
+    #[test]
+    fn the_folder_flag_becomes_a_named_choice() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        for (index, (_, sql)) in MIGRATIONS.iter().enumerate().take(19) {
+            conn.execute_batch(sql).unwrap();
+            conn.pragma_update(None, "user_version", index as i64 + 1)
+                .unwrap();
+        }
+        for (path, flag) in [("/a", Some(0)), ("/b", Some(1)), ("/c", None)] {
+            conn.execute(
+                "INSERT INTO import_source (path, delete_originals) VALUES (?1, ?2)",
+                rusqlite::params![path, flag],
+            )
+            .unwrap();
+        }
+
+        migrate(&mut conn).unwrap();
+
+        let choices: Vec<Option<String>> = conn
+            .prepare("SELECT delete_originals FROM import_source ORDER BY path")
+            .unwrap()
+            .query_map([], |row| row.get(0))
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap();
+        assert_eq!(
+            choices,
+            [Some("never".to_string()), Some("ask".to_string()), None]
+        );
+        assert!(
+            conn.execute(
+                "UPDATE import_source SET delete_originals = 'sometimes'",
+                []
+            )
+            .is_err()
+        );
+    }
 }

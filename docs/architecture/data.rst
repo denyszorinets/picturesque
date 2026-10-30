@@ -191,6 +191,11 @@ how many have run. Each migration runs in its own transaction.
      - ``import_source.delete_originals`` (NULL follows the setting, 0
        never, 1 ask) and ``import_job.source_removed_at`` (originals
        deleted; :doc:`ADR-0017 </architecture/decisions/0017-delete-originals-after-import>`)
+   * - 20
+     - ``0020_delete_originals_mode.sql``
+     - ``import_source.delete_originals`` becomes TEXT (NULL follows the
+       setting, ``never``, ``ask``, ``immediately``; old 0 became
+       ``never``, 1 ``ask``)
 
 Conventions:
 

@@ -46,7 +46,10 @@ Crates
    (:doc:`ADR-0013 </architecture/decisions/0013-folder-sessions>`).
    ``originals`` plans and runs the optional deletion of imported
    originals, re-verifying both sides before each photo (its plan also records photos
-   whose originals are already gone as done)
+   whose originals are already gone as done). Its ``after_import`` runs as the
+   pipeline's per-job hook (set in ``api.rs``) and deletes a verified
+   photo's originals at once in ``immediately`` mode; the pipeline names no
+   deletion logic
    (:doc:`ADR-0017 </architecture/decisions/0017-delete-originals-after-import>`).
    ``insights`` maps stored critiques to ``core::insights`` for the
    ``library_insights`` command, including its rule-based ``advice`` (:doc:`ADR-0016

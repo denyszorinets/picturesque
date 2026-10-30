@@ -3,4 +3,4 @@
 /**
  * A folder's own choice about deleting originals.
  */
-export type OriginalsChoice = "default" | "never" | "ask";
+export type OriginalsChoice = "default" | "never" | "ask" | "immediately";

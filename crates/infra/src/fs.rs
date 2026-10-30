@@ -127,6 +127,28 @@ impl FileSystem for StdFileSystem {
         }
     }
 
+    fn sync_durable(&self, path: &Path, up_to: &Path) -> Result<(), String> {
+        // Windows needs write access to flush a file; it has no way to
+        // flush a directory, where the rename is journaled by NTFS.
+        std::fs::OpenOptions::new()
+            .write(true)
+            .open(path)
+            .and_then(|f| f.sync_all())
+            .map_err(|e| io_reason(&e))?;
+        #[cfg(unix)]
+        for dir in path.ancestors().skip(1) {
+            File::open(dir)
+                .and_then(|d| d.sync_all())
+                .map_err(|e| io_reason(&e))?;
+            if dir == up_to {
+                break;
+            }
+        }
+        #[cfg(not(unix))]
+        let _ = up_to;
+        Ok(())
+    }
+
     fn remove_file(&self, path: &Path) -> Result<(), String> {
         match std::fs::remove_file(path) {
             Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(io_reason(&e)),

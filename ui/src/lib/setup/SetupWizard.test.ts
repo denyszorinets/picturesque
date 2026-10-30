@@ -151,6 +151,32 @@ describe("SetupWizard", () => {
     expect(onclose).toHaveBeenCalledOnce();
   });
 
+  it("turns on deleting right after importing only after a confirmation", async () => {
+    render(SetupWizard, { onclose: vi.fn() });
+    await screen.findByTestId("setup-library-root");
+    await fireEvent.click(screen.getByTestId("setup-skip"));
+    const originals = await screen.findByTestId("setup-delete-originals");
+    updateSettings.mockClear();
+
+    // Cancelled: nothing is saved and the choice stays as it was.
+    await fireEvent.change(originals, { target: { value: "immediately" } });
+    expect(screen.getByTestId("immediate-dialog")).toHaveTextContent(
+      "permanent",
+    );
+    expect(updateSettings).not.toHaveBeenCalled();
+    await fireEvent.click(screen.getByTestId("immediate-cancel"));
+    expect(screen.queryByTestId("immediate-dialog")).toBeNull();
+    expect(originals).toHaveValue("never");
+    expect(updateSettings).not.toHaveBeenCalled();
+
+    // Confirmed: saved.
+    await fireEvent.change(originals, { target: { value: "immediately" } });
+    await fireEvent.click(screen.getByTestId("immediate-confirm"));
+    expect(updateSettings).toHaveBeenCalledWith({
+      delete_after_import: "immediately",
+    });
+  });
+
   it("keeps a step open and shows why when saving fails", async () => {
     updateSettings.mockRejectedValue(new Error("folder is not writable"));
     render(SetupWizard, { onclose: vi.fn() });
