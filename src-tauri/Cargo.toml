@@ -16,7 +16,7 @@ tauri-build = { version = "2.7.0", features = [] }
 picturesque-app.workspace = true
 picturesque-infra.workspace = true
 serde_json.workspace = true
-tauri = { version = "2.12.0", features = [] }
+tauri = { version = "2.12.0", features = ["tray-icon"] }
 tauri-plugin-dialog = "2.8.0"
 tauri-plugin-opener = "2.6.0"
 

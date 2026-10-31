@@ -21,6 +21,14 @@ The AppImage closes right away
      the system's WebKitGTK and graphics libraries
      (:doc:`/getting-started/install`).
 
+Closed the window and cannot find the app
+   While a job runs, closing the window hides it to the tray. Click the
+   tray icon, or choose **Show Picturesque**; **Quit** ends the app
+   (:doc:`/features/import`). On GNOME the tray icon needs the *AppIndicator
+   and KStatusNotifierItem Support* extension; without it, end the
+   Picturesque process and start it again. Jobs resume from where they
+   stopped.
+
 Importing
 ---------
 

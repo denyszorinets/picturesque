@@ -33,6 +33,7 @@ pub mod stats;
 pub mod taste;
 pub mod templates;
 pub mod thumbnails;
+pub mod work;
 
 #[cfg(test)]
 mod testing;
