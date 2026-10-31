@@ -11,7 +11,7 @@ fn the_prompts_and_keys_are_pinned_so_a_change_is_deliberate() {
     let prompt = system_prompt(CriticPreset::Professional, DEFAULT_RUBRIC);
     assert_eq!(
         (fingerprint(&prompt), prompt.len()),
-        ("ce6629f22d0e608f".into(), 5175)
+        ("904873b308ecdaa1".into(), 6132)
     );
     assert_eq!(
         rubric_key(CriticPreset::Professional, DEFAULT_RUBRIC),
@@ -80,6 +80,8 @@ fn every_preset_states_the_photography_facts_the_tips_rest_on() {
             "SMALLER f-number (f/1.8) opens the lens wider",
             "LARGER f-number (f/8, f/11) lets in less light and gives MORE depth of field",
             "Never suggest a value the shot already used",
+            "A blurred background is not always better",
+            "never advise a wider aperture just to blur",
         ] {
             assert!(prompt.contains(fact), "{preset:?}: {fact}");
         }

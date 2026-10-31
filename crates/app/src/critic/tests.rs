@@ -371,6 +371,7 @@ fn schema_lists_the_flaws_first_and_the_rating_last() {
             "rating",
             "potential",
             "fixable",
+            "scene",
             "fix_steps",
             "improvements",
             "camera_tips"

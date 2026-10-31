@@ -7,7 +7,7 @@
 
 use picturesque_core::metadata::Exposure;
 
-use super::Critique;
+use super::{Critique, Scene};
 
 /// Words that make a mention of a value a suggestion to use it.
 const CHANGE_WORDS: [&str; 9] = [
@@ -40,9 +40,11 @@ const DEEPER: [&str; 5] = [
 ];
 
 impl Critique {
-    /// Removes the camera tips and improvements that contradict the shot.
+    /// Removes the camera tips and improvements that contradict the shot or
+    /// its kind of photo.
     pub(in crate::critic) fn check_against(&mut self, shot: &Exposure) {
-        let keep = |tip: &String| tip_fits(tip, shot);
+        let context = self.scene.is_some_and(Scene::wants_context);
+        let keep = |tip: &String| tip_fits(tip, shot) && !(context && blurs_background(tip, shot));
         self.camera_tips.retain(keep);
         self.improvements.retain(keep);
     }
@@ -75,6 +77,30 @@ fn tip_fits(tip: &str, shot: &Exposure) -> bool {
     let narrower = ["narrower aperture", "smaller aperture", "stop down"];
     let says = |words: &[&str]| words.iter().any(|w| text.contains(w));
     !((says(&wider) && says(&DEEPER)) || (says(&narrower) && says(&SHALLOWER)))
+}
+
+/// Whether a tip asks for a blurred background or a wider aperture, which a
+/// landscape, a building or a street scene rarely wants.
+fn blurs_background(tip: &str, shot: &Exposure) -> bool {
+    let text = tip.to_lowercase();
+    let words = [
+        "shallow",
+        "background blur",
+        "blur the background",
+        "blurred background",
+        "bokeh",
+        "isolate",
+        "wider aperture",
+        "open up",
+    ];
+    if words.iter().any(|w| text.contains(w)) {
+        return true;
+    }
+    // "f/2.8" when the shot was at f/5.6.
+    match (shot.f_number, numbers_after(&text, "f/").as_slice()) {
+        (Some(shot_f), [new_f]) => *new_f < shot_f - 0.05,
+        _ => false,
+    }
 }
 
 /// Whether the text names values and all of them are the shot's.

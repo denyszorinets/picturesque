@@ -323,7 +323,12 @@ Prompt version 6 teaches the model the basics its advice rests on (how
 the aperture, shutter speed and ISO change a photo, depth of field, the
 handheld shutter rule, composition) because the small model sometimes
 mixed them up, for example advising a *larger* f-number "for a shallower
-depth of field". As a second guard, the app drops a camera tip or
+depth of field". It also says that a blurred background is not always
+better: it suits portraits, pets, wildlife, macro and products, while a
+landscape, a building or a street scene needs its surroundings sharp. The
+model names the kind of photo (``scene``) before it advises; for a
+landscape, architecture or street photo the app drops any tip that asks
+for a blurred background or a wider aperture. As a second guard, the app drops a camera tip or
 improvement that suggests the setting the photo was already shot with
 (for example "use f/4 at 12 mm" for an f/4, 12 mm shot) or whose wording
 contradicts itself (a wider aperture for more depth of field). Dropped

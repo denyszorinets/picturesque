@@ -90,3 +90,42 @@ fn without_shot_data_only_the_wording_is_checked() {
         &none
     ));
 }
+
+#[test]
+fn a_blurred_background_is_not_advised_for_scenes_that_need_their_surroundings() {
+    let critique = |scene: &str| -> super::Critique {
+        serde_json::from_value(serde_json::json!({
+            "summary": "A lake under a clear sky.", "rating": 6, "scene": scene,
+            "camera_tips": [
+                "Use f/2.8 for a shallower depth of field.",
+                "Use a wider aperture to blur the background.",
+                "Use f/11 so the whole lake is sharp.",
+                "Raise the shutter speed to 1/500 s."
+            ],
+            "improvements": ["Isolate the peak with bokeh.", "Put the horizon on a third."]
+        }))
+        .unwrap()
+    };
+    let at_f56 = shot(5.6, 24.0, 100);
+    // (scene, camera tips kept, improvements kept)
+    let cases = [
+        ("landscape", 2, 1),
+        ("architecture", 2, 1),
+        ("street", 2, 1),
+        // Where blur suits the subject, the tips stay.
+        ("portrait", 4, 2),
+        ("macro", 4, 2),
+        ("other", 4, 2),
+    ];
+    for (scene, tips, improvements) in cases {
+        let mut c = critique(scene);
+        c.check_against(&at_f56);
+        assert_eq!(c.camera_tips.len(), tips, "{scene}");
+        assert_eq!(c.improvements.len(), improvements, "{scene}");
+    }
+    // An unknown scene is not a failed reply and changes nothing.
+    let mut c = critique("seascape");
+    assert_eq!(c.scene, None);
+    c.check_against(&at_f56);
+    assert_eq!(c.camera_tips.len(), 4);
+}

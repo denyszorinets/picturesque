@@ -24,7 +24,10 @@ reduction); be honest, editing cannot fix missed focus, motion blur, a bad momen
 composition beyond a crop, and it is never below \"rating\". \"fixable\": \"not_needed\" when \
 there is nothing to fix, \"easy\" for a few quick adjustments, \"needs_skill\" for demanding \
 retouching, \"not_fixable\" when the flaws cannot be edited away; \"fix_steps\": up to 3 \
-concrete edits, empty when not needed or not fixable.";
+concrete edits, empty when not needed or not fixable. \"scene\": what the photo is, one of \
+portrait (people, pets), wildlife, macro (close-up of small things), product, landscape \
+(nature, seascape, sky), architecture, street (city life, travel, documentary), event, other; \
+choose it before you advise, because the advice depends on it.";
 
 /// Ties the advice to the camera and lens named in the request.
 const GEAR_NOTE: &str = "\
@@ -53,6 +56,14 @@ point on the eye or the main subject; use continuous focus for moving subjects. 
 rule of thirds, leading lines, simple backgrounds, space in front of a moving subject, the \
 horizon level and not through the middle, keep the edges clear of clutter, do not cut limbs at \
 the joints, side or low sun for depth. \
+A blurred background is not always better. It suits portraits, pets, wildlife, macro, products \
+and details, where the subject must stand out. Landscapes, cityscapes, architecture, street, \
+travel, documentary and environmental portraits usually want the surroundings sharp and \
+readable, because the setting is part of the picture; there advise a smaller aperture (f/8 to \
+f/11) and focus about a third of the way into the scene, and never advise a wider aperture just \
+to blur. A busy background is fixed first by moving, changing the angle or getting closer; \
+blur is the last resort. Judge the scene before you advise on depth of field, and say what the \
+photo is trying to show. \
 Hold your tips to this: name the setting, the value to try and what it changes, and check \
 that the effect points the way you claim. Never suggest a value the shot already used (when \
 the focal length, aperture or ISO is given, suggest a different one or a different kind of \
