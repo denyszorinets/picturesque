@@ -309,8 +309,9 @@ impl CritiqueService {
                 schema: &Critique::schema(),
             })
             .map_err(CritiqueError::Server)?;
-        let critique = Critique::parse(&reply)
+        let mut critique = Critique::parse(&reply)
             .ok_or_else(|| CritiqueError::BadReply(reply.chars().take(200).collect::<String>()))?;
+        critique.check_against(&photo.metadata.exposure);
         let model = Self::model_name(settings);
         self.catalog.store_analysis(
             id,

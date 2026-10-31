@@ -34,6 +34,31 @@ try, for this lens and focal length (its widest aperture if the lens name gives 
 safe for the focal length, a lower or higher ISO than the shot used). Use only what the lens \
 name tells you; do not invent specifications.";
 
+/// Photography basics for the advice. A small model gets the direction of
+/// aperture and depth of field wrong ("f/5.6 for a shallower depth of field")
+/// and suggests settings the shot already used, so the facts are stated and
+/// the tips are held to them. Written for this prompt, kept short.
+const PHOTO_FACTS: &str = "\
+Facts to rely on in \"camera_tips\" and \"improvements\". Aperture: a SMALLER f-number (f/1.8) \
+opens the lens wider: more light, SHALLOWER depth of field, more background blur. A LARGER \
+f-number (f/8, f/11) lets in less light and gives MORE depth of field, so more of the scene is \
+sharp; beyond about f/11 to f/16 diffraction softens the image. Depth of field is also shallower \
+with a longer focal length or a closer subject, and deeper with a wide angle or a distant \
+subject. Shutter: it freezes motion; handheld without stabilisation use about 1/focal length \
+seconds or faster (1/60 s at 50 mm), a walking person needs about 1/250 s, running or sport \
+1/1000 s or faster. ISO: higher is brighter but noisier; use the lowest ISO that allows the \
+aperture and shutter you need, and raise it rather than accept blur. Blown highlights cannot be \
+recovered, so expose for the highlights; lifting dark shadows adds noise. Focus: put the focus \
+point on the eye or the main subject; use continuous focus for moving subjects. Composition: \
+rule of thirds, leading lines, simple backgrounds, space in front of a moving subject, the \
+horizon level and not through the middle, keep the edges clear of clutter, do not cut limbs at \
+the joints, side or low sun for depth. \
+Hold your tips to this: name the setting, the value to try and what it changes, and check \
+that the effect points the way you claim. Never suggest a value the shot already used (when \
+the focal length, aperture or ISO is given, suggest a different one or a different kind of \
+advice); never suggest a focal length the lens cannot reach. If the shot data look right for \
+the scene, give a composition or timing tip instead of a setting.";
+
 const JPEG_NOTE: &str = "If the original is a JPEG, say little about recovery.";
 
 const PROFESSIONAL_INTRO: &str = "\
@@ -126,6 +151,6 @@ pub(in crate::critic) fn system_prompt(preset: CriticPreset, rubric: &str) -> St
     };
     format!(
         "{intro}\n\nAssess the photograph against this rubric:\n{rubric}\n\n{FLAWS_FIRST}\n\n\
-{rating}\n\n{ADVICE_FIX} {tips} {GEAR_NOTE} {JPEG_NOTE}\n\nReply with JSON only."
+{rating}\n\n{ADVICE_FIX} {tips} {GEAR_NOTE} {PHOTO_FACTS} {JPEG_NOTE}\n\nReply with JSON only."
     )
 }

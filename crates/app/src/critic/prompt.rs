@@ -11,6 +11,7 @@ use ts_rs::TS;
 use crate::settings::CriticPreset;
 
 mod presets;
+mod tips;
 pub(super) use presets::system_prompt;
 
 /// What the model judges, unless the user wrote their own.
@@ -23,7 +24,7 @@ pub const DEFAULT_RUBRIC: &str = "\
 
 /// Bumped when the prompt changes enough to make earlier critiques
 /// incomparable; it is part of the stored rubric key.
-pub(crate) const PROMPT_VERSION: u32 = 5;
+pub(crate) const PROMPT_VERSION: u32 = 6;
 
 /// The key stored with a critique to recognize the prompt, preset and
 /// rubric it was written with. The Professional preset hashes what it did

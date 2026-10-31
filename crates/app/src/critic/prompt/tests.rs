@@ -11,18 +11,18 @@ fn the_prompts_and_keys_are_pinned_so_a_change_is_deliberate() {
     let prompt = system_prompt(CriticPreset::Professional, DEFAULT_RUBRIC);
     assert_eq!(
         (fingerprint(&prompt), prompt.len()),
-        ("a873f34897c72aaa".into(), 3493)
+        ("ce6629f22d0e608f".into(), 5175)
     );
     assert_eq!(
         rubric_key(CriticPreset::Professional, DEFAULT_RUBRIC),
-        "2fda969db7eb9005"
+        "c80a69cb2fbe62ca"
     );
     // Other presets: the key is built from the serialized name, so it stays
     // stable if the Rust variant is renamed. Professional hashes only the
     // version and the rubric, as it did before presets.
     assert_eq!(
         rubric_key(CriticPreset::Amateur, DEFAULT_RUBRIC),
-        "a3aa5a142bbe25c7"
+        "9597f97a3e264f4a"
     );
 }
 
@@ -70,6 +70,20 @@ fn each_preset_has_its_voice_and_the_shared_schema_instructions() {
         }
     }
     assert!(system_prompt(CriticPreset::Beginner, "r").contains("raise the ISO a little"));
+}
+
+#[test]
+fn every_preset_states_the_photography_facts_the_tips_rest_on() {
+    for preset in PRESETS {
+        let prompt = system_prompt(preset, "r");
+        for fact in [
+            "SMALLER f-number (f/1.8) opens the lens wider",
+            "LARGER f-number (f/8, f/11) lets in less light and gives MORE depth of field",
+            "Never suggest a value the shot already used",
+        ] {
+            assert!(prompt.contains(fact), "{preset:?}: {fact}");
+        }
+    }
 }
 
 #[test]

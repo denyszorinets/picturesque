@@ -309,8 +309,8 @@ Commons photos, 25 featured pictures and 25 ordinary ones, the mean rating
 was 7.6 for the featured pictures and 4.2 for the ordinary photos, and it
 tells them apart as well as the milder prompt it replaced (AUC 0.90). The
 measurements are in ``spikes/llama/results.md``. They were made with
-earlier prompt versions; prompt version 5 (camera and lens in the request,
-finer problem kinds) has not been measured the same way.
+earlier prompt versions; prompts version 5 (camera and lens in the request,
+finer problem kinds) and 6 (below) have not been measured the same way.
 
 Critiques written by an earlier prompt version are still counted until
 they are redone; the background critic redoes them last. Prompt version 4
@@ -318,6 +318,17 @@ added the advice; critiques written before show without it, marked as
 outdated. Prompt version 5 adds the gear and the finer problem tags; every
 earlier critique becomes outdated (still shown and counted in Insights)
 and is redone by the background critic or on refresh.
+
+Prompt version 6 teaches the model the basics its advice rests on (how
+the aperture, shutter speed and ISO change a photo, depth of field, the
+handheld shutter rule, composition) because the small model sometimes
+mixed them up, for example advising a *larger* f-number "for a shallower
+depth of field". As a second guard, the app drops a camera tip or
+improvement that suggests the setting the photo was already shot with
+(for example "use f/4 at 12 mm" for an f/4, 12 mm shot) or whose wording
+contradicts itself (a wider aperture for more depth of field). Dropped
+tips are not shown or stored. Every earlier critique becomes outdated
+again and is redone as above.
 
 .. _features-ai-critique-presets:
 

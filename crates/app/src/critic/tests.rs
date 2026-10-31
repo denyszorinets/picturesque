@@ -467,6 +467,27 @@ fn a_new_critique_keeps_its_advice_when_stored_and_viewed() {
 }
 
 #[test]
+fn advice_that_contradicts_itself_is_not_stored_or_shown() {
+    let (world, api, id) = setup(true, Some(&["qwen3-vl:4b"]));
+    *world.critic.reply.lock().unwrap() = r#"{"weaknesses": [], "issues": [],
+        "strengths": [], "summary": "A calm lake at dusk, level and sharp.", "rating": 6,
+        "potential": 6, "fixable": "not_needed", "fix_steps": [],
+        "improvements": ["Put the horizon on the lower third."],
+        "camera_tips": ["A wider aperture gives more depth of field.", "Use ISO 100."]}"#
+        .into();
+    let made = api
+        .call("critique_photo", json!({ "photo_id": id }))
+        .unwrap();
+    let shown = api.call("get_critique", json!({ "photo_id": id })).unwrap();
+    assert_eq!(made, shown);
+    assert_eq!(shown["camera_tips"], json!(["Use ISO 100."]));
+    assert_eq!(
+        shown["improvements"],
+        json!(["Put the horizon on the lower third."])
+    );
+}
+
+#[test]
 fn the_prompt_names_the_shot_data_and_the_format_only_when_known() {
     use picturesque_core::metadata::{Exposure, ExposureTime, GeoPoint};
     let photo = |exposure: Exposure, name: &str, format: MediaFormat| Photo {
