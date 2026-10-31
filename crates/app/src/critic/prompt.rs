@@ -11,6 +11,7 @@ use ts_rs::TS;
 use crate::settings::CriticPreset;
 
 mod presets;
+mod tips;
 pub(super) use presets::system_prompt;
 
 /// What the model judges, unless the user wrote their own.
@@ -23,7 +24,7 @@ pub const DEFAULT_RUBRIC: &str = "\
 
 /// Bumped when the prompt changes enough to make earlier critiques
 /// incomparable; it is part of the stored rubric key.
-pub(crate) const PROMPT_VERSION: u32 = 5;
+pub(crate) const PROMPT_VERSION: u32 = 6;
 
 /// The key stored with a critique to recognize the prompt, preset and
 /// rubric it was written with. The Professional preset hashes what it did
@@ -80,6 +81,43 @@ const ISSUES: [&str; 13] = [
     "other",
 ];
 
+/// What kind of photo it is. The model names it before it gives advice, so
+/// the advice can fit the genre: a blurred background suits a portrait, not
+/// a landscape. Only the app reads it (it is stored, not shown).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Scene {
+    Portrait,
+    Wildlife,
+    Macro,
+    Product,
+    Landscape,
+    Architecture,
+    Street,
+    Event,
+    Other,
+}
+
+const SCENES: [&str; 9] = [
+    "portrait",
+    "wildlife",
+    "macro",
+    "product",
+    "landscape",
+    "architecture",
+    "street",
+    "event",
+    "other",
+];
+
+impl Scene {
+    /// Scenes where the surroundings are part of the picture, so a blurred
+    /// background is rarely the advice.
+    pub(super) fn wants_context(self) -> bool {
+        matches!(self, Self::Landscape | Self::Architecture | Self::Street)
+    }
+}
+
 /// Whether editing the original in a RAW editor would fix its flaws.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "snake_case")]
@@ -114,6 +152,12 @@ fn lenient_fixable<'de, D: Deserializer<'de>>(d: D) -> Result<Option<Fixable>, D
         .and_then(|v| serde_json::from_value(v).ok()))
 }
 
+fn lenient_scene<'de, D: Deserializer<'de>>(d: D) -> Result<Option<Scene>, D::Error> {
+    Ok(Value::deserialize(d)
+        .ok()
+        .and_then(|v| serde_json::from_value(v).ok()))
+}
+
 fn lenient_number<'de, D: Deserializer<'de>>(d: D) -> Result<Option<f32>, D::Error> {
     Ok(Value::deserialize(d)
         .ok()
@@ -141,6 +185,13 @@ pub struct Critique {
     pub potential: Option<f32>,
     #[serde(default, deserialize_with = "lenient_fixable")]
     pub fixable: Option<Fixable>,
+    /// The kind of photo; only the advice guard reads it.
+    #[serde(
+        default,
+        deserialize_with = "lenient_scene",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub scene: Option<Scene>,
     /// What to change when editing the photo.
     #[serde(default)]
     pub fix_steps: Vec<String>,
@@ -215,12 +266,13 @@ impl Critique {
                 "rating": { "type": "number", "minimum": 1, "maximum": 10 },
                 "potential": { "type": "number", "minimum": 1, "maximum": 10 },
                 "fixable": { "type": "string", "enum": FIXABLE },
+                "scene": { "type": "string", "enum": SCENES },
                 "fix_steps": points(3),
                 "improvements": points(3),
                 "camera_tips": points(3),
             },
             "required": ["weaknesses", "issues", "strengths", "summary", "rating",
-                "potential", "fixable", "fix_steps", "improvements", "camera_tips"],
+                "potential", "fixable", "scene", "fix_steps", "improvements", "camera_tips"],
         })
     }
 }
