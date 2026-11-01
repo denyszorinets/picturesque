@@ -16,18 +16,23 @@ account, no uploads.
 
 - **Import:** copies photos from watched folders into a clean library built
   from a template (date, place, camera, …), skipping duplicates and
-  verifying every copy. Originals are never modified.
+  verifying every copy. Originals are never modified unless you choose to
+  delete them after a verified copy, as you go or when the import is done.
+  A tray icon shows the progress of long jobs.
 - **Series and best shots:** bursts grouped into series, each photo scored for
   sharpness, exposure and noise (plus aesthetics and closed eyes with the
   optional local models), the best frame marked and suggested as a keeper.
 - **Culling:** pick, reject and rate from the keyboard, in the grid, the
-  photo view or side by side in Compare; every decision can be undone.
+  photo view or side by side in Compare; a ribbon shows the whole series
+  and a switch puts the best frame beside the current one; every decision can
+  be undone.
 - **Search and filters:** by flag, rating, camera, lens, place, date and
   scores, or by describing a photo ("dog on a beach").
 - **AI critic (optional):** a local vision-language model critiques a photo
   (rating, strengths, weaknesses, how to fix it, camera tips), in the photo
   view or in the background across the library, with Professional, Amateur
-  and Beginner presets. The critique feeds the aesthetic score.
+  and Beginner presets, with advice that fits the scene. The critique feeds
+  the aesthetic score.
 - **Insights:** recurring problems, rating trend by quarter and settings
   habits across all your critiques.
 - **Statistics:** which cameras and lenses give you keepers, and the focal
