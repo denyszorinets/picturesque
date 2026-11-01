@@ -896,3 +896,26 @@ fn a_folder_culled_in_place_never_deletes_right_away() {
 
     assert!(exists(&world, "/card/DCIM/IMG_1.CR3") && exists(&world, "/card/DCIM/IMG_2.JPG"));
 }
+
+#[test]
+fn switching_to_deleting_right_away_clears_what_was_imported_before() {
+    let world = world_with(fs(), DeleteAfterImport::Never);
+    let pipeline = pipeline_deleting(&world);
+    let source = pipeline.add_source(Path::new("/card"), true).unwrap();
+    pipeline.scan_now(&HashSet::from([Some(source.id)]));
+    pipeline.run_until_idle();
+    assert!(exists(&world, "/card/DCIM/IMG_2.JPG"));
+    assert_eq!(pipeline.delete_leftover_originals(), 2);
+    assert!(exists(&world, "/card/DCIM/IMG_2.JPG"), "still keeping");
+
+    let mut settings = world.settings.load_settings().unwrap();
+    settings.delete_after_import = DeleteAfterImport::Immediately;
+    world.settings.save_settings(&settings).unwrap();
+    pipeline.delete_leftover_originals();
+
+    for gone in ["IMG_1.CR3", "IMG_1.JPG", "IMG_2.JPG"] {
+        assert!(!exists(&world, &format!("/card/DCIM/{gone}")), "{gone}");
+    }
+    assert!(exists(&world, "/lib/2026/2026-10-13/IMG_2.JPG"));
+    assert!(warnings(&world).is_empty());
+}
