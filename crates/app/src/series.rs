@@ -7,7 +7,8 @@
 //! combined quality score, whenever an input changes: right away after an
 //! edit, a choice or a settings change, and debounced while analysis,
 //! imports and culling change data. With 10,000 photos a run takes
-//! milliseconds.
+//! milliseconds; when picks or rejects changed, the personal taste model
+//! is retrained first (`taste`), which takes up to about a second.
 
 use std::collections::{HashMap, HashSet};
 use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender, channel};
@@ -21,6 +22,7 @@ use picturesque_core::ranking::{
     Candidate, FaceSignal, Standing, best, is_keeper, photo_quality, rank,
 };
 use picturesque_core::series::{SeriesEdit, SeriesInput, detect_series};
+use picturesque_core::taste::blend;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
@@ -31,6 +33,7 @@ use crate::analysis::technical::TechnicalAnalyzer;
 use crate::ports::catalog::{CatalogError, PhotoCatalog, PhotoScore, StoredSeries};
 use crate::ports::events::{AppEvent, EventSink};
 use crate::ports::settings::SettingsStore;
+use crate::taste::TasteService;
 
 /// Quiet time before a requested recompute runs.
 pub const DEBOUNCE: Duration = Duration::from_secs(1);
@@ -140,6 +143,12 @@ pub struct SeriesService {
     catalog: Arc<dyn PhotoCatalog>,
     settings: Arc<dyn SettingsStore>,
     events: Arc<dyn EventSink>,
+    taste: TasteService,
+    /// Critique scores as last computed (`critique_score`).
+    critique_scores: Mutex<HashMap<PhotoId, f32>>,
+    /// For RAW photos whose rating was raised by their potential: the
+    /// rating and the potential (`critique_lift`).
+    critique_lifts: Mutex<HashMap<PhotoId, (f32, f32)>>,
     /// The last stored series and scores; also serializes recomputes.
     last: Mutex<Option<Stored>>,
     notify: Mutex<Option<Sender<()>>>,
@@ -158,12 +167,51 @@ impl SeriesService {
         events: Arc<dyn EventSink>,
     ) -> Self {
         Self {
+            taste: TasteService::new(Arc::clone(&catalog)),
+            critique_scores: Mutex::default(),
+            critique_lifts: Mutex::default(),
             catalog,
             settings,
             events,
             last: Mutex::new(None),
             notify: Mutex::new(None),
         }
+    }
+
+    /// The series as last stored (empty before the first recompute).
+    pub fn stored_series(&self) -> Vec<StoredSeries> {
+        self.last
+            .lock()
+            .expect("series lock")
+            .as_ref()
+            .map(|(series, _)| series.clone())
+            .unwrap_or_default()
+    }
+
+    /// A photo's critique score (0–1, its rating's percentile among the
+    /// library's critiques) as last computed; `None` without a critique or
+    /// while critiques are off.
+    pub fn critique_score(&self, id: PhotoId) -> Option<f32> {
+        self.critique_scores
+            .lock()
+            .expect("critique scores lock")
+            .get(&id)
+            .copied()
+    }
+
+    /// A RAW photo's critique rating and the potential rating it was raised
+    /// toward, as last computed; `None` when the potential did not raise it.
+    pub fn critique_lift(&self, id: PhotoId) -> Option<(f32, f32)> {
+        self.critique_lifts
+            .lock()
+            .expect("critique lifts lock")
+            .get(&id)
+            .copied()
+    }
+
+    /// The personal taste model, retrained by [`Self::recompute`].
+    pub fn taste(&self) -> &TasteService {
+        &self.taste
     }
 
     /// Recomputes series, their best photos and every photo's combined
@@ -183,12 +231,36 @@ impl SeriesService {
             .iter()
             .filter_map(|(id, result)| Some((*id, ClipAnalyzer::embedding(result)?)))
             .collect();
-        let aesthetic: HashMap<PhotoId, f32> = clip
+        let general: HashMap<PhotoId, f32> = clip
             .iter()
             .filter_map(|(id, result)| {
                 Some((*id, aesthetic_score(ClipAnalyzer::aesthetic(result)?)))
             })
             .collect();
+        let mut captured = self.catalog.capture_times()?;
+        captured.sort_by_key(|(id, time)| (*time, *id));
+        let order: Vec<PhotoId> = captured.iter().map(|(id, _)| *id).collect();
+        let personal = self.taste.update(&order, &embeddings)?;
+        let personal_weight = settings.taste.personal_weight as f32;
+        let (critiques, lifts) = self.critique_scores(&settings)?;
+        let critique_weight = settings.critic.score_weight as f32;
+        let aesthetic: HashMap<PhotoId, f32> = embeddings
+            .keys()
+            .chain(critiques.keys())
+            .collect::<HashSet<_>>()
+            .into_iter()
+            .filter_map(|id| {
+                let p = personal.as_ref().and_then(|m| m.score(embeddings.get(id)?));
+                let looks = blend(general.get(id).copied(), p, personal_weight);
+                Some((
+                    *id,
+                    blend(looks, critiques.get(id).copied(), critique_weight)?,
+                ))
+            })
+            .collect();
+        let critique_of = critiques.clone();
+        *self.critique_scores.lock().expect("critique scores lock") = critiques;
+        *self.critique_lifts.lock().expect("critique lifts lock") = lifts;
         let found_faces: HashMap<PhotoId, Vec<FaceView>> = self
             .catalog
             .analysis_results(FaceAnalyzer::ID)?
@@ -203,9 +275,7 @@ impl SeriesService {
             .iter()
             .map(|(id, f)| (*id, f.len() as u32))
             .collect();
-        let inputs: Vec<SeriesInput> = self
-            .catalog
-            .capture_times()?
+        let inputs: Vec<SeriesInput> = captured
             .into_iter()
             .map(|(id, captured)| SeriesInput {
                 id,
@@ -269,6 +339,7 @@ impl SeriesService {
                     id: *id,
                     score,
                     aesthetic: aesthetic.get(id).copied(),
+                    critique: critique_of.get(id).copied(),
                     eyes_closed,
                     faces: face_counts.get(id).copied().unwrap_or(0),
                     keeper: auto_pick.enabled
@@ -404,6 +475,8 @@ fn settle(rx: &Receiver<()>, quiet: Duration, max_wait: Duration) -> bool {
         }
     }
 }
+
+mod critique;
 
 #[cfg(test)]
 mod tests;

@@ -90,7 +90,8 @@ Commands
    ``min_sharpness``, ``min_exposure`` and ``min_noise`` (0–1) keep photos
    whose technical score is at least that (:doc:`quality-scores`); photos
    not analyzed yet never match. ``min_aesthetic`` (0–1) does the same for
-   the aesthetic score, ``hide_closed_eyes: true`` hides photos where
+   the aesthetic score, ``min_critique`` (0–1) for the critique score
+   (photos without a critique never match), ``hide_closed_eyes: true`` hides photos where
    someone important has closed eyes, and ``people`` keeps only photos with
    (``true``) or without (``false``) faces. ``auto_picked: true`` keeps
    auto-picked photos (:ref:`features-library-auto-pick`); with ``flags``,
@@ -125,7 +126,11 @@ Commands
    ``highlights_clipped``, ``shadows_clipped``; ``null`` until analyzed,
    see :doc:`quality-scores`) and ``aesthetic`` (``score`` 0–1 and the
    predictor's ``rating``, about 1–10; ``null`` until the CLIP model
-   analyzed the photo, see :ref:`features-ai-aesthetic`) and ``faces``
+   analyzed the photo, see :ref:`features-ai-aesthetic`), ``taste`` (how
+   well the photo matches the user's picks, 0–1; ``null`` until enough
+   picks and rejects taught it, see :ref:`features-ai-taste`),
+   ``critique_score`` (0–1, ``null`` when there is none;
+   :ref:`features-ai-critique-score`) and ``faces``
    (largest first; each with ``x``, ``y``, ``width``, ``height`` as
    fractions of the photo, detector ``score``, ``eyes_closed`` —
    ``true``, ``false`` or ``null`` when undecided — ``eye_openness`` and
@@ -174,6 +179,35 @@ Commands
    photos (``few_photos``) last. ``focal_lengths`` (cameras only) counts
    photos per focal length in whole millimetres, most used first.
 
+``library_insights``
+   No arguments, read-only. What the stored critiques say together, with
+   recent ones weighted more (:doc:`/features/insights`). It calls no
+   model and works whether critiques are on or off:
+
+   .. code-block:: json
+
+      { "critiques": 240, "with_issues": 180, "min_critiques": 10,
+        "half_life_days": 365.0, "as_of": "2026-09-30",
+        "mean_rating": 6.1, "weighted_rating": 6.5,
+        "issues": [{ "issue": "noise", "count": 60, "share": 0.33, "weighted_share": 0.29,
+                     "examples": [412, 87, 1204] }],
+        "trend": [{ "quarter": "2026-Q2", "critiques": 40, "mean_rating": 6.3 }],
+        "advice": [{ "issue": "noise", "title": "...", "text": "...",
+                     "evidence": "Named in 35% of your recent critiques (14 photos); 2.4x as often (ISO 801-3200)",
+                     "examples": [412, 87] }],
+        "trend_slope": 0.4,
+        "habits": [{ "issue": "noise", "setting": "iso", "label": "ISO above 3200",
+                     "critiques": 25, "share": 0.6, "baseline": 0.29, "lift": 2.1 }] }
+
+   ``advice`` is the "What to work on" list (at most 5, most frequent
+   first; fields ``issue``, ``title``, ``text``, ``evidence``, ``examples``),
+   from fixed rules without a model. ``as_of`` is the newest capture date among critiqued photos (null
+   without dates). ``issues`` come most often flagged first; ``examples``
+   are photo ids, up to 6. ``trend`` is oldest quarter first;
+   ``trend_slope`` is rating points per year and null below three
+   quarters. ``setting`` is ``iso``, ``shutter``, ``aperture`` or
+   ``focal_length``; at most 10 ``habits``, highest ``lift`` first.
+
 ``reanalyze_photos``
    Optional ``{ "photo_ids": [7, 8] }``; without it, every photo. Marks
    the photos' analysis results stale so background analysis runs again
@@ -182,6 +216,97 @@ Commands
    "waiting_for_models": ["faces and closed eyes"] }``: how many of the
    photos exist (unknown ids are ignored), and what is not analyzed until
    its model is downloaded (as in ``analysis_status``).
+
+``taste_status``
+   No arguments. What the personal taste model learned
+   (:ref:`features-ai-taste`):
+
+   .. code-block:: json
+
+      { "picks": 42, "rejects": 118, "needed": 10, "learned": true,
+        "agreement": 0.87 }
+
+   ``picks`` and ``rejects`` count decided photos with a CLIP embedding;
+   ``needed`` of each are required before anything is learned.
+   ``agreement`` is the cross-validated chance that the model scores one
+   of the user's picks above one of their rejects (``null`` until
+   learned).
+
+``critic_status``
+   No arguments. Whether photo critiques can run
+   (:ref:`features-ai-critique`). While critiques are on, asks the server
+   for its models (5 s timeout):
+
+   .. code-block:: json
+
+      { "enabled": true, "backend": "server",
+        "server": "http://127.0.0.1:11434/v1", "local": true,
+        "reachable": true, "models": ["qwen3-vl:4b"], "model": "qwen3-vl:4b",
+        "model_installed": true, "problem": null,
+        "suggested": [{ "name": "qwen3-vl:2b", "size": 1900000000,
+                        "license": "Apache-2.0", "license_url": "…", "note": "…" }],
+        "default_rubric": "- Composition: …" }
+
+   With the ``builtin`` backend, ``reachable`` says whether the helper is
+   installed, ``model_installed`` whether the model is downloaded, and
+   ``model`` is ``"Qwen3-VL 4B (built-in)"``; the server is not asked.
+   ``local`` is ``false`` when the server is on another computer.
+   ``problem`` says what to do when the server is not running or lacks the
+   model.
+
+``get_critique``
+   ``{ "photo_id": 7 }``. The stored critique, or ``null``. One written by
+   another model or rubric is returned too, with ``outdated`` true.
+   Never contacts the server.
+
+``critique_photo``
+   ``{ "photo_id": 7, "refresh": false }``. Asks the model for a critique,
+   or returns the stored one unless ``refresh`` or it is ``outdated``. Can
+   take minutes on a CPU. Returns ``{ "model": "qwen3-vl:4b", "rating": 7.5, "score": 0.72,
+   "summary": "…", "strengths": ["…"], "weaknesses": ["…"],
+   "issues": ["exposure"], "potential": 8.0, "fixable": "easy",
+   "fix_steps": ["…"], "improvements": ["…"], "camera_tips": ["…"],
+   "outdated": false }`` (``rating`` 1–10, ``score`` the same as 0–1;
+   ``outdated`` true when another model or rubric than the current
+   settings wrote it). ``issues`` are the kinds of the weaknesses
+   (``exposure``, ``focus``, ``composition``, ``noise``, ``colour``,
+   ``horizon``, ``light``, ``timing``, ``other``); ``potential`` is the
+   rating (1–10, never below ``rating``) after the best editing of a RAW
+   file; ``fixable`` is ``not_needed``, ``easy``, ``needs_skill`` or
+   ``not_fixable``, advisory only. The fields from ``issues`` on are
+   empty, or ``null`` for ``potential`` and ``fixable``, in critiques
+   written before prompt version 4. ``invalid_arguments``
+   while critiques are off; ``internal`` with the reason when the server
+   fails or the reply is not a critique.
+
+``background_critique_status``
+   No arguments. The background critic (:ref:`features-ai-critique-background`):
+
+   .. code-block:: json
+
+      { "enabled": true, "running": true, "paused": null,
+        "critiqued": 1200, "stale": 40, "missing": 8160, "failed": 0,
+        "total": 9400, "seconds_per_photo": 11.2, "seconds_left": 88000 }
+
+   ``enabled`` means the background critic is on (and critiques are on).
+   ``running`` means it is writing a critique now. ``paused`` is the reason
+   it waits, for example for the import, analysis, battery power, or a model
+   that is not downloaded, or ``null``. ``critiqued`` counts photos, rejects
+   excluded, with a critique by the current model, rubric and prompt.
+   ``stale`` counts photos critiqued by another model, rubric or prompt,
+   to be redone. ``missing`` counts photos without a critique. ``total``
+   counts every photo except rejects; ``failed`` counts the photos skipped
+   because their critique failed, reset when the critic settings change or the app restarts
+   (:ref:`features-ai-critique-background`).
+   ``seconds_per_photo`` and ``seconds_left`` are ``null`` until a critique
+   was written in this session. The same object is sent as the
+   ``background_critique_progress`` event, whenever a critique finishes or
+   starts and when the pause reason changes.
+
+``report_activity``
+   No arguments. Returns ``null``. The UI calls it at most every 30 seconds
+   while the user is active; the ``when_idle`` critique intensity
+   (:ref:`reference-settings-critic`) depends on these calls.
 
 ``ai_status``
    No arguments. Where local AI models run (:doc:`/features/ai`):
@@ -317,11 +442,14 @@ Commands
 
 ``list_import_sources``
    No arguments. Every ``ImportSource``: ``id``, ``path``, ``watch``,
-   ``scanned_at`` and ``scan_error``.
+   ``scanned_at``, ``scan_error`` and ``delete_originals`` (``null``
+   follows the setting, otherwise ``"never"``, ``"ask"`` or
+   ``"immediately"``).
 
 ``add_import_source``
    ``{ "path": "/absolute/folder", "watch": true }`` (``watch`` defaults
-   to ``true``). Stores the folder and scans it right away; returns the
+   to ``true``; optional ``"delete_originals": "default"|"never"|"ask"|"immediately"``
+   sets the folder's choice). Stores the folder and scans it right away; returns the
    ``ImportSource``. Adding a stored folder again returns it unchanged.
    Fails if the path is relative, cannot be read, or is inside or contains
    the library folder.
@@ -329,6 +457,44 @@ Commands
 ``remove_import_source``
    ``{ "id": 1 }``. Forgets the folder and drops its waiting photos;
    imported photos stay. Returns the remaining sources.
+
+``set_import_source_delete_originals``
+   ``{ "id": 1, "choice": "default" }``; ``choice`` is ``default``
+   (follow the ``delete_after_import`` setting), ``never``, ``ask`` or ``immediately``.
+   Returns the ``ImportSource``.
+
+``delete_originals_offers``
+   No arguments. Folders with imported photos whose originals can be
+   deleted: ``[{ "source_id": 1, "path": "/media/card", "photos": 120 }]``.
+   Read from the catalog only.
+
+``delete_originals_plan``
+   ``{ "source_id": 1 }``. What deleting would do: ``{ "source_id": 1,
+   "through_job_id": 340, "photos": 120, "files": 240, "bytes": 3000000000,
+   "duplicates": 4, "changed": 2 }`` (``changed`` photos stay). Reads the
+   folder, and, although shaped like a read, records photos whose
+   originals are all gone already as done (``import_job.source_removed_at``).
+   ``invalid_arguments`` for a folder culled in place, one that is
+   not writable, one still importing, or one whose folder overlaps the
+   library folder (nothing is deleted). ``changed`` also counts media files
+   whose size or modification time differ from the import.
+
+``delete_originals``
+   ``{ "source_id": 1, "through_job_id": 340 }``, the values from the
+   plan the user confirmed; photos imported later are not included. Starts
+   the background run and returns an ``OriginalsStatus``: ``{ "state":
+   "running", "source_id", "done", "total", "deleted", "gone", "files", "bytes",
+   "kept": [{ "photo_id", "reason" }] }``. ``state`` is ``idle``,
+   ``running``, ``completed`` or ``cancelled``. ``gone`` counts photos whose originals were already gone (not in
+   ``deleted``). Removing the import folder from the app stops the run
+   (``cancelled``). One run at a time
+   (``invalid_arguments`` otherwise). Permanent.
+
+``delete_originals_status``
+   No arguments. The current ``OriginalsStatus``.
+
+``cancel_delete_originals``
+   No arguments. Stops between photos; returns the ``OriginalsStatus``.
 
 ``set_import_source_watch``
    ``{ "id": 1, "watch": false }``. Returns the ``ImportSource``.
@@ -408,6 +574,9 @@ events from ``GET /api/events``.
 ``analysis_progress``
    The ``analysis_status``, sent after each analyzed photo.
 
+``background_critique_progress``
+   The ``background_critique_status`` object (see above).
+
 ``sidecar_progress``
    The ``sidecar_status``, sent when decisions change and after each
    batch of sidecars is written.
@@ -415,6 +584,10 @@ events from ``GET /api/events``.
 ``series_changed``
    ``{ "series": 12, "photos": 57 }``: series membership changed (after
    analysis, an import, an edit or a settings change).
+
+``originals_progress``
+   An ``OriginalsStatus`` (see ``delete_originals``), sent while originals
+   are deleted and when the run ends.
 
 ``export_progress``
    An ``ExportStatus`` (see ``start_export``), sent about five times a

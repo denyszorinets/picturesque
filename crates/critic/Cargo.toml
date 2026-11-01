@@ -1,0 +1,33 @@
+[package]
+name = "picturesque-critic"
+description = "Helper process that writes photo critiques with a local vision-language model through llama.cpp (ADR-0016)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "picturesque-critic"
+path = "src/main.rs"
+
+[dependencies]
+picturesque-core.workspace = true
+serde_json.workspace = true
+
+# GPU backends are loaded at run time from libraries next to the helper
+# (`dynamic-backends`), so it starts without a Vulkan loader and picks the
+# best CPU variant; no OpenMP, so there is no libgomp to ship. Windows runs
+# on the CPU for now: Vulkan there needs the Vulkan SDK on the build machine.
+[target.'cfg(target_os = "linux")'.dependencies]
+llama-cpp-2 = { workspace = true, features = ["vulkan"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+llama-cpp-2 = { workspace = true, features = ["metal"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+llama-cpp-2.workspace = true
+
+[lints]
+workspace = true

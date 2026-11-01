@@ -1,0 +1,18 @@
+[package]
+name = "llama-spike"
+version = "0.0.0"
+edition = "2024"
+publish = false
+description = "Throwaway spike: Qwen3-VL critiques in-process with llama.cpp. Not part of the workspace."
+
+[workspace]
+
+[features]
+vulkan = ["llama-cpp-2/vulkan"]
+
+[dependencies]
+llama-cpp-2 = { version = "=0.1.160", features = ["mtmd"] }
+serde_json = "1.0.151"
+
+[profile.release]
+debug = false

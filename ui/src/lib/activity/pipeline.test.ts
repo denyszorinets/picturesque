@@ -48,8 +48,11 @@ function api() {
         watch: watch ?? true,
         scanned_at: null,
         scan_error: null,
+        delete_originals: null,
       }),
     ),
+    setImportSourceDeleteOriginals:
+      vi.fn<PipelineApi["setImportSourceDeleteOriginals"]>(),
     removeImportSource: vi.fn<PipelineApi["removeImportSource"]>(
       async () => [],
     ),
@@ -149,6 +152,18 @@ describe("Pipeline", () => {
     ).toBe(false);
   });
 
+  it("sets a folder's own choice about deleting originals", async () => {
+    const backend = api();
+    const pipeline = new Pipeline(backend);
+
+    expect(await pipeline.setDeleteOriginals(4, "never")).toBe(true);
+
+    expect(backend.setImportSourceDeleteOriginals).toHaveBeenCalledWith(
+      4,
+      "never",
+    );
+  });
+
   it("adds folders and explains errors", async () => {
     const backend = api();
     const pipeline = new Pipeline(backend);
@@ -156,14 +171,52 @@ describe("Pipeline", () => {
     expect(backend.addImportSource).not.toHaveBeenCalled();
 
     expect(await pipeline.addSource(" /card ")).toBe(true);
-    expect(backend.addImportSource).toHaveBeenCalledWith("/card", true);
+    expect(backend.addImportSource).toHaveBeenCalledWith(
+      "/card",
+      true,
+      "default",
+    );
     expect(backend.listImportSources).toHaveBeenCalled();
+
+    expect(await pipeline.addSource("/other", false, "ask")).toBe(true);
+    expect(backend.addImportSource).toHaveBeenLastCalledWith(
+      "/other",
+      false,
+      "ask",
+    );
 
     backend.addImportSource.mockRejectedValueOnce(
       new ApiError("invalid_arguments", "Cannot read `/x`: missing."),
     );
     expect(await pipeline.addSource("/x")).toBe(false);
     expect(pipeline.error).toBe("Cannot read `/x`: missing.");
+  });
+
+  it("keeps the same source objects while a refresh brings nothing new", async () => {
+    const backend = api();
+    const card = (scanned_at: string | null) => ({
+      id: 1,
+      path: "/card",
+      watch: true,
+      scanned_at,
+      scan_error: null,
+      delete_originals: null,
+    });
+    backend.listImportSources.mockImplementation(async () => [card(null)]);
+    const pipeline = new Pipeline(backend);
+    await pipeline.refresh();
+    const first = pipeline.sources[0]!;
+
+    // Rebuilding a row would close a dropdown the user has open.
+    await pipeline.refresh();
+    expect(pipeline.sources[0]).toBe(first);
+
+    backend.listImportSources.mockImplementation(async () => [
+      card("2026-10-14T10:00:00Z"),
+    ]);
+    await pipeline.refresh();
+    expect(pipeline.sources[0]).not.toBe(first);
+    expect(pipeline.sources[0]?.scanned_at).toBe("2026-10-14T10:00:00Z");
   });
 
   it("filters and pages photos and the log", async () => {

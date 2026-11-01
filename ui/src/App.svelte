@@ -5,6 +5,9 @@
   import ActivityRing from "./lib/activity/ActivityRing.svelte";
   import { Pipeline } from "./lib/activity/pipeline.svelte";
   import { ringState } from "./lib/activity/ring";
+  import { critiqueRing } from "./lib/activity/critique-ring";
+  import { CritiqueProgress } from "./lib/activity/critique.svelte";
+  import { trackActivity } from "./lib/activity/user-activity";
   import { AnalysisProgress } from "./lib/library/analysis.svelte";
   import FolderSwitcher from "./lib/session/FolderSwitcher.svelte";
   import LibraryView from "./lib/library/LibraryView.svelte";
@@ -12,15 +15,17 @@
   import SettingsPanel from "./lib/settings/SettingsPanel.svelte";
   import SetupWizard from "./lib/setup/SetupWizard.svelte";
   import StatsView from "./lib/stats/StatsView.svelte";
+  import InsightsView from "./lib/insights/InsightsView.svelte";
   import HelpDialog from "./lib/help/HelpDialog.svelte";
   import Icon, { type IconName } from "./lib/components/Icon.svelte";
   import { tourWanted } from "./lib/tour/policy";
 
-  type Tab = "library" | "activity" | "statistics" | "settings";
+  type Tab = "library" | "activity" | "statistics" | "insights" | "settings";
   const TABS: { id: Tab; label: string; icon: IconName }[] = [
     { id: "library", label: "Library", icon: "photo" },
     { id: "activity", label: "Activity", icon: "arrow-path" },
     { id: "statistics", label: "Statistics", icon: "chart-bar" },
+    { id: "insights", label: "Insights", icon: "light-bulb" },
     { id: "settings", label: "Settings", icon: "cog-6-tooth" },
   ];
 
@@ -69,6 +74,8 @@
   const pipeline = new Pipeline(api);
   const analysis = new AnalysisProgress(api);
   const ring = $derived(ringState(pipeline.status, analysis.status));
+  const critiqueProgress = new CritiqueProgress(api);
+  const critique = $derived(critiqueRing(critiqueProgress.status));
 
   const versionLabel = (i: AppInfo) => `v${i.version}`;
 
@@ -110,6 +117,7 @@
     sessionRevision += 1;
     void pipeline.loadStatus();
     void analysis.load();
+    void critiqueProgress.load();
   }
 
   async function closeSetup() {
@@ -124,13 +132,18 @@
     }
   }
 
+  // The background critic yields while the user works.
+  $effect(() => trackActivity(() => api.reportActivity()));
+
   // The header ring follows importing and analysis everywhere.
   $effect(() => {
     void pipeline.loadStatus();
     void analysis.load();
+    void critiqueProgress.load();
     const stop = api.onAppEvent((event) => {
       pipeline.handle(event);
       analysis.handle(event);
+      critiqueProgress.handle(event);
     });
     // Events may be missed (for example while reconnecting).
     const timer = setInterval(() => {
@@ -167,6 +180,11 @@
       </nav>
       <div class="status">
         <ActivityRing {ring} onactivity={() => (tab = "activity")} />
+        <ActivityRing
+          ring={critique}
+          testid="critique-ring"
+          onactivity={() => (tab = "activity")}
+        />
         <button
           class="help"
           onclick={() => (help = true)}
@@ -211,6 +229,7 @@
         <div class="view page" hidden={tab !== "activity"}>
           <ActivityView
             {pipeline}
+            critique={critiqueProgress.status}
             visible={tab === "activity"}
             hasLibrary={settings === null || !!settings.library_root}
             {inFolder}
@@ -228,10 +247,18 @@
                 : (tab = "activity")}
           />
         </div>
+        <div class="view page" hidden={tab !== "insights"}>
+          <InsightsView
+            load={api.libraryInsights}
+            visible={tab === "insights"}
+            onsettings={() => (tab = "settings")}
+          />
+        </div>
         <div class="view page settings" hidden={tab !== "settings"}>
           {#key settingsRevision}
             <SettingsPanel
               {inFolder}
+              critiqueProgress={critiqueProgress.status}
               onchange={(s) => (settings = s)}
               onsetup={() => (setup = true)}
               ontour={() => {

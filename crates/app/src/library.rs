@@ -81,6 +81,10 @@ pub struct PhotoQuery {
     /// never match.
     #[ts(optional)]
     pub min_aesthetic: Option<f32>,
+    /// Minimum critique score, 0–1 (the critic's rating as a percentile of
+    /// the library's critiques); photos without a critique never match.
+    #[ts(optional)]
+    pub min_critique: Option<f32>,
     /// Hide photos where someone important has closed eyes.
     #[ts(optional)]
     pub hide_closed_eyes: Option<bool>,
@@ -123,6 +127,7 @@ impl PhotoQuery {
             ("min_exposure", self.min_exposure),
             ("min_noise", self.min_noise),
             ("min_aesthetic", self.min_aesthetic),
+            ("min_critique", self.min_critique),
         ] {
             if value.is_some_and(|v| !(0.0..=1.0).contains(&v)) {
                 return Err(format!("`{name}` must be between 0 and 1."));
@@ -300,6 +305,12 @@ pub struct PhotoDetail {
     pub quality: Option<crate::analysis::technical::QualityView>,
     /// How good the photo looks, once the CLIP model analyzed it.
     pub aesthetic: Option<crate::analysis::clip::AestheticView>,
+    /// How well the photo matches the user's taste, 0–1, once enough picks
+    /// and rejects taught it (`taste_status`).
+    pub taste: Option<f32>,
+    /// The critique's percentile among the library's critiques, 0–1; null
+    /// without a critique or while critiques are off.
+    pub critique_score: Option<f32>,
     /// Faces found, largest first; `null` until the face models analyzed
     /// the photo.
     pub faces: Option<Vec<crate::analysis::faces::FaceView>>,
@@ -433,6 +444,8 @@ impl PhotoDetail {
             rating: decision.rating.stars(),
             quality: None,
             aesthetic: None,
+            taste: None,
+            critique_score: None,
             faces: None,
             score: None,
             reasons: Vec::new(),
@@ -484,6 +497,8 @@ mod tests {
         assert!(q(|q| q.photo_ids = Some(vec![1; 1000])).is_ok());
         assert!(q(|q| q.min_sharpness = Some(1.5)).is_err());
         assert!(q(|q| q.min_noise = Some(f32::NAN)).is_err());
+        assert!(q(|q| q.min_critique = Some(1.5)).is_err());
+        assert!(q(|q| q.min_critique = Some(0.5)).is_ok());
         assert!(q(|q| q.min_exposure = Some(0.0)).is_ok());
     }
 

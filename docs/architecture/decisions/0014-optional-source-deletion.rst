@@ -4,6 +4,9 @@ ADR-0014: Optional Deletion of Source Files After a Verified Copy
 :Status: Accepted
 :Date: 2026-10-19
 
+See also :doc:`ADR-0017 <0017-delete-originals-after-import>`, which
+extends optional deletion to imported folders.
+
 Context
 -------
 

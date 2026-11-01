@@ -94,6 +94,17 @@ ISO, focal length), size, GPS position and the photo's files with their
 sizes. Closing the loupe leaves the last viewed photo selected in the
 timeline.
 
+For a photo in a :doc:`series </features/series>`, a **ribbon** along the
+bottom shows every photo of the series in capture order, with the shown one
+outlined, the best marked *Best*, picks ticked and rejects dimmed, and
+"3 of 7" saying where you are. Click a frame to open that photo (frames of
+photos hidden by a filter or by stacked series are greyed out and cannot be
+opened from here). **Compare with best** (or **V**) shows the series' best
+photo beside the shown one, so the two can be judged at once; when the shown
+photo is the best, the runner-up is shown, labelled *Runner-up*. The switch
+is kept while the app is open and is off at first. The second photo uses the
+same RAW/JPEG choice and is hidden while the shown photo is at 100%.
+
 The fitted view uses a 2048-pixel preview. 100% zoom uses a full-size
 image, created the first time you zoom into a photo and then cached
 (:doc:`/reference/data-locations`).
@@ -199,7 +210,7 @@ The **Filters** panel beside the timeline (toggle it with the
      - Photos whose sharpness, exposure and/or low-noise score is at least
        25, 50 or 75% (:doc:`/reference/quality-scores`). Photos not analyzed
        yet are hidden while a quality filter is on.
-   * - Aesthetic, Hide closed eyes, People
+   * - Aesthetic, Critique score, Hide closed eyes, People
      - AI signals, once the models have run (:ref:`features-ai-library`)
    * - Best of each series only
      - Hides photos that are in a series but are not its best photo

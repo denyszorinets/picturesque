@@ -46,6 +46,10 @@ struct State {
     /// The next copy fills the disk (someone else wrote a big file).
     fill_during_next_copy: bool,
     clock: u64,
+    /// Files made durable by `sync_durable`, in order.
+    synced: Vec<PathBuf>,
+    /// `sync_durable` fails.
+    sync_fails: bool,
 }
 
 /// In-memory file system with failure injection. Paths are absolute.
@@ -185,6 +189,16 @@ impl MemFs {
     /// The next copy fails because the disk filled up meanwhile.
     pub fn fill_during_next_copy(&self) {
         self.state.lock().unwrap().fill_during_next_copy = true;
+    }
+
+    /// Files `sync_durable` was called for.
+    pub fn synced(&self) -> Vec<PathBuf> {
+        self.state.lock().unwrap().synced.clone()
+    }
+
+    /// Making a file durable fails from now on.
+    pub fn fail_sync(&self) {
+        self.state.lock().unwrap().sync_fails = true;
     }
 
     pub fn change_after_copy(&self, path: &str) {
@@ -343,6 +357,15 @@ impl FileSystem for MemFs {
         Ok(())
     }
 
+    fn sync_durable(&self, path: &Path, _up_to: &Path) -> Result<(), String> {
+        let mut s = self.state.lock().unwrap();
+        if s.sync_fails {
+            return Err("input/output error".into());
+        }
+        s.synced.push(path.to_path_buf());
+        Ok(())
+    }
+
     fn available_space(&self, _path: &Path) -> Result<u64, String> {
         Ok(self.state.lock().unwrap().space.unwrap_or(u64::MAX))
     }
@@ -428,6 +451,19 @@ impl MemoryCatalog {
 }
 
 impl MemoryCatalog {
+    fn flagged(&self, flag: picturesque_core::decision::Flag) -> Vec<PhotoId> {
+        let mut ids: Vec<PhotoId> = self
+            .decisions
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(_, d)| d.flag == flag)
+            .map(|(id, _)| *id)
+            .collect();
+        ids.sort();
+        ids
+    }
+
     fn is_analyzed(&self, id: PhotoId, analyzer: AnalyzerId) -> bool {
         self.analysis
             .lock()
@@ -934,16 +970,11 @@ impl PhotoCatalog for MemoryCatalog {
     }
 
     fn rejected_photos(&self) -> Result<Vec<PhotoId>, CatalogError> {
-        let mut ids: Vec<PhotoId> = self
-            .decisions
-            .lock()
-            .unwrap()
-            .iter()
-            .filter(|(_, d)| d.flag == picturesque_core::decision::Flag::Reject)
-            .map(|(id, _)| *id)
-            .collect();
-        ids.sort();
-        Ok(ids)
+        Ok(self.flagged(picturesque_core::decision::Flag::Reject))
+    }
+
+    fn picked_photos(&self) -> Result<Vec<PhotoId>, CatalogError> {
+        Ok(self.flagged(picturesque_core::decision::Flag::Pick))
     }
 
     fn move_assets(&self, id: PhotoId, moves: &[(PathBuf, PathBuf)]) -> Result<(), CatalogError> {
@@ -1405,6 +1436,104 @@ pub struct TestWorld {
     pub pixels: Arc<FakePixels>,
     pub pipeline: Arc<MemoryPipelineStore>,
     pub watcher: Arc<FakeWatcher>,
+    pub critic: Arc<FakeCritic>,
+    pub power: Arc<FakePower>,
+}
+
+/// Mains or battery power, as a test sets it.
+#[derive(Debug, Default)]
+pub struct FakePower(pub std::sync::atomic::AtomicBool);
+
+impl crate::ports::power::PowerSource for FakePower {
+    fn on_battery(&self) -> bool {
+        self.0.load(std::sync::atomic::Ordering::Relaxed)
+    }
+}
+
+/// A vision-language model (server or built-in) that answers with a set
+/// reply and records what it was asked.
+#[derive(Debug, Default)]
+pub struct FakeCritic {
+    /// The models the server has; `None` makes it unreachable.
+    pub models: Mutex<Option<Vec<String>>>,
+    /// Why the built-in critic cannot run, if it cannot.
+    pub builtin_problem: Mutex<Option<String>>,
+    /// Its reply to every question.
+    pub reply: Mutex<String>,
+    pub asked: Mutex<Vec<Question>>,
+    /// Makes `ask` fail as if the server went away after `models` answered.
+    pub ask_unreachable: std::sync::atomic::AtomicBool,
+    /// How often `interrupt` was called.
+    pub interrupts: std::sync::atomic::AtomicUsize,
+}
+
+/// A question to [`FakeCritic`].
+#[derive(Debug, Clone, PartialEq)]
+pub struct Question {
+    /// The server's address, or `builtin`.
+    pub target: String,
+    /// The server's model name, or the built-in model's file.
+    pub model: String,
+    /// For the built-in critic, whether it may use a GPU.
+    pub gpu: Option<bool>,
+    pub system: String,
+    pub prompt: String,
+    pub image: PathBuf,
+    pub max_edge: u32,
+}
+
+impl crate::ports::critic::Critic for FakeCritic {
+    fn models(&self, _server: &str) -> Result<Vec<String>, crate::ports::critic::CriticError> {
+        self.models.lock().unwrap().clone().ok_or_else(|| {
+            crate::ports::critic::CriticError::Unreachable("connection refused".into())
+        })
+    }
+
+    fn builtin_problem(&self) -> Option<String> {
+        self.builtin_problem.lock().unwrap().clone()
+    }
+
+    fn ask(
+        &self,
+        r: &crate::ports::critic::CriticRequest<'_>,
+    ) -> Result<String, crate::ports::critic::CriticError> {
+        use crate::ports::critic::CriticBackend;
+        if self
+            .ask_unreachable
+            .load(std::sync::atomic::Ordering::Relaxed)
+        {
+            return Err(crate::ports::critic::CriticError::Unreachable(
+                "connection lost".into(),
+            ));
+        }
+        let (target, model, gpu) = match r.backend {
+            CriticBackend::Server { url, model } => {
+                self.models(url)?;
+                (url.to_owned(), model.to_owned(), None)
+            }
+            CriticBackend::Builtin { model, gpu, .. } => {
+                if let Some(problem) = self.builtin_problem() {
+                    return Err(crate::ports::critic::CriticError::Unreachable(problem));
+                }
+                ("builtin".to_owned(), model.display().to_string(), Some(gpu))
+            }
+        };
+        self.asked.lock().unwrap().push(Question {
+            target,
+            model,
+            gpu,
+            system: r.system.into(),
+            prompt: r.prompt.into(),
+            image: r.image.to_path_buf(),
+            max_edge: r.max_edge,
+        });
+        Ok(self.reply.lock().unwrap().clone())
+    }
+
+    fn interrupt(&self) {
+        self.interrupts
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    }
 }
 
 /// Records what is watched; tests report changes with [`FakeWatcher::touch`].
@@ -1470,6 +1599,8 @@ impl TestWorld {
             events: Arc::default(),
             pipeline: Arc::default(),
             watcher: Arc::default(),
+            critic: Arc::default(),
+            power: Arc::default(),
         }
     }
 
@@ -1508,6 +1639,8 @@ impl TestWorld {
             model_store: Arc::new(MemoryModelStore::default()),
             pipeline_store: self.pipeline.clone(),
             watcher: self.watcher.clone(),
+            critic: self.critic.clone(),
+            power: self.power.clone(),
         }
     }
 }
@@ -1523,6 +1656,8 @@ struct PipelineState {
     sources: Vec<crate::ports::pipeline::ImportSource>,
     jobs: Vec<(String, crate::ports::pipeline::Job)>,
     log: Vec<crate::ports::pipeline::LogEntry>,
+    /// Jobs whose source files were deleted.
+    removed: std::collections::HashSet<i64>,
     next_id: i64,
 }
 
@@ -1563,6 +1698,7 @@ impl crate::ports::pipeline::PipelineStore for MemoryPipelineStore {
             watch,
             scanned_at: None,
             scan_error: None,
+            delete_originals: None,
         };
         s.sources.push(source.clone());
         Ok(source)
@@ -1576,6 +1712,18 @@ impl crate::ports::pipeline::PipelineStore for MemoryPipelineStore {
         let mut s = self.state.lock().unwrap();
         if let Some(source) = s.sources.iter_mut().find(|x| x.id == id) {
             source.watch = watch;
+        }
+        Ok(())
+    }
+
+    fn set_source_delete_originals(
+        &self,
+        id: i64,
+        choice: Option<crate::settings::DeleteAfterImport>,
+    ) -> Result<(), CatalogError> {
+        let mut s = self.state.lock().unwrap();
+        if let Some(source) = s.sources.iter_mut().find(|x| x.id == id) {
+            source.delete_originals = choice;
         }
         Ok(())
     }
@@ -1611,7 +1759,8 @@ impl crate::ports::pipeline::PipelineStore for MemoryPipelineStore {
         use crate::ports::pipeline::{Job, JobStage};
         let mut s = self.state.lock().unwrap();
         let key = key.display().to_string();
-        if let Some((_, job)) = s.jobs.iter_mut().find(|(k, _)| *k == key) {
+        if let Some(index) = s.jobs.iter().position(|(k, _)| *k == key) {
+            let job = &mut s.jobs[index].1;
             if job.files == files || matches!(job.stage, JobStage::Reading | JobStage::Copying) {
                 return Ok(None);
             }
@@ -1622,7 +1771,9 @@ impl crate::ports::pipeline::PipelineStore for MemoryPipelineStore {
             job.stage = JobStage::Queued;
             job.error = None;
             job.source_id = Some(source_id);
-            return Ok(Some(job.id));
+            let id = job.id;
+            s.removed.remove(&id);
+            return Ok(Some(id));
         }
         let id = s.id();
         s.jobs.push((
@@ -1694,6 +1845,47 @@ impl crate::ports::pipeline::PipelineStore for MemoryPipelineStore {
             }
         }
         Ok(n)
+    }
+
+    fn cleanup_candidates(
+        &self,
+        source_id: i64,
+        through_job_id: Option<i64>,
+    ) -> Result<Vec<crate::ports::pipeline::Job>, CatalogError> {
+        use crate::ports::pipeline::JobStage;
+        let s = self.state.lock().unwrap();
+        let mut jobs: Vec<_> = s
+            .jobs
+            .iter()
+            .map(|(_, j)| j)
+            .filter(|j| j.source_id == Some(source_id))
+            .filter(|j| matches!(j.stage, JobStage::Imported | JobStage::Duplicate))
+            .filter(|j| j.photo_id.is_some() && !s.removed.contains(&j.id))
+            .filter(|j| through_job_id.is_none_or(|t| j.id <= t))
+            .cloned()
+            .collect();
+        jobs.sort_by_key(|j| j.id);
+        Ok(jobs)
+    }
+
+    fn unfinished_jobs(&self, source_id: i64) -> Result<usize, CatalogError> {
+        use crate::ports::pipeline::JobStage;
+        let s = self.state.lock().unwrap();
+        Ok(s.jobs
+            .iter()
+            .filter(|(_, j)| j.source_id == Some(source_id))
+            .filter(|(_, j)| {
+                matches!(
+                    j.stage,
+                    JobStage::Queued | JobStage::Reading | JobStage::Copying
+                )
+            })
+            .count())
+    }
+
+    fn mark_source_removed(&self, job_id: i64) -> Result<(), CatalogError> {
+        self.state.lock().unwrap().removed.insert(job_id);
+        Ok(())
     }
 
     fn job(&self, id: i64) -> Result<Option<crate::ports::pipeline::Job>, CatalogError> {

@@ -176,6 +176,16 @@ fn orient(image: &Image, orientation: Orientation) -> Result<Image, String> {
     if flip { rotated.flip() } else { Ok(rotated) }
 }
 
+/// A JPEG of the image at `path` shrunk to fit `max_edge`, upright and
+/// without any metadata (no EXIF, GPS or XMP), to send to a model server.
+pub fn jpeg_for_upload(path: &Path, max_edge: u32) -> Result<Vec<u8>, String> {
+    let image = Image::thumbnail(path, i32::try_from(max_edge).unwrap_or(i32::MAX))?;
+    let dir = tempfile::tempdir().map_err(|e| e.to_string())?;
+    let out = dir.path().join("upload.jpg");
+    image.save_jpeg(&out, JPEG_QUALITY, false)?;
+    std::fs::read(&out).map_err(|e| e.to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use std::path::PathBuf;

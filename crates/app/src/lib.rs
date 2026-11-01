@@ -9,14 +9,17 @@ pub mod ai;
 pub mod analysis;
 pub mod api;
 pub mod clear;
+pub mod critic;
 pub mod embeddings;
 pub mod explain;
 pub mod export;
 pub mod finish;
 pub mod hooks;
 pub mod info;
+pub mod insights;
 pub mod library;
 pub mod models;
+pub mod originals;
 pub mod pipeline;
 pub mod ports;
 pub mod rejects;
@@ -27,8 +30,10 @@ pub mod sessions;
 pub mod settings;
 pub mod sidecars;
 pub mod stats;
+pub mod taste;
 pub mod templates;
 pub mod thumbnails;
+pub mod work;
 
 #[cfg(test)]
 mod testing;

@@ -12,11 +12,25 @@ const SETTINGS: Settings = {
   ai: { provider: "auto" },
   import: { rescan_minutes: 5 },
   auto_pick: { enabled: true, min_quality: 0.5 },
+  taste: { personal_weight: 0.5 },
+  critic: {
+    enabled: false,
+    backend: "builtin",
+    server: "http://127.0.0.1:11434/v1",
+    model: "qwen3-vl:4b",
+    preset: "amateur",
+    rubric: null,
+    background: false,
+    intensity: "gentle",
+    score_weight: 0.25,
+    potential_weight: 0.15,
+  },
   onboarding: { tour_done: false },
   open_folder: null,
   recent_folders: [],
   labels: { pick: "green", auto_pick: "yellow" },
   delete_after_copy: "verified",
+  delete_after_import: "never",
   pair_view: "image",
 };
 
@@ -64,7 +78,14 @@ vi.mock("../api", async (importOriginal) => {
 });
 
 function source(id: number, path: string): ImportSource {
-  return { id, path, watch: true, scanned_at: null, scan_error: null };
+  return {
+    id,
+    path,
+    watch: true,
+    scanned_at: null,
+    scan_error: null,
+    delete_originals: null,
+  };
 }
 
 beforeEach(() => {
@@ -96,7 +117,7 @@ describe("SetupWizard", () => {
     const root = await screen.findByTestId("setup-library-root");
     // Photos are copied; originals are only read.
     expect(screen.getByTestId("setup-copy-only")).toHaveTextContent(
-      "Your originals are never moved, renamed, edited or deleted",
+      "Importing never moves, renames or edits your originals",
     );
     await fireEvent.input(root, { target: { value: " /photos/library " } });
     await fireEvent.click(await screen.findByLabelText(/One folder/));
@@ -113,6 +134,14 @@ describe("SetupWizard", () => {
     await fireEvent.click(screen.getByTestId("setup-add-source"));
     expect(addImportSource).toHaveBeenCalledWith("/media/card");
     expect(await screen.findByText("/media/card")).toBeInTheDocument();
+    // Originals are kept unless the user chooses otherwise.
+    const originals = screen.getByTestId("setup-delete-originals");
+    expect(originals).toHaveValue("never");
+    updateSettings.mockClear();
+    await fireEvent.change(originals, { target: { value: "ask" } });
+    expect(updateSettings).toHaveBeenCalledWith({
+      delete_after_import: "ask",
+    });
     await next();
 
     // Step 3: AI models, optional.
@@ -120,6 +149,32 @@ describe("SetupWizard", () => {
     expect(await screen.findByText("CLIP image encoder")).toBeInTheDocument();
     await fireEvent.click(screen.getByTestId("setup-next"));
     expect(onclose).toHaveBeenCalledOnce();
+  });
+
+  it("turns on deleting right after importing only after a confirmation", async () => {
+    render(SetupWizard, { onclose: vi.fn() });
+    await screen.findByTestId("setup-library-root");
+    await fireEvent.click(screen.getByTestId("setup-skip"));
+    const originals = await screen.findByTestId("setup-delete-originals");
+    updateSettings.mockClear();
+
+    // Cancelled: nothing is saved and the choice stays as it was.
+    await fireEvent.change(originals, { target: { value: "immediately" } });
+    expect(screen.getByTestId("immediate-dialog")).toHaveTextContent(
+      "permanent",
+    );
+    expect(updateSettings).not.toHaveBeenCalled();
+    await fireEvent.click(screen.getByTestId("immediate-cancel"));
+    expect(screen.queryByTestId("immediate-dialog")).toBeNull();
+    expect(originals).toHaveValue("never");
+    expect(updateSettings).not.toHaveBeenCalled();
+
+    // Confirmed: saved.
+    await fireEvent.change(originals, { target: { value: "immediately" } });
+    await fireEvent.click(screen.getByTestId("immediate-confirm"));
+    expect(updateSettings).toHaveBeenCalledWith({
+      delete_after_import: "immediately",
+    });
   });
 
   it("keeps a step open and shows why when saving fails", async () => {

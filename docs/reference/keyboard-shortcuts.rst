@@ -82,7 +82,8 @@ Loupe
 -----
 
 ← → move between photos, ↑ picks and ↓ rejects, Z zooms, I toggles the information panel,
-R switches between the RAW and the JPEG of a pair, Esc
+R switches between the RAW and the JPEG of a pair, V shows the best photo of
+the series beside this one (and hides it again), Esc
 closes; the culling keys above apply to the photo shown, and with
 **Auto-advance** on every decision moves to the next photo. See
 :ref:`features-library-loupe`.

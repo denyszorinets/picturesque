@@ -1,4 +1,8 @@
 import type { AiStatus } from "./generated/AiStatus";
+import type { TasteStatus } from "./generated/TasteStatus";
+import type { CriticStatus } from "./generated/CriticStatus";
+import type { BackgroundCritiqueStatus } from "./generated/BackgroundCritiqueStatus";
+import type { CritiqueView } from "./generated/CritiqueView";
 import type { AnalysisStatus } from "./generated/AnalysisStatus";
 import type { SidecarStatus } from "./generated/SidecarStatus";
 import type { FinishResult } from "./generated/FinishResult";
@@ -14,6 +18,10 @@ import type { SimilarPhoto } from "./generated/SimilarPhoto";
 import type { AppEvent } from "./generated/AppEvent";
 import type { AppInfo } from "./generated/AppInfo";
 import type { ImportSource } from "./generated/ImportSource";
+import type { OriginalsChoice } from "./generated/OriginalsChoice";
+import type { OriginalsOffer } from "./generated/OriginalsOffer";
+import type { OriginalsPlan } from "./generated/OriginalsPlan";
+import type { OriginalsStatus } from "./generated/OriginalsStatus";
 import type { JobsArgs } from "./generated/JobsArgs";
 import type { JobView } from "./generated/JobView";
 import type { LogArgs } from "./generated/LogArgs";
@@ -23,6 +31,7 @@ import type { DecisionChange } from "./generated/DecisionChange";
 import type { DecisionView } from "./generated/DecisionView";
 import type { PhotoDetail } from "./generated/PhotoDetail";
 import type { LibraryStats } from "./generated/LibraryStats";
+import type { LibraryInsights } from "./generated/LibraryInsights";
 import type { PhotoFacets } from "./generated/PhotoFacets";
 import type { ReanalyzeResult } from "./generated/ReanalyzeResult";
 import type { PhotoPage } from "./generated/PhotoPage";
@@ -37,10 +46,27 @@ import { selectTransport, type ImageSize, type PairView } from "./transport";
 
 export { ApiError } from "./error";
 export type { AiStatus } from "./generated/AiStatus";
+export type { TasteStatus } from "./generated/TasteStatus";
+export type { TasteSettings } from "./generated/TasteSettings";
+export type { CriticStatus } from "./generated/CriticStatus";
+export type { BackgroundCritiqueStatus } from "./generated/BackgroundCritiqueStatus";
+export type { CriticIntensity } from "./generated/CriticIntensity";
+export type { CriticPreset } from "./generated/CriticPreset";
+export type { CritiqueView } from "./generated/CritiqueView";
+export type { Fixable } from "./generated/Fixable";
+export type { Issue } from "./generated/Issue";
+export type { CriticSettings } from "./generated/CriticSettings";
+export type { CriticEngine } from "./generated/CriticEngine";
+export type { SuggestedModel } from "./generated/SuggestedModel";
 export type { ReanalyzeResult } from "./generated/ReanalyzeResult";
 export type { GearStats } from "./generated/GearStats";
 export type { KeeperCounts } from "./generated/KeeperCounts";
 export type { LibraryStats } from "./generated/LibraryStats";
+export type { LibraryInsights } from "./generated/LibraryInsights";
+export type { IssueInsight } from "./generated/IssueInsight";
+export type { TrendBucket } from "./generated/TrendBucket";
+export type { SettingHabit } from "./generated/SettingHabit";
+export type { InsightSetting } from "./generated/InsightSetting";
 export type { AnalysisStatus } from "./generated/AnalysisStatus";
 export type { ModelView } from "./generated/ModelView";
 export type { ExportArgs } from "./generated/ExportArgs";
@@ -77,6 +103,11 @@ export type { ColorLabel } from "./generated/ColorLabel";
 export type { FinishResult } from "./generated/FinishResult";
 export type { ClearPlan } from "./generated/ClearPlan";
 export type { ClearResult } from "./generated/ClearResult";
+export type { DeleteAfterImport } from "./generated/DeleteAfterImport";
+export type { OriginalsChoice } from "./generated/OriginalsChoice";
+export type { OriginalsOffer } from "./generated/OriginalsOffer";
+export type { OriginalsPlan } from "./generated/OriginalsPlan";
+export type { OriginalsStatus } from "./generated/OriginalsStatus";
 export type { DeleteAfterCopy } from "./generated/DeleteAfterCopy";
 export type { FinishStatus } from "./generated/FinishStatus";
 export type { LabelSettings } from "./generated/LabelSettings";
@@ -170,8 +201,59 @@ export function listImportSources(): Promise<ImportSource[]> {
 export function addImportSource(
   path: string,
   watch = true,
+  deleteOriginals: OriginalsChoice = "default",
 ): Promise<ImportSource> {
-  return transport.call<ImportSource>("add_import_source", { path, watch });
+  return transport.call<ImportSource>("add_import_source", {
+    path,
+    watch,
+    delete_originals: deleteOriginals,
+  });
+}
+
+/** Sets a folder's own choice about deleting originals (ADR-0017). */
+export function setImportSourceDeleteOriginals(
+  id: number,
+  choice: OriginalsChoice,
+): Promise<ImportSource> {
+  return transport.call<ImportSource>("set_import_source_delete_originals", {
+    id,
+    choice,
+  });
+}
+
+/** Folders whose imported photos' originals can be deleted. */
+export function originalsOffers(): Promise<OriginalsOffer[]> {
+  return transport.call<OriginalsOffer[]>("delete_originals_offers");
+}
+
+/** What deleting a folder's originals would do. */
+export function originalsPlan(sourceId: number): Promise<OriginalsPlan> {
+  return transport.call<OriginalsPlan>("delete_originals_plan", {
+    source_id: sourceId,
+  });
+}
+
+/**
+ * Starts deleting the originals the plan listed; permanent. The library
+ * copy of each photo is checked again first.
+ */
+export function deleteOriginals(
+  sourceId: number,
+  throughJobId: number,
+): Promise<OriginalsStatus> {
+  return transport.call<OriginalsStatus>("delete_originals", {
+    source_id: sourceId,
+    through_job_id: throughJobId,
+  });
+}
+
+export function originalsStatus(): Promise<OriginalsStatus> {
+  return transport.call<OriginalsStatus>("delete_originals_status");
+}
+
+/** Stops deleting after the photo being worked on. */
+export function cancelDeleteOriginals(): Promise<OriginalsStatus> {
+  return transport.call<OriginalsStatus>("cancel_delete_originals");
 }
 
 /** Forgets a folder (imported photos stay); returns the remaining folders. */
@@ -265,6 +347,11 @@ export function libraryStats(): Promise<LibraryStats> {
   return transport.call<LibraryStats>("library_stats");
 }
 
+/** What the stored critiques say together; recent ones count more. */
+export function libraryInsights(): Promise<LibraryInsights> {
+  return transport.call<LibraryInsights>("library_insights");
+}
+
 /** Changes photos' flags and/or ratings; returns the resulting decisions. */
 export function setDecisions(
   changes: DecisionChange[],
@@ -332,6 +419,44 @@ export function chooseBest(
 /** Which hardware local AI models run on (probes it when the choice changed). */
 export function aiStatus(): Promise<AiStatus> {
   return transport.call<AiStatus>("ai_status");
+}
+
+/** What the personal taste model has learned from picks and rejects. */
+export function tasteStatus(): Promise<TasteStatus> {
+  return transport.call<TasteStatus>("taste_status");
+}
+
+/** Whether photo critiques can run (asks the model server when on). */
+export function criticStatus(): Promise<CriticStatus> {
+  return transport.call<CriticStatus>("critic_status");
+}
+
+/** Progress of critiquing the whole library in the background. */
+export function backgroundCritiqueStatus(): Promise<BackgroundCritiqueStatus> {
+  return transport.call<BackgroundCritiqueStatus>("background_critique_status");
+}
+
+/** Tells the app the user is active (the background critic yields). */
+export function reportActivity(): Promise<null> {
+  return transport.call<null>("report_activity");
+}
+
+/** The stored critique of a photo by the current model and rubric. */
+export function getCritique(photoId: number): Promise<CritiqueView | null> {
+  return transport.call<CritiqueView | null>("get_critique", {
+    photo_id: photoId,
+  });
+}
+
+/** Asks the model to critique a photo (or returns the stored critique). */
+export function critiquePhoto(
+  photoId: number,
+  refresh = false,
+): Promise<CritiqueView> {
+  return transport.call<CritiqueView>("critique_photo", {
+    photo_id: photoId,
+    refresh,
+  });
 }
 
 /** The AI models the app offers, with licenses and download state. */

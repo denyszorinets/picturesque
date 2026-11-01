@@ -37,6 +37,15 @@ pub const FACES: &str = "faces";
 pub const FACE_DETECTOR_FILE: &str = "face_detection_yunet_2023mar.onnx";
 pub const FACE_MESH_FILE: &str = "face_mesh.onnx";
 
+/// Qwen3-VL 4B Instruct for the built-in critic (`critic`, ADR-0016): the
+/// language model and its vision projector, as GGUF for llama.cpp.
+pub const CRITIC: &str = "critic-qwen3-vl";
+pub const CRITIC_MODEL_FILE: &str = "Qwen3VL-4B-Instruct-Q4_K_M.gguf";
+pub const CRITIC_MMPROJ_FILE: &str = "mmproj-Qwen3VL-4B-Instruct-Q8_0.gguf";
+
+/// Qwen's official GGUF files, pinned to a commit.
+const CRITIC_REPO: &str = "https://huggingface.co/Qwen/Qwen3-VL-4B-Instruct-GGUF/resolve/1cd86afb9a95c410a6038ab3b40d8b578c892266";
+
 /// Immich's ONNX export of OpenAI CLIP ViT-L/14, pinned to a commit. The
 /// improved LAION aesthetic predictor was trained on its embeddings; with
 /// the smaller ViT-B/32 the aesthetic score barely beat chance
@@ -122,6 +131,33 @@ pub fn catalog() -> Vec<ModelSpec> {
                     sha256: "c334c26b128dfc709da0f353c6157ac340b785f5f25cdab5dbea12bbea243172"
                         .into(),
                     size: 5_133_323,
+                },
+            ],
+        },
+        ModelSpec {
+            id: CRITIC.into(),
+            name: "Qwen3-VL 4B (built-in critic)".into(),
+            purpose: "Writes critiques of photos: what works and what does not. \
+                  Runs on this computer, on the GPU when it can."
+                .into(),
+            version: 1,
+            license: "Apache-2.0".into(),
+            license_url: "https://huggingface.co/Qwen/Qwen3-VL-4B-Instruct-GGUF".into(),
+            homepage: "https://github.com/QwenLM/Qwen3-VL".into(),
+            files: vec![
+                ModelFile {
+                    name: CRITIC_MODEL_FILE.into(),
+                    url: format!("{CRITIC_REPO}/{CRITIC_MODEL_FILE}"),
+                    sha256: "66358cb18bb6b3b1b6675aa412c7a88ef01d228f481184d13668e5201c730a0a"
+                        .into(),
+                    size: 2_497_281_664,
+                },
+                ModelFile {
+                    name: CRITIC_MMPROJ_FILE.into(),
+                    url: format!("{CRITIC_REPO}/{CRITIC_MMPROJ_FILE}"),
+                    sha256: "30ba2c7dd3127a4561b6cba9d13d0f711c91bdb38742e2f56d73c8cb596bd06d"
+                        .into(),
+                    size: 453_974_304,
                 },
             ],
         },

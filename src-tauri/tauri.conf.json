@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Picturesque",
-  "version": "0.1.5",
+  "version": "0.2.0",
   "identifier": "io.github.denyszorinets.picturesque",
   "build": {
     "devUrl": "http://127.0.0.1:5173",
@@ -44,28 +44,33 @@
         "depends": [
           "libvips42t64 | libvips42",
           "libraw23t64 | libraw23",
-          "libheif1"
+          "libheif1",
+          "libayatana-appindicator3-1 | libappindicator3-1"
         ],
         "files": {
           "/usr/lib/picturesque/libonnxruntime.so": "../target/release/libonnxruntime.so",
-          "/usr/lib/picturesque/libwebgpu_dawn.so": "../target/release/libwebgpu_dawn.so"
+          "/usr/lib/picturesque/libwebgpu_dawn.so": "../target/release/libwebgpu_dawn.so",
+          "/usr/lib/picturesque/critic": "../target/release/critic"
         }
       },
       "rpm": {
         "depends": [
           "vips",
           "LibRaw",
-          "libheif"
+          "libheif",
+          "libayatana-appindicator-gtk3"
         ],
         "files": {
           "/usr/lib/picturesque/libonnxruntime.so": "../target/release/libonnxruntime.so",
-          "/usr/lib/picturesque/libwebgpu_dawn.so": "../target/release/libwebgpu_dawn.so"
+          "/usr/lib/picturesque/libwebgpu_dawn.so": "../target/release/libwebgpu_dawn.so",
+          "/usr/lib/picturesque/critic": "../target/release/critic"
         }
       },
       "appimage": {
         "files": {
           "/usr/lib/picturesque/libonnxruntime.so": "../target/release/libonnxruntime.so",
-          "/usr/lib/picturesque/libwebgpu_dawn.so": "../target/release/libwebgpu_dawn.so"
+          "/usr/lib/picturesque/libwebgpu_dawn.so": "../target/release/libwebgpu_dawn.so",
+          "/usr/lib/picturesque/critic": "../target/release/critic"
         }
       }
     }

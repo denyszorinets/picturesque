@@ -468,3 +468,12 @@ For a normal GitHub task, follow this sequence:
 15. Human review is mandatory before merging, unless the user explicitly instructs Claude in-conversation to merge a specific PR itself (see [Human Review Is Mandatory](#human-review-is-mandatory)).
 16. Never bypass required GitHub review or branch protection.
 17. Keep GitHub ticket, branch, commit, and PR associated with the same piece of work.
+
+## Standing Autonomy
+
+The maintainer has given a **standing, in-conversation instruction** (also written in `CLAUDE.md`, section *Autonomy*), which is the explicit merge instruction the [Human Review Is Mandatory](#human-review-is-mandatory) exception asks for:
+
+* For GitHub issues that already exist (an epic's tasks, or issues the maintainer pointed at), implement them one after another without asking whether to start the next one.
+* Open the PR into `develop`, wait for CI, and **squash-merge it yourself once all checks pass and it is mergeable**. Surface what is merged (files, test results, mergeability) in your report.
+* Then close the issue, tick the epic, `git switch develop && git pull --ff-only origin develop`, and start the next issue.
+* Still forbidden: merging into `main` or releasing, force-pushing without instruction, bypassing branch protection or required checks, merging with failing CI. If CI fails and you cannot fix it, stop and report.

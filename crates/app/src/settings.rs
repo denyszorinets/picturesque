@@ -44,6 +44,10 @@ pub struct Settings {
     pub import: ImportSettings,
     /// Which photos the app marks as keepers.
     pub auto_pick: AutoPickSettings,
+    /// How much the user's own taste counts in the aesthetic score.
+    pub taste: TasteSettings,
+    /// Photo critiques from a local vision-language model.
+    pub critic: CriticSettings,
     /// What the user has already been shown.
     pub onboarding: OnboardingSettings,
     /// The folder being culled in place, reopened at startup; `None` while
@@ -57,6 +61,8 @@ pub struct Settings {
     pub labels: LabelSettings,
     /// What clearing a folder after copying may delete (ADR-0014).
     pub delete_after_copy: DeleteAfterCopy,
+    /// Whether to offer deleting originals once imported (ADR-0017).
+    pub delete_after_import: DeleteAfterImport,
     /// Which file of a RAW+JPEG pair the grid and loupe show.
     #[ts(type = "\"image\" | \"raw\"")]
     pub pair_view: PairView,
@@ -75,6 +81,41 @@ pub enum DeleteAfterCopy {
     Verified,
     /// Those, and photos you rejected.
     VerifiedAndRejects,
+}
+
+/// Whether to offer deleting the original files of imported photos
+/// (ADR-0017); each import folder can override it.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export)]
+pub enum DeleteAfterImport {
+    /// Originals are never touched.
+    #[default]
+    Never,
+    /// When a folder is imported, offer to delete the originals whose copy
+    /// was verified; nothing is deleted without confirmation.
+    Ask,
+    /// Delete each original as soon as its copy is imported and verified,
+    /// so a library larger than the free space can still be imported.
+    /// Permanent, and confirmed once when it is turned on.
+    Immediately,
+}
+
+impl DeleteAfterImport {
+    /// The name stored in the catalog for a folder's own choice.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Never => "never",
+            Self::Ask => "ask",
+            Self::Immediately => "immediately",
+        }
+    }
+
+    pub fn parse(name: &str) -> Option<Self> {
+        [Self::Never, Self::Ask, Self::Immediately]
+            .into_iter()
+            .find(|m| m.as_str() == name)
+    }
 }
 
 /// Colour labels written to XMP sidecars, so tools without a pick flag
@@ -136,6 +177,172 @@ impl Default for AutoPickSettings {
             enabled: true,
             min_quality: 0.5,
         }
+    }
+}
+
+/// The personal aesthetic model (`docs/features/ai.rst`), learned from
+/// the user's picks and rejects.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, TS)]
+#[serde(default)]
+#[ts(export)]
+pub struct TasteSettings {
+    /// How much the personal score counts in the aesthetic score once
+    /// learned, 0–1: 0 uses only the general score, 1 only the personal one.
+    pub personal_weight: f64,
+}
+
+impl Default for TasteSettings {
+    fn default() -> Self {
+        Self {
+            personal_weight: 0.5,
+        }
+    }
+}
+
+/// Photo critiques from a local vision-language model (ADR-0016,
+/// `docs/features/ai.rst`).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[serde(default)]
+#[ts(export)]
+pub struct CriticSettings {
+    pub enabled: bool,
+    /// Which model writes critiques.
+    pub backend: CriticEngine,
+    /// Base address of an OpenAI-compatible API (`server` backend).
+    pub server: String,
+    pub model: String,
+    /// Who the critique is written for: how strict, how simple.
+    pub preset: CriticPreset,
+    /// What the model judges (the custom rubric); `null` uses the default
+    /// rubric. Independent of the preset.
+    pub rubric: Option<String>,
+    /// Critique the whole library in the background.
+    pub background: bool,
+    /// How hard the background critic may use the computer.
+    pub intensity: CriticIntensity,
+    /// How much critiques count in the aesthetic score, 0–1.
+    pub score_weight: f64,
+    /// How far a RAW original's critique rating moves toward the rating it
+    /// could reach after editing, 0–1; 0 turns it off.
+    pub potential_weight: f64,
+}
+
+/// Who a critique is written for (`docs/features/ai.rst`).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export)]
+pub enum CriticPreset {
+    /// A strict juror; the original critic.
+    #[default]
+    Professional,
+    /// A demanding but fair coach for an enthusiast.
+    Amateur,
+    /// An encouraging teacher in plain language.
+    Beginner,
+}
+
+impl CriticPreset {
+    /// The serialized name; part of the stored critique key, so it must not
+    /// change.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Professional => "professional",
+            Self::Amateur => "amateur",
+            Self::Beginner => "beginner",
+        }
+    }
+}
+
+/// How hard the background critic may use the computer
+/// (`docs/features/ai.rst`).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export)]
+pub enum CriticIntensity {
+    /// Low priority and half the processor; pauses while importing or
+    /// analyzing, and on battery power.
+    #[default]
+    Gentle,
+    /// Full speed, but only after a few minutes without using the app.
+    WhenIdle,
+    /// Full speed whenever enabled.
+    Full,
+}
+
+/// Where critiques come from.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export)]
+pub enum CriticEngine {
+    /// The downloaded Qwen3-VL model, run by the app's helper.
+    #[default]
+    Builtin,
+    /// A local server the user runs (Ollama, llama.cpp, LM Studio).
+    Server,
+}
+
+impl Default for CriticSettings {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            backend: CriticEngine::Builtin,
+            server: crate::critic::DEFAULT_SERVER.into(),
+            model: crate::critic::DEFAULT_MODEL.into(),
+            preset: CriticPreset::Professional,
+            rubric: None,
+            background: false,
+            intensity: CriticIntensity::Gentle,
+            score_weight: 0.25,
+            potential_weight: 0.15,
+        }
+    }
+}
+
+impl CriticSettings {
+    /// Longest rubric accepted.
+    pub const MAX_RUBRIC: usize = 4_000;
+
+    /// The rubric in use.
+    pub fn rubric(&self) -> &str {
+        self.rubric
+            .as_deref()
+            .filter(|r| !r.trim().is_empty())
+            .unwrap_or(crate::critic::DEFAULT_RUBRIC)
+    }
+
+    fn validate(&self) -> Result<(), String> {
+        if !(self.server.starts_with("http://") || self.server.starts_with("https://")) {
+            return Err(format!(
+                "The critic's server must be an http:// or https:// address, got `{}`.",
+                self.server
+            ));
+        }
+        if self.model.trim().is_empty() {
+            return Err("Choose a model for critiques.".into());
+        }
+        if !(0.0..=1.0).contains(&self.score_weight) {
+            return Err(format!(
+                "The critique's share of the aesthetic score must be 0–100%, got {}%.",
+                (self.score_weight * 100.0).round()
+            ));
+        }
+        if !(0.0..=1.0).contains(&self.potential_weight) {
+            return Err(format!(
+                "The RAW potential's share of the critique rating must be 0–100%, got {}%.",
+                (self.potential_weight * 100.0).round()
+            ));
+        }
+        if self
+            .rubric
+            .as_ref()
+            .is_some_and(|r| r.chars().count() > Self::MAX_RUBRIC)
+        {
+            return Err(format!(
+                "The rubric is too long: at most {} characters.",
+                Self::MAX_RUBRIC
+            ));
+        }
+        Ok(())
     }
 }
 
@@ -254,11 +461,14 @@ impl Default for Settings {
             ai: AiSettings::default(),
             import: ImportSettings::default(),
             auto_pick: AutoPickSettings::default(),
+            taste: TasteSettings::default(),
+            critic: CriticSettings::default(),
             onboarding: OnboardingSettings::default(),
             open_folder: None,
             recent_folders: Vec::new(),
             labels: LabelSettings::default(),
             delete_after_copy: DeleteAfterCopy::default(),
+            delete_after_import: DeleteAfterImport::default(),
             pair_view: PairView::default(),
         }
     }
@@ -286,11 +496,17 @@ pub struct SettingsUpdate {
     #[ts(optional)]
     pub auto_pick: Option<AutoPickSettings>,
     #[ts(optional)]
+    pub taste: Option<TasteSettings>,
+    #[ts(optional)]
+    pub critic: Option<CriticSettings>,
+    #[ts(optional)]
     pub onboarding: Option<OnboardingSettings>,
     #[ts(optional)]
     pub labels: Option<LabelSettings>,
     #[ts(optional)]
     pub delete_after_copy: Option<DeleteAfterCopy>,
+    #[ts(optional)]
+    pub delete_after_import: Option<DeleteAfterImport>,
     #[ts(type = "\"image\" | \"raw\"", optional)]
     pub pair_view: Option<PairView>,
 }
@@ -431,11 +647,27 @@ impl SettingsService {
             }
             settings.auto_pick = auto_pick;
         }
+        if let Some(taste) = update.taste {
+            if !(0.0..=1.0).contains(&taste.personal_weight) {
+                return Err(SettingsError::Invalid(format!(
+                    "Your taste's share of the aesthetic score must be 0–100%, got {}%.",
+                    (taste.personal_weight * 100.0).round()
+                )));
+            }
+            settings.taste = taste;
+        }
+        if let Some(critic) = update.critic {
+            critic.validate().map_err(SettingsError::Invalid)?;
+            settings.critic = critic;
+        }
         if let Some(onboarding) = update.onboarding {
             settings.onboarding = onboarding;
         }
         if let Some(labels) = update.labels {
             settings.labels = labels;
+        }
+        if let Some(mode) = update.delete_after_import {
+            settings.delete_after_import = mode;
         }
         if let Some(mode) = update.delete_after_copy {
             settings.delete_after_copy = mode;
@@ -680,6 +912,127 @@ pub(crate) mod tests {
             matches!(&err, SettingsError::Invalid(m) if m.contains(".{ext}")),
             "{err}"
         );
+    }
+
+    #[test]
+    fn the_personal_weight_is_a_share() {
+        let (service, _) = service(&[]);
+        let update = |personal_weight| {
+            service.update(SettingsUpdate {
+                taste: Some(TasteSettings { personal_weight }),
+                ..Default::default()
+            })
+        };
+
+        assert_eq!(update(1.0).unwrap().taste.personal_weight, 1.0);
+        let err = update(1.5).unwrap_err();
+        assert!(
+            matches!(&err, SettingsError::Invalid(m) if m.contains("150%")),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn critic_settings_are_validated() {
+        let (service, _) = service(&[]);
+        let update = |critic: CriticSettings| {
+            service.update(SettingsUpdate {
+                critic: Some(critic),
+                ..Default::default()
+            })
+        };
+        let ok = CriticSettings {
+            enabled: true,
+            rubric: Some("Light only.".into()),
+            ..Default::default()
+        };
+        assert_eq!(update(ok.clone()).unwrap().critic.rubric(), "Light only.");
+        for (bad, message) in [
+            (
+                CriticSettings {
+                    server: "ftp://host".into(),
+                    ..ok.clone()
+                },
+                "http://",
+            ),
+            (
+                CriticSettings {
+                    model: " ".into(),
+                    ..ok.clone()
+                },
+                "Choose a model",
+            ),
+            (
+                CriticSettings {
+                    rubric: Some("x".repeat(CriticSettings::MAX_RUBRIC + 1)),
+                    ..ok.clone()
+                },
+                "too long",
+            ),
+        ] {
+            let err = update(bad).unwrap_err();
+            assert!(
+                matches!(&err, SettingsError::Invalid(m) if m.contains(message)),
+                "{err}"
+            );
+        }
+        let err = update(CriticSettings {
+            score_weight: 2.0,
+            ..ok.clone()
+        })
+        .unwrap_err();
+        assert!(
+            matches!(&err, SettingsError::Invalid(m) if m.contains("200%")),
+            "{err}"
+        );
+        for (weight, valid) in [(-0.1, false), (1.5, false), (0.0, true), (1.0, true)] {
+            let result = update(CriticSettings {
+                potential_weight: weight,
+                ..ok.clone()
+            });
+            assert_eq!(result.is_ok(), valid, "potential_weight {weight}");
+        }
+        // An empty rubric means the default one.
+        let blank = CriticSettings {
+            rubric: Some("  ".into()),
+            ..ok
+        };
+        assert_eq!(blank.rubric(), crate::critic::DEFAULT_RUBRIC);
+    }
+
+    #[test]
+    fn the_critic_preset_defaults_to_professional_and_round_trips() {
+        // Settings saved before presets existed.
+        let old: CriticSettings =
+            serde_json::from_str(r#"{"enabled": true, "rubric": "Light only."}"#).unwrap();
+        assert_eq!(old.preset, CriticPreset::Professional);
+        assert_eq!(CriticSettings::default().preset, CriticPreset::Professional);
+        // (JSON, preset)
+        let cases = [
+            ("professional", CriticPreset::Professional),
+            ("amateur", CriticPreset::Amateur),
+            ("beginner", CriticPreset::Beginner),
+        ];
+        for (name, preset) in cases {
+            let c: CriticSettings =
+                serde_json::from_str(&format!(r#"{{"preset": "{name}"}}"#)).unwrap();
+            assert_eq!(c.preset, preset);
+            assert_eq!(serde_json::to_value(&c).unwrap()["preset"], name);
+        }
+        // The custom rubric is independent of the preset.
+        let (service, _) = service(&[]);
+        let saved = service
+            .update(SettingsUpdate {
+                critic: Some(CriticSettings {
+                    preset: CriticPreset::Beginner,
+                    rubric: Some("Light only.".into()),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(saved.critic.preset, CriticPreset::Beginner);
+        assert_eq!(saved.critic.rubric(), "Light only.");
     }
 
     #[test]

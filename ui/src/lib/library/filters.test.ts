@@ -133,19 +133,27 @@ describe("Filters", () => {
   it("filters on scores and best photos, and sorts", () => {
     const storage = memoryStorage();
     const f = new Filters(storage);
-    f.minScores = { sharpness: 0.5, exposure: 0, noise: 0.25, aesthetic: 0 };
+    f.minScores = {
+      sharpness: 0.5,
+      exposure: 0,
+      noise: 0.25,
+      aesthetic: 0,
+      critique: 0.7,
+    };
     f.bestOnly = true;
     f.sort = "quality_desc";
 
     expect(f.toQuery()).toEqual({
       min_sharpness: 0.5,
       min_noise: 0.25,
+      min_critique: 0.7,
       best_only: true,
       sort: "quality_desc",
     });
     expect(f.chips.map((c) => c.label)).toEqual([
       "Sharpness ≥ 50%",
       "Low noise ≥ 25%",
+      "Critique score ≥ 70%",
       "Best only",
     ]);
     f.save();

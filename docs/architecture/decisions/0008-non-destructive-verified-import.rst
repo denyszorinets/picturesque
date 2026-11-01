@@ -7,7 +7,9 @@ ADR-0008: Non-Destructive, Verified Import
    :doc:`ADR-0013 <0013-folder-sessions>` (a folder culled in place
    gets XMP sidecars written into it) and
    :doc:`ADR-0014 <0014-optional-source-deletion>` (in a folder session,
-   originals with a verified copy may be deleted when the user asks)
+   originals with a verified copy may be deleted when the user asks) and
+   :doc:`ADR-0017 <0017-delete-originals-after-import>` (imported
+   originals may be deleted in a separate, confirmed step)
 :Date: 2026-10-12
 
 Context

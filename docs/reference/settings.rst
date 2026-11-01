@@ -126,6 +126,63 @@ Which photos the app marks as keepers
 
 Changing it updates the suggestions immediately.
 
+.. _reference-settings-taste:
+
+``taste``
+---------
+
+How much the user's own taste counts in the aesthetic score
+(:ref:`features-ai-taste`). In the app: **Settings → Your taste**, as a
+percentage.
+
+:Type: object with ``personal_weight``
+:Default: ``{ "personal_weight": 0.5 }``
+:Values: ``personal_weight``: the share of the personal score, 0–1. 0 uses
+   only the general aesthetic score, 1 only the personal one. Until enough
+   picks and rejects exist, the general score is used whatever the value.
+
+Changing it rescores photos immediately.
+
+.. _reference-settings-critic:
+
+``critic``
+----------
+
+Photo critiques from a local vision-language model
+(:ref:`features-ai-critique`). In the app: **Settings → AI critic**.
+
+:Type: object with ``enabled``, ``backend``, ``server``, ``model``,
+   ``preset``, ``rubric``, ``background``, ``intensity``,
+   ``score_weight`` and ``potential_weight``
+:Default: ``{ "enabled": false, "backend": "builtin", "server":
+   "http://127.0.0.1:11434/v1", "model": "qwen3-vl:4b", "preset":
+   "professional", "rubric": null,
+   "background": false, "intensity": "gentle", "score_weight": 0.25,
+   "potential_weight": 0.15 }``
+:Values: ``backend``: ``builtin`` (the downloaded Qwen3-VL model, run by
+   the app) or ``server``. ``server``: base address of an OpenAI-compatible
+   API, ``http://`` or ``https://``. ``model``: a model the server has
+   (``server`` only). ``preset``: who the critique is written for,
+   ``professional`` (strict; the original critic), ``amateur`` or
+   ``beginner`` (:ref:`features-ai-critique-presets`); settings saved
+   before presets existed load as ``professional``. Changing it marks
+   earlier critiques as outdated. ``rubric``: the custom rubric, what the
+   model judges, at most 4,000 characters; ``null`` or empty uses the
+   default rubric. It works with every preset.
+   ``background``: critique the whole library in the background, one
+   photo at a time, except rejects. Needs ``enabled`` (:ref:`features-ai-critique-background`).
+   ``intensity``: ``gentle`` (low priority and half the processor threads;
+   waits during imports and analysis and on battery, Linux only for now),
+   ``when_idle`` (full speed, only after three minutes without using the
+   app) or ``full`` (full speed whenever on). Changing it restarts the
+   built-in helper. ``score_weight``: the share of the critique score in the
+   aesthetic score, 0–1, shown as a percentage in Settings
+   (:ref:`features-ai-critique-score`). Critique scores count only while
+   ``enabled`` is true. ``potential_weight``: for RAW originals, how far
+   the critique rating moves toward the rating the critic says the photo
+   could reach after editing, 0–1 (shown as a percentage, step 5, in
+   Settings); 0 turns it off (:ref:`features-ai-critique-score`).
+
 .. _reference-settings-import:
 
 ``import``
@@ -169,6 +226,24 @@ folder culled in place (:ref:`features-folders-clear`).
    have no copy; ``never`` turns the action off. Deleting is permanent and
    only happens when asked.
 
+.. _reference-settings-delete-after-import:
+
+``delete_after_import``
+-----------------------
+
+Whether Activity offers to delete the originals of an import folder once
+its photos are imported and verified, or deletes each original right after
+its verified import (:ref:`features-import-delete-originals`).
+Each import folder can override it (``ImportSource.delete_originals``).
+
+:Type: ``never``, ``ask`` or ``immediately``
+:Default: ``never``
+:Behaviour: ``ask`` offers **Delete originals…** per folder; nothing is
+   deleted without a confirmation, and deleting is permanent.
+   ``immediately`` deletes each original as soon as its photo is imported
+   (or found as a duplicate) and verified, while the import runs, with no
+   offer afterwards; switching it on asks for a confirmation in the UI.
+
 .. _reference-settings-folders:
 
 ``open_folder``, ``recent_folders``
@@ -207,10 +282,19 @@ API
         "ai": { "provider": "auto" },
         "import": { "rescan_minutes": 5 },
         "auto_pick": { "enabled": true, "min_quality": 0.5 },
+        "taste": { "personal_weight": 0.5 },
+        "critic": { "enabled": false, "backend": "builtin",
+                    "server": "http://127.0.0.1:11434/v1",
+                    "model": "qwen3-vl:4b",
+                    "preset": "professional", "rubric": null,
+                    "background": false, "intensity": "gentle",
+                    "score_weight": 0.25,
+                    "potential_weight": 0.15 },
         "onboarding": { "tour_done": false },
         "open_folder": null, "recent_folders": [],
         "labels": { "pick": "green", "auto_pick": "yellow" },
-        "delete_after_copy": "verified", "pair_view": "image" }
+        "delete_after_copy": "verified",
+        "delete_after_import": "never", "pair_view": "image" }
 
 ``update_settings``
    Arguments: any subset of the settings. Unknown fields are rejected.

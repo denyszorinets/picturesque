@@ -6,6 +6,7 @@ import {
   type JobView,
   type LogEntry,
   type LogLevel,
+  type OriginalsChoice,
   type PipelineStatus,
 } from "../api";
 
@@ -13,7 +14,15 @@ import {
 export interface PipelineApi {
   pipelineStatus(): Promise<PipelineStatus>;
   listImportSources(): Promise<ImportSource[]>;
-  addImportSource(path: string, watch?: boolean): Promise<ImportSource>;
+  addImportSource(
+    path: string,
+    watch?: boolean,
+    deleteOriginals?: OriginalsChoice,
+  ): Promise<ImportSource>;
+  setImportSourceDeleteOriginals(
+    id: number,
+    choice: OriginalsChoice,
+  ): Promise<ImportSource>;
   removeImportSource(id: number): Promise<ImportSource[]>;
   setImportSourceWatch(id: number, watch: boolean): Promise<ImportSource>;
   scanImportSources(id?: number): Promise<PipelineStatus>;
@@ -149,6 +158,17 @@ export class Pipeline {
     }
   }
 
+  /**
+   * Sources equal to the ones shown stay the same objects, so a refresh
+   * while a dropdown is open does not rebuild it (and close it).
+   */
+  private keepUnchanged(next: ImportSource[]): ImportSource[] {
+    return next.map((s) => {
+      const old = this.sources.find((o) => o.id === s.id);
+      return old && JSON.stringify(old) === JSON.stringify(s) ? old : s;
+    });
+  }
+
   /** Reloads sources, status, and the photos and log loaded so far. */
   async refresh(): Promise<void> {
     const generation = ++this.generation;
@@ -167,7 +187,7 @@ export class Pipeline {
       ]);
       if (generation !== this.generation) return;
       this.status = status;
-      this.sources = sources;
+      this.sources = this.keepUnchanged(sources);
       this.jobsComplete = jobs.length < Math.max(PAGE, this.jobs.length);
       this.jobs = jobs;
       this.logComplete = log.length < Math.max(PAGE, this.log.length);
@@ -227,10 +247,20 @@ export class Pipeline {
     }
   }
 
-  addSource(path: string, watch = true): Promise<boolean> {
+  addSource(
+    path: string,
+    watch = true,
+    deleteOriginals: OriginalsChoice = "default",
+  ): Promise<boolean> {
     const trimmed = path.trim();
     if (!trimmed) return Promise.resolve(false);
-    return this.act(() => this.api.addImportSource(trimmed, watch));
+    return this.act(() =>
+      this.api.addImportSource(trimmed, watch, deleteOriginals),
+    );
+  }
+
+  setDeleteOriginals(id: number, choice: OriginalsChoice): Promise<boolean> {
+    return this.act(() => this.api.setImportSourceDeleteOriginals(id, choice));
   }
 
   removeSource(id: number): Promise<boolean> {

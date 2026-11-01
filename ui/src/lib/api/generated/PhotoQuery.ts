@@ -53,6 +53,11 @@ best_only?: boolean,
  */
 min_aesthetic?: number, 
 /**
+ * Minimum critique score, 0–1 (the critic's rating as a percentile of
+ * the library's critiques); photos without a critique never match.
+ */
+min_critique?: number, 
+/**
  * Hide photos where someone important has closed eyes.
  */
 hide_closed_eyes?: boolean, 

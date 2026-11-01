@@ -48,4 +48,5 @@ ui/playwright-report/
 spikes/*/corpus/
 spikes/*/sample/
 spikes/*/target/
+spikes/*/target-*/
 spikes/*/stderr.log

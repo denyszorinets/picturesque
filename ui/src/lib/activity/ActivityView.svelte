@@ -1,12 +1,24 @@
 <script lang="ts">
   import Icon from "../components/Icon.svelte";
   import { logLine } from "./log";
-  import type { JobFilter, LogLevel } from "../api";
+  import type {
+    BackgroundCritiqueStatus,
+    JobFilter,
+    DeleteAfterImport,
+    ImportSource,
+    LogLevel,
+    OriginalsChoice,
+  } from "../api";
   import PathInput from "../components/PathInput.svelte";
+  import CritiqueCard from "./CritiqueCard.svelte";
+  import ImmediateDeleteConfirm from "./ImmediateDeleteConfirm.svelte";
+  import OriginalsOffers from "./OriginalsOffers.svelte";
   import { STEP_LABELS, steps, type Pipeline } from "./pipeline.svelte";
 
   interface Props {
     pipeline: Pipeline;
+    /** Background critique progress; `null` until known. */
+    critique?: BackgroundCritiqueStatus | null;
     /** Whether the view is on screen; it reloads only then. */
     visible: boolean;
     /** Whether a library folder is set; importing waits for one. */
@@ -20,6 +32,7 @@
 
   let {
     pipeline,
+    critique = null,
     visible,
     hasLibrary,
     inFolder = false,
@@ -27,6 +40,53 @@
     onsetup,
   }: Props = $props();
   let draft = $state("");
+  let draftOriginals = $state<OriginalsChoice>("default");
+
+  /** A folder's own choice about deleting originals, as a select value. */
+  function choiceOf(value: DeleteAfterImport | null): OriginalsChoice {
+    return value ?? "default";
+  }
+
+  /**
+   * Deleting right after importing waits for the user to confirm. The
+   * select shows the pick meanwhile (a folder's id, or "new") and goes back
+   * to the saved value when it is cancelled.
+   */
+  let confirming = $state<
+    { kind: "source"; id: number; path: string } | { kind: "new" } | null
+  >(null);
+  let previousNew: OriginalsChoice = "default";
+
+  function chooseForSource(choice: OriginalsChoice, source: ImportSource) {
+    if (choice === "immediately")
+      confirming = { kind: "source", id: source.id, path: source.path };
+    else void pipeline.setDeleteOriginals(source.id, choice);
+  }
+
+  function chooseForNew(choice: OriginalsChoice) {
+    previousNew = draftOriginals;
+    draftOriginals = choice;
+    if (choice === "immediately") confirming = { kind: "new" };
+  }
+
+  /** What a folder's select shows: the pick waiting for confirmation. */
+  function shownFor(source: ImportSource): OriginalsChoice {
+    return confirming?.kind === "source" && confirming.id === source.id
+      ? "immediately"
+      : choiceOf(source.delete_originals);
+  }
+
+  function confirmed() {
+    const what = confirming;
+    confirming = null;
+    if (what?.kind === "source")
+      void pipeline.setDeleteOriginals(what.id, "immediately");
+  }
+
+  function cancelled() {
+    if (confirming?.kind === "new") draftOriginals = previousNew;
+    confirming = null;
+  }
 
   /** How often the view reloads while visible. */
   const REFRESH_MS = 1500;
@@ -39,7 +99,7 @@
   });
 
   async function add(path: string) {
-    if (await pipeline.addSource(path)) draft = "";
+    if (await pipeline.addSource(path, true, draftOriginals)) draft = "";
   }
 
   const status = $derived(pipeline.status);
@@ -164,6 +224,27 @@
               />
               Watch
             </label>
+            {#if !inFolder}
+              <select
+                class="originals"
+                value={shownFor(source)}
+                onchange={(e) =>
+                  chooseForSource(
+                    e.currentTarget.value as OriginalsChoice,
+                    source,
+                  )}
+                aria-label={`Originals in ${source.path}`}
+                title="Whether to offer deleting the originals once imported"
+                data-testid="source-originals"
+              >
+                <option value="default">Originals: as in Settings</option>
+                <option value="never">Originals: keep</option>
+                <option value="ask">Originals: offer to delete</option>
+                <option value="immediately"
+                  >Originals: delete right after import</option
+                >
+              </select>
+            {/if}
             <button
               class="small"
               onclick={() => pipeline.scan(source.id)}
@@ -181,6 +262,11 @@
       </ul>
     {/if}
 
+    {#if !inFolder}<OriginalsOffers
+        {visible}
+        revision={`${pipeline.status?.imported}-${pipeline.status?.queued}-${pipeline.status?.duplicates}`}
+      />{/if}
+
     {#if !inFolder}<div class="add">
         <PathInput
           label="Folder to import from"
@@ -190,6 +276,21 @@
           onsubmit={(p) => void add(p)}
           testid="source-path"
         />
+        <select
+          class="originals"
+          value={draftOriginals}
+          onchange={(e) =>
+            chooseForNew(e.currentTarget.value as OriginalsChoice)}
+          aria-label="Originals in the new folder"
+          data-testid="add-source-originals"
+        >
+          <option value="default">Originals: as in Settings</option>
+          <option value="never">Originals: keep</option>
+          <option value="ask">Originals: offer to delete</option>
+          <option value="immediately"
+            >Originals: delete right after import</option
+          >
+        </select>
         <button
           class="primary"
           onclick={() => add(draft)}
@@ -203,6 +304,10 @@
       </p>
     {/if}
   </section>
+
+  <div class="critique-area">
+    <CritiqueCard status={critique} {onsettings} />
+  </div>
 
   <section class="card photos" aria-labelledby="photos-title">
     <div class="heading">
@@ -368,20 +473,33 @@
   </section>
 </div>
 
+{#if confirming}
+  <ImmediateDeleteConfirm
+    scope={confirming.kind === "source" ? confirming.path : null}
+    onconfirm={confirmed}
+    oncancel={cancelled}
+  />
+{/if}
+
 <style>
   .activity {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(18rem, 26rem);
     grid-template-areas:
       "sources log"
+      "critique log"
       "photos log";
-    grid-template-rows: auto 1fr;
+    grid-template-rows: auto auto 1fr;
     gap: 1rem;
     align-items: start;
   }
 
   .sources {
     grid-area: sources;
+  }
+
+  .critique-area {
+    grid-area: critique;
   }
 
   .photos {
@@ -400,7 +518,7 @@
   @media (max-width: 1100px) {
     .activity {
       grid-template-columns: minmax(0, 1fr);
-      grid-template-areas: "sources" "photos" "log";
+      grid-template-areas: "sources" "critique" "photos" "log";
     }
 
     .log {
@@ -495,6 +613,11 @@
     overflow-wrap: anywhere;
   }
 
+  .originals {
+    max-width: 14rem;
+    font-size: 0.85rem;
+  }
+
   .watch {
     display: flex;
     align-items: center;
@@ -512,6 +635,7 @@
 
   .add {
     display: flex;
+    flex-wrap: wrap;
     gap: 0.5rem;
   }
 

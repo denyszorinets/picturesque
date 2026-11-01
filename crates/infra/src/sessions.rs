@@ -91,6 +91,8 @@ impl ContextFactory for StandardSessions {
             settings_store: self.library.clone(),
             catalog,
             watcher: Arc::new(crate::watcher::NotifyWatcher::new()),
+            critic: Arc::new(crate::critic::CriticAdapter::new()),
+            power: Arc::new(crate::power::SystemPower),
             fs: Arc::new(crate::fs::StdFileSystem),
             metadata: Arc::new(crate::metadata::ExifMetadataReader),
             geocoder: Arc::clone(&self.geocoder),

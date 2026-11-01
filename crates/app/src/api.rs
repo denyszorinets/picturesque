@@ -8,8 +8,8 @@ use std::fmt;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use serde::Serialize;
 use serde::de::DeserializeOwned;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use ts_rs::TS;
 
@@ -27,9 +27,11 @@ use crate::library::{
     DecisionView, FacetsArgs, PhotoArgs, PhotoDetail, PhotoQuery, SetDecisionsArgs,
 };
 use crate::models::{ModelArgs, ModelError, ModelService};
+use crate::originals::OriginalsChoice;
 use crate::pipeline::{
-    AddSourceArgs, ImportPipeline, JobsArgs, LogArgs, PipelineDeps, PipelineError, RetryArgs,
-    ScanArgs, SourceArgs, SourceWatchArgs,
+    AddSourceArgs, ImportPipeline, JobsArgs, LogArgs, OriginalsArgs, OriginalsPlanArgs,
+    PipelineDeps, PipelineError, RetryArgs, ScanArgs, SourceArgs, SourceOriginalsArgs,
+    SourceWatchArgs,
 };
 use crate::ports::catalog::{AnalyzerId, PhotoCatalog};
 use crate::ports::events::EventSink;
@@ -47,7 +49,7 @@ use crate::ports::sidecars::SidecarStore;
 use crate::rejects::{RejectsError, RejectsService, UndoRejectMoveArgs};
 use crate::search::{DEFAULT_LIMIT as SEARCH_LIMIT, SearchArgs, SearchError, TextSearch};
 use crate::series::{ChooseBestArgs, EditSeriesArgs, SeriesService};
-use crate::settings::{SettingsError, SettingsService, SettingsUpdate};
+use crate::settings::{DeleteAfterImport, SettingsError, SettingsService, SettingsUpdate};
 use crate::sidecars::SidecarService;
 use crate::templates::{self, PreviewTemplateArgs};
 use crate::thumbnails::{ImageSize, ThumbnailError, ThumbnailService};
@@ -123,6 +125,10 @@ pub struct AppContext {
     pub pipeline_store: Arc<dyn PipelineStore>,
     /// Change notifications for watched import folders.
     pub watcher: Arc<dyn crate::ports::watcher::FolderWatcher>,
+    /// The vision-language model server for critiques (ADR-0016).
+    pub critic: Arc<dyn crate::ports::critic::Critic>,
+    /// Whether the computer runs on battery (the background critic waits).
+    pub power: Arc<dyn crate::ports::power::PowerSource>,
 }
 
 impl fmt::Debug for AppContext {
@@ -135,6 +141,12 @@ impl fmt::Debug for AppContext {
 struct Analyzed {
     quality: Option<QualityView>,
     aesthetic: Option<AestheticView>,
+    /// How well the photo matches the user's taste, once learned.
+    taste: Option<f32>,
+    /// The critique's percentile among the library's critiques.
+    critique: Option<f32>,
+    /// The critique rating and potential of a RAW photo raised by it.
+    raw_potential: Option<(f32, f32)>,
     faces: Option<Vec<crate::analysis::faces::FaceView>>,
     score: Option<f32>,
 }
@@ -144,6 +156,9 @@ impl Analyzed {
         Signals {
             quality: self.quality.as_ref(),
             aesthetic: self.aesthetic.as_ref(),
+            taste: self.taste,
+            critique: self.critique,
+            raw_potential: self.raw_potential,
             faces: self.faces.as_deref(),
         }
     }
@@ -161,6 +176,9 @@ pub struct Api {
     analysis: Arc<AnalysisService>,
     series: Arc<SeriesService>,
     ai: AiService,
+    critic: Arc<crate::critic::CritiqueService>,
+    background_critic: Arc<crate::critic::background::BackgroundCritic>,
+    activity: Arc<crate::critic::background::Activity>,
     models: Arc<ModelService>,
     embeddings: Arc<EmbeddingIndex>,
     search: TextSearch,
@@ -169,6 +187,7 @@ pub struct Api {
     pipeline: Arc<ImportPipeline>,
     finish: crate::finish::FinishService,
     clear: crate::clear::ClearService,
+    originals: Arc<crate::originals::OriginalsService>,
 }
 
 impl fmt::Debug for Api {
@@ -256,6 +275,17 @@ impl Api {
                 series.notify();
             });
         }
+        let originals = Arc::new(crate::originals::OriginalsService::new(
+            Arc::clone(&ctx.pipeline_store),
+            Arc::clone(&ctx.catalog),
+            Arc::clone(&ctx.fs),
+            Arc::clone(&ctx.settings_store),
+            Arc::clone(&events) as Arc<dyn EventSink>,
+        ));
+        {
+            let originals = Arc::clone(&originals);
+            pipeline.after_import(move |job_id| originals.after_import(job_id));
+        }
         let catalog = Arc::clone(&ctx.catalog);
         let sidecars = Arc::new(SidecarService::new(
             Arc::clone(&ctx.catalog),
@@ -274,7 +304,32 @@ impl Api {
             Arc::clone(&ctx.fs),
             Arc::clone(&ctx.settings_store),
         );
+        let critic = Arc::new(crate::critic::CritiqueService::new(
+            Arc::clone(&catalog),
+            Arc::clone(&ctx.settings_store),
+            Arc::clone(&thumbnails),
+            Arc::clone(&models),
+            ctx.critic,
+        ));
+        let activity = Arc::new(crate::critic::background::Activity::default());
+        let background_critic = Arc::new(crate::critic::background::BackgroundCritic::new(
+            crate::critic::background::BackgroundDeps {
+                critiques: Arc::clone(&critic),
+                catalog: Arc::clone(&catalog),
+                settings: Arc::clone(&ctx.settings_store),
+                series: Arc::clone(&series),
+                analysis: Arc::clone(&analysis),
+                pipeline: Arc::clone(&pipeline),
+                power: ctx.power,
+                activity: Arc::clone(&activity),
+                events: Arc::clone(&events) as Arc<dyn EventSink>,
+            },
+        ));
         Ok(Self {
+            critic,
+            background_critic,
+            activity,
+            originals,
             clear: crate::clear::ClearService::new(
                 Arc::clone(&catalog),
                 Arc::clone(&ctx.fs),
@@ -298,6 +353,16 @@ impl Api {
     }
 
     /// A photo's current analysis results, read for display.
+    /// Frees the originals of photos imported before a folder began to
+    /// delete right after each import. Runs on its own thread: it reads and
+    /// hashes files.
+    fn clear_leftover_originals(&self) {
+        let pipeline = Arc::clone(&self.pipeline);
+        std::thread::spawn(move || {
+            pipeline.delete_leftover_originals();
+        });
+    }
+
     fn analyzed(&self, id: PhotoId) -> Result<Analyzed, ApiError> {
         let results = self.catalog.analysis(id).map_err(catalog_error)?;
         let current = |analyzer: AnalyzerId| {
@@ -308,18 +373,36 @@ impl Api {
         };
         let quality = current(TechnicalAnalyzer::ID).and_then(QualityView::from_result);
         let aesthetic = current(ClipAnalyzer::ID).and_then(AestheticView::from_result);
+        let taste = current(ClipAnalyzer::ID)
+            .and_then(ClipAnalyzer::embedding)
+            .and_then(|e| self.series.taste().model()?.score(&e));
+        let settings = self.settings.get().map_err(settings_error)?;
+        let personal_weight = settings.taste.personal_weight;
+        let critique = self.series.critique_score(id);
+        let raw_potential = self.series.critique_lift(id);
         let faces = current(FaceAnalyzer::ID).and_then(crate::analysis::faces::faces);
         let score = picturesque_core::ranking::photo_quality(&Candidate {
             id,
             scores: current(TechnicalAnalyzer::ID)
                 .and_then(|r| serde_json::from_value(r.clone()).ok()),
             rejected: false,
-            aesthetic: aesthetic.map(|a| a.score),
+            aesthetic: picturesque_core::taste::blend(
+                picturesque_core::taste::blend(
+                    aesthetic.map(|a| a.score),
+                    taste,
+                    personal_weight as f32,
+                ),
+                critique,
+                settings.critic.score_weight as f32,
+            ),
             face: faces.as_deref().and_then(crate::analysis::faces::signal),
         });
         Ok(Analyzed {
             quality,
             aesthetic,
+            taste,
+            critique,
+            raw_potential,
             faces,
             score,
         })
@@ -334,6 +417,7 @@ impl Api {
         self.analysis.start(analysis_workers());
         self.series.start();
         self.pipeline.start();
+        self.background_critic.start();
     }
 
     /// Writes pending sidecars and stops all background work, before the
@@ -345,6 +429,7 @@ impl Api {
         self.analysis.stop();
         self.series.stop();
         self.thumbnails.stop();
+        self.background_critic.stop();
     }
 
     /// Scans every import source and imports what it finds, on the calling
@@ -361,6 +446,30 @@ impl Api {
     /// Waits for background thumbnail generation (tests and tools).
     pub fn wait_for_thumbnails(&self) {
         self.thumbnails.wait_for_prefill();
+    }
+
+    /// The series service (tests).
+    #[cfg(test)]
+    pub(crate) fn series_service(&self) -> &Arc<SeriesService> {
+        &self.series
+    }
+
+    /// The background critic (tests).
+    #[cfg(test)]
+    pub(crate) fn background_critic(&self) -> &crate::critic::background::BackgroundCritic {
+        &self.background_critic
+    }
+
+    /// The critique service (tests).
+    #[cfg(test)]
+    pub(crate) fn critique_service(&self) -> &crate::critic::CritiqueService {
+        &self.critic
+    }
+
+    /// When the user was last active (tests).
+    #[cfg(test)]
+    pub(crate) fn activity(&self) -> &crate::critic::background::Activity {
+        &self.activity
     }
 
     /// Recomputes series now (tests and tools).
@@ -506,10 +615,21 @@ impl Api {
                 let update: SettingsUpdate = parse_args(command, args)?;
                 let series_changed = update.series.is_some()
                     || update.ranking.is_some()
-                    || update.auto_pick.is_some();
+                    || update.auto_pick.is_some()
+                    || update.taste.is_some()
+                    || update.critic.is_some();
+                let critic_changed = update.critic.is_some() || update.ai.is_some();
+                let deletes_now =
+                    update.delete_after_import == Some(DeleteAfterImport::Immediately);
                 let settings = self.settings.update(update).map_err(settings_error)?;
+                if deletes_now {
+                    self.clear_leftover_originals();
+                }
                 if series_changed {
                     self.series.recompute().map_err(catalog_error)?;
+                }
+                if critic_changed {
+                    self.background_critic.wake();
                 }
                 respond(settings)
             }
@@ -553,6 +673,8 @@ impl Api {
                 let analyzed = self.analyzed(id)?;
                 detail.quality = analyzed.quality;
                 detail.aesthetic = analyzed.aesthetic;
+                detail.taste = analyzed.taste;
+                detail.critique_score = analyzed.critique;
                 detail.faces = analyzed.faces.clone();
                 detail.score = analyzed.score;
                 let series = self.series.view(id).map_err(catalog_error)?;
@@ -578,8 +700,10 @@ impl Api {
                 let SetDecisionsArgs { changes } = parse_args(command, args)?;
                 let decisions = self.set_decisions(&changes)?;
                 self.sidecars.notify();
-                // Rejected photos are never chosen as best.
+                // Rejected photos are never chosen as best, nor critiqued in
+                // the background.
                 self.series.notify();
+                self.background_critic.wake();
                 respond(decisions)
             }
             "photo_facets" => {
@@ -597,6 +721,10 @@ impl Api {
                         .facets(filter.as_ref())
                         .map_err(catalog_error)?,
                 )
+            }
+            "library_insights" => {
+                no_args(command, &args)?;
+                respond(crate::insights::library_insights(&*self.catalog).map_err(catalog_error)?)
             }
             "library_stats" => {
                 no_args(command, &args)?;
@@ -625,17 +753,65 @@ impl Api {
                 respond(self.pipeline.sources().map_err(pipeline_error)?)
             }
             "add_import_source" => {
-                let AddSourceArgs { path, watch } = parse_args(command, args)?;
-                respond(
-                    self.pipeline
-                        .add_source(&path, watch.unwrap_or(true))
-                        .map_err(pipeline_error)?,
-                )
+                let AddSourceArgs {
+                    path,
+                    watch,
+                    delete_originals,
+                } = parse_args(command, args)?;
+                let mut source = self
+                    .pipeline
+                    .add_source(&path, watch.unwrap_or(true))
+                    .map_err(pipeline_error)?;
+                if let Some(choice) = delete_originals {
+                    source = self
+                        .pipeline
+                        .set_delete_originals(source.id, choice)
+                        .map_err(pipeline_error)?;
+                }
+                respond(source)
             }
             "remove_import_source" => {
                 let SourceArgs { id } = parse_args(command, args)?;
                 self.pipeline.remove_source(id).map_err(pipeline_error)?;
                 respond(self.pipeline.sources().map_err(pipeline_error)?)
+            }
+            "set_import_source_delete_originals" => {
+                let SourceOriginalsArgs { id, choice } = parse_args(command, args)?;
+                let source = self
+                    .pipeline
+                    .set_delete_originals(id, choice)
+                    .map_err(pipeline_error)?;
+                if choice == OriginalsChoice::Immediately {
+                    self.clear_leftover_originals();
+                }
+                respond(source)
+            }
+            "delete_originals_offers" => {
+                no_args(command, &args)?;
+                respond(self.originals.offers().map_err(originals_error)?)
+            }
+            "delete_originals_plan" => {
+                let OriginalsPlanArgs { source_id } = parse_args(command, args)?;
+                respond(self.originals.plan(source_id).map_err(originals_error)?)
+            }
+            "delete_originals" => {
+                let OriginalsArgs {
+                    source_id,
+                    through_job_id,
+                } = parse_args(command, args)?;
+                respond(
+                    self.originals
+                        .start(source_id, through_job_id)
+                        .map_err(originals_error)?,
+                )
+            }
+            "delete_originals_status" => {
+                no_args(command, &args)?;
+                respond(self.originals.status())
+            }
+            "cancel_delete_originals" => {
+                no_args(command, &args)?;
+                respond(self.originals.cancel())
             }
             "set_import_source_watch" => {
                 let SourceWatchArgs { id, watch } = parse_args(command, args)?;
@@ -764,6 +940,41 @@ impl Api {
                 let ModelArgs { id } = parse_args(command, args)?;
                 respond(self.models.remove(&id).map_err(model_error)?)
             }
+            "taste_status" => {
+                no_args(command, &args)?;
+                respond(self.series.taste().status())
+            }
+            "background_critique_status" => {
+                no_args(command, &args)?;
+                respond(self.background_critic.status().map_err(catalog_error)?)
+            }
+            "report_activity" => {
+                no_args(command, &args)?;
+                self.activity.touch();
+                respond(Value::Null)
+            }
+            "critic_status" => {
+                no_args(command, &args)?;
+                respond(self.critic.status().map_err(catalog_error)?)
+            }
+            "get_critique" => {
+                let PhotoArgs { photo_id } = parse_args(command, args)?;
+                respond(
+                    self.critic
+                        .cached(PhotoId(photo_id))
+                        .map_err(critique_error)?,
+                )
+            }
+            "critique_photo" => {
+                let CritiqueArgs { photo_id, refresh } = parse_args(command, args)?;
+                let view = self
+                    .critic
+                    .critique(PhotoId(photo_id), refresh)
+                    .map_err(critique_error)?;
+                // The critique counts in the scores (`photo_score`).
+                self.series.notify();
+                respond(view)
+            }
             "ai_status" => {
                 no_args(command, &args)?;
                 respond(self.ai.status().map_err(catalog_error)?)
@@ -800,6 +1011,7 @@ impl Api {
                 let PrioritizeArgs { photo_ids } = parse_args(command, args)?;
                 let ids: Vec<PhotoId> = photo_ids.into_iter().map(PhotoId).collect();
                 self.analysis.prioritize(&ids);
+                self.background_critic.prioritize(&ids);
                 respond(self.analysis.status())
             }
             "reanalyze_photos" => {
@@ -871,6 +1083,16 @@ fn export_error(e: ExportError) -> ApiError {
     }
 }
 
+fn originals_error(e: crate::originals::OriginalsError) -> ApiError {
+    use crate::originals::OriginalsError;
+    match e {
+        OriginalsError::Invalid(_) | OriginalsError::Busy => {
+            ApiError::new(ApiErrorCode::InvalidArguments, e.to_string())
+        }
+        OriginalsError::Failed(_) => ApiError::internal(e.to_string()),
+    }
+}
+
 fn rejects_error(e: RejectsError) -> ApiError {
     match e {
         RejectsError::Invalid(_) => ApiError::new(ApiErrorCode::InvalidArguments, e.to_string()),
@@ -906,6 +1128,29 @@ fn clear_error(e: crate::clear::ClearError) -> ApiError {
         }
         crate::clear::ClearError::Failed(msg) => ApiError::internal(msg),
     }
+}
+
+fn critique_error(e: crate::critic::CritiqueError) -> ApiError {
+    use crate::critic::CritiqueError;
+    let code = match e {
+        CritiqueError::Disabled => ApiErrorCode::InvalidArguments,
+        CritiqueError::NotFound(_) => ApiErrorCode::NotFound,
+        _ => ApiErrorCode::Internal,
+    };
+    ApiError::new(code, e.to_string())
+}
+
+/// Arguments of `critique_photo`.
+#[derive(Debug, Clone, Copy, Deserialize, TS)]
+#[serde(deny_unknown_fields)]
+#[ts(export)]
+pub struct CritiqueArgs {
+    #[ts(type = "number")]
+    pub photo_id: i64,
+    /// Ask the model again even if a critique is stored.
+    #[serde(default)]
+    #[ts(as = "Option<bool>", optional)]
+    pub refresh: bool,
 }
 
 fn settings_error(e: SettingsError) -> ApiError {
@@ -1012,11 +1257,25 @@ mod tests {
                 "ai": { "provider": "auto" },
                 "import": { "rescan_minutes": 5 },
                 "auto_pick": { "enabled": true, "min_quality": 0.5 },
+                "taste": { "personal_weight": 0.5 },
+                "critic": {
+                    "enabled": false,
+                    "backend": "builtin",
+                    "server": "http://127.0.0.1:11434/v1",
+                    "model": "qwen3-vl:4b",
+                    "preset": "professional",
+                    "rubric": null,
+                    "background": false,
+                    "intensity": "gentle",
+                    "score_weight": 0.25,
+                    "potential_weight": 0.15
+                },
                 "onboarding": { "tour_done": false },
                 "open_folder": null,
                 "recent_folders": [],
                 "labels": { "pick": "green", "auto_pick": "yellow" },
                 "delete_after_copy": "verified",
+                "delete_after_import": "never",
                 "pair_view": "image"
             })
         );
@@ -1051,6 +1310,15 @@ mod tests {
     }
 
     #[test]
+    fn taste_status_starts_with_nothing_learned() {
+        let status = api().call("taste_status", Value::Null).unwrap();
+        assert_eq!(
+            status,
+            json!({ "picks": 0, "rejects": 0, "needed": 10, "learned": false, "agreement": null })
+        );
+    }
+
+    #[test]
     fn ai_status_follows_the_provider_setting() {
         let api = api();
         let status = api.call("ai_status", Value::Null).unwrap();
@@ -1071,6 +1339,22 @@ mod tests {
             .call("update_settings", json!({ "ai": { "provider": "tpu" } }))
             .unwrap_err();
         assert_eq!(err.code, ApiErrorCode::InvalidArguments);
+    }
+
+    #[test]
+    fn an_unknown_critic_preset_is_rejected_and_settings_stay_unchanged() {
+        let api = api();
+        let before = api.call("get_settings", json!({})).unwrap();
+
+        let err = api
+            .call(
+                "update_settings",
+                json!({ "critic": { "preset": "custom" } }),
+            )
+            .unwrap_err();
+
+        assert_eq!(err.code, ApiErrorCode::InvalidArguments);
+        assert_eq!(api.call("get_settings", json!({})).unwrap(), before);
     }
 
     #[test]
@@ -1150,6 +1434,7 @@ mod tests {
                 id: picturesque_core::photo::PhotoId(id),
                 score: 0.9,
                 aesthetic: None,
+                critique: None,
                 eyes_closed: None,
                 faces: 0,
                 keeper: true,

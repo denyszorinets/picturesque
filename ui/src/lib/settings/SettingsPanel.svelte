@@ -2,23 +2,40 @@
   import {
     aiStatus,
     ApiError,
+    criticStatus,
     getSettings,
     previewTemplate,
     reanalyzePhotos,
+    tasteStatus,
     templatePresets,
     updateSettings,
     type AiStatus,
+    type BackgroundCritiqueStatus,
+    type CriticEngine,
+    type CriticIntensity,
+    type CriticPreset,
+    type CriticStatus,
     type Provider,
     type ProviderChoice,
     type Settings,
     type SettingsUpdate,
+    type TasteStatus,
     type TemplatePresetView,
     type TemplatePreview,
   } from "../api";
+  import { validPercent } from "./percent";
+  import TasteFields from "./TasteFields.svelte";
+  import CriticFields from "../ai/CriticFields.svelte";
   import ModelList from "../ai/ModelList.svelte";
   import Reanalyze from "../analysis/Reanalyze.svelte";
   import PathInput from "../components/PathInput.svelte";
-  import type { ColorLabel, DeleteAfterCopy, PairView } from "../api";
+  import ImmediateDeleteConfirm from "../activity/ImmediateDeleteConfirm.svelte";
+  import type {
+    ColorLabel,
+    DeleteAfterCopy,
+    DeleteAfterImport,
+    PairView,
+  } from "../api";
 
   const LABELS: { value: ColorLabel | ""; label: string }[] = [
     { value: "", label: "No label" },
@@ -38,9 +55,17 @@
     ontour?: () => void;
     /** Whether a folder is culled in place (library settings do not apply). */
     inFolder?: boolean;
+    /** Progress of the background critic, from the app. */
+    critiqueProgress?: BackgroundCritiqueStatus | null;
   }
 
-  let { onchange, onsetup, ontour, inFolder = false }: Props = $props();
+  let {
+    onchange,
+    onsetup,
+    ontour,
+    inFolder = false,
+    critiqueProgress = null,
+  }: Props = $props();
 
   let saved = $state<Settings | null>(null);
   let presets = $state<TemplatePresetView[]>([]);
@@ -50,6 +75,9 @@
   let pickLabel = $state<ColorLabel | null>("green");
   let autoLabel = $state<ColorLabel | null>("yellow");
   let deleteAfterCopy = $state<DeleteAfterCopy>("verified");
+  let deleteAfterImport = $state<DeleteAfterImport>("never");
+  /** Choosing deleting right after importing waits for a confirmation. */
+  let confirmingImmediate = $state(false);
   let pairView = $state<PairView>("image");
   let maxGap = $state(30);
   let maxDistance = $state(16);
@@ -69,6 +97,26 @@
     noise: "Low noise",
     aesthetic: "Aesthetic",
   } as const;
+  /** Share of the personal taste score in the aesthetic score, in percent. */
+  let tastePercent = $state<number | null>(50);
+  let taste = $state<TasteStatus | null>(null);
+  let critic = $state({
+    enabled: false,
+    backend: "builtin" as CriticEngine,
+    server: "",
+    model: "",
+    preset: "professional" as CriticPreset,
+    rubric: "",
+    background: false,
+    intensity: "gentle" as CriticIntensity,
+    /** Share of critiques in the aesthetic score, in percent. */
+    scorePercent: 25 as number | null,
+    /** Share of a RAW file's potential in its critique rating, in percent. */
+    potentialPercent: 15 as number | null,
+  });
+  const scoreValid = $derived(validPercent(critic.scorePercent));
+  const potentialValid = $derived(validPercent(critic.potentialPercent));
+  let criticState = $state<CriticStatus | null>(null);
   let provider = $state<ProviderChoice>("auto");
   let ai = $state<AiStatus | null>(null);
   const PROVIDER_LABELS: Record<Provider, string> = {
@@ -103,14 +151,40 @@
       (autoPick !== saved.auto_pick.enabled ||
         autoPickPercent !== Math.round(saved.auto_pick.min_quality * 100)),
   );
+  const tasteValid = $derived(validPercent(tastePercent));
+  const tasteChanged = $derived(
+    saved !== null &&
+      tasteValid &&
+      tastePercent !== Math.round(saved.taste.personal_weight * 100),
+  );
+  const criticChanged = $derived(
+    saved !== null &&
+      (critic.enabled !== saved.critic.enabled ||
+        critic.backend !== saved.critic.backend ||
+        critic.server.trim() !== saved.critic.server ||
+        critic.model.trim() !== saved.critic.model ||
+        critic.preset !== saved.critic.preset ||
+        critic.rubric.trim() !== (saved.critic.rubric ?? "") ||
+        critic.background !== saved.critic.background ||
+        critic.intensity !== saved.critic.intensity ||
+        (scoreValid &&
+          critic.scorePercent !==
+            Math.round(saved.critic.score_weight * 100)) ||
+        (potentialValid &&
+          critic.potentialPercent !==
+            Math.round(saved.critic.potential_weight * 100))),
+  );
   const dirty = $derived(
     saved !== null &&
-      (libraryRoot.trim() !== (saved.library_root ?? "") ||
+      (tasteChanged ||
+        criticChanged ||
+        libraryRoot.trim() !== (saved.library_root ?? "") ||
         template.trim() !== saved.path_template ||
         sidecarNaming !== saved.sidecar_naming ||
         pickLabel !== saved.labels.pick ||
         autoLabel !== saved.labels.auto_pick ||
         deleteAfterCopy !== saved.delete_after_copy ||
+        deleteAfterImport !== saved.delete_after_import ||
         pairView !== saved.pair_view ||
         seriesChanged ||
         rankingChanged ||
@@ -127,6 +201,20 @@
       })
       .catch((e: unknown) => (error = ApiError.from(e).message));
   });
+
+  function loadTaste() {
+    tasteStatus()
+      .then((status) => (taste = status))
+      .catch(() => {});
+  }
+
+  /** Asks the critic's server about the saved settings. */
+  function loadCritic() {
+    criticState = null;
+    criticStatus()
+      .then((status) => (criticState = status))
+      .catch((e: unknown) => (error = ApiError.from(e).message));
+  }
 
   /** Probes the provider; slow the first time (it loads a test model). */
   function loadAi() {
@@ -156,6 +244,7 @@
     pickLabel = settings.labels.pick;
     autoLabel = settings.labels.auto_pick;
     deleteAfterCopy = settings.delete_after_copy;
+    deleteAfterImport = settings.delete_after_import;
     pairView = settings.pair_view;
     maxGap = settings.series.max_gap_seconds;
     maxDistance = settings.series.max_distance;
@@ -164,7 +253,22 @@
     autoPickPercent = Math.round(settings.auto_pick.min_quality * 100);
     weights = { ...settings.ranking };
     provider = settings.ai.provider;
+    tastePercent = Math.round(settings.taste.personal_weight * 100);
+    critic = {
+      enabled: settings.critic.enabled,
+      backend: settings.critic.backend,
+      server: settings.critic.server,
+      model: settings.critic.model,
+      preset: settings.critic.preset,
+      rubric: settings.critic.rubric ?? "",
+      background: settings.critic.background,
+      intensity: settings.critic.intensity,
+      scorePercent: Math.round(settings.critic.score_weight * 100),
+      potentialPercent: Math.round(settings.critic.potential_weight * 100),
+    };
     loadAi();
+    loadTaste();
+    loadCritic();
     onchange?.(settings);
   }
 
@@ -184,6 +288,21 @@
         update.series = { max_gap_seconds: maxGap, max_distance: maxDistance };
       if (rankingChanged) update.ranking = { ...weights };
       if (provider !== saved.ai.provider) update.ai = { provider };
+      if (tasteChanged)
+        update.taste = { personal_weight: (tastePercent ?? 0) / 100 };
+      if (criticChanged)
+        update.critic = {
+          enabled: critic.enabled,
+          backend: critic.backend,
+          server: critic.server.trim(),
+          model: critic.model.trim(),
+          preset: critic.preset,
+          rubric: critic.rubric.trim() || null,
+          background: critic.background,
+          intensity: critic.intensity,
+          score_weight: (critic.scorePercent ?? 0) / 100,
+          potential_weight: (critic.potentialPercent ?? 0) / 100,
+        };
       if (autoPickChanged)
         update.auto_pick = {
           enabled: autoPick,
@@ -200,6 +319,8 @@
         update.labels = { pick: pickLabel, auto_pick: autoLabel };
       if (deleteAfterCopy !== saved.delete_after_copy)
         update.delete_after_copy = deleteAfterCopy;
+      if (deleteAfterImport !== saved.delete_after_import)
+        update.delete_after_import = deleteAfterImport;
       if (pairView !== saved.pair_view) update.pair_view = pairView;
       if (libraryRoot.trim() !== (saved.library_root ?? ""))
         update.library_root = libraryRoot.trim();
@@ -378,6 +499,39 @@
   </div>
 
   <div class="field">
+    <label class="label" for="delete-after-import">After importing</label>
+    <select
+      id="delete-after-import"
+      value={confirmingImmediate ? "immediately" : deleteAfterImport}
+      onchange={(e) => {
+        const choice = e.currentTarget.value as DeleteAfterImport;
+        // Permanent: confirmed before it can be saved.
+        if (choice === "immediately") confirmingImmediate = true;
+        else deleteAfterImport = choice;
+      }}
+      data-testid="delete-after-import"
+    >
+      <option value="never">Keep my originals</option>
+      <option value="ask"
+        >Offer to delete originals that are safely copied</option
+      >
+      <option value="immediately"
+        >Delete each original right after it is safely copied</option
+      >
+    </select>
+    <p class="hint muted">
+      With the offer, <strong>Activity</strong> shows
+      <strong>Delete originals…</strong> once a folder has been imported. Each
+      original is deleted only if it matches the verified copy in your library,
+      and only after you confirm. Deleting is permanent. Each import folder can
+      override this in Activity.
+      <strong>Delete each original right after…</strong> does the same checks for
+      every photo as it is imported, without asking, so a library larger than the
+      free disk space can be imported.
+    </p>
+  </div>
+
+  <div class="field">
     <label class="label" for="delete-after-copy">After copying keepers</label>
     <select
       id="delete-after-copy"
@@ -521,11 +675,40 @@
     <ModelList />
   </div>
 
+  <div class="field">
+    <TasteFields bind:percent={tastePercent} {taste} />
+  </div>
+
+  <div class="field">
+    <span class="label">AI critic</span>
+    <CriticFields
+      bind:enabled={critic.enabled}
+      bind:backend={critic.backend}
+      bind:server={critic.server}
+      bind:model={critic.model}
+      bind:preset={critic.preset}
+      bind:rubric={critic.rubric}
+      bind:background={critic.background}
+      bind:intensity={critic.intensity}
+      bind:scorePercent={critic.scorePercent}
+      bind:potentialPercent={critic.potentialPercent}
+      progress={critiqueProgress}
+      status={criticState}
+      oncheck={loadCritic}
+      unsaved={criticChanged}
+    />
+  </div>
+
   <div class="actions">
     <button
       class="primary"
       onclick={save}
-      disabled={!dirty || saving || !!preview?.error}
+      disabled={!dirty ||
+        saving ||
+        !!preview?.error ||
+        !scoreValid ||
+        !potentialValid ||
+        !tasteValid}
       data-testid="save-settings"
     >
       Save
@@ -539,6 +722,16 @@
     {/if}
   </div>
 </section>
+
+{#if confirmingImmediate}
+  <ImmediateDeleteConfirm
+    onconfirm={() => {
+      deleteAfterImport = "immediately";
+      confirmingImmediate = false;
+    }}
+    oncancel={() => (confirmingImmediate = false)}
+  />
+{/if}
 
 <style>
   .title {

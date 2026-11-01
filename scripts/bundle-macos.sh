@@ -4,7 +4,8 @@
 # into the bundle, signs it ad hoc and packs it into
 # target/release/bundle/dmg/Picturesque_<version>_<arch>.dmg.
 #
-# Needs: brew install vips libraw libheif dylibbundler
+# Needs: brew install vips libraw libheif dylibbundler, and
+# scripts/critic-libs.sh release run first.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -28,6 +29,10 @@ dylibbundler -od -b \
 # load (#52).
 scripts/dedupe-rpaths.sh "$app/Contents/MacOS/picturesque-desktop" \
   "$app"/Contents/Frameworks/*.dylib
+# The built-in critic's helper with llama.cpp (scripts/critic-libs.sh),
+# self-contained: it finds its libraries beside it.
+rm -rf "$app/Contents/MacOS/critic"
+cp -R target/release/critic "$app/Contents/MacOS/critic"
 codesign --force --deep --sign - "$app"
 mkdir -p "$out"
 hdiutil create -volname Picturesque -srcfolder "$app" -ov -format UDZO \

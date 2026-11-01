@@ -31,7 +31,8 @@ Crates
 ``picturesque-core``
    The domain, with no I/O. Photo and metadata types, content-hash identity,
    path-template rendering and filename sanitization, series grouping, score
-   combination and best-in-series ranking. Depends only on small utility
+   combination and best-in-series ranking, and ``insights``, the weighted
+   aggregation of stored critiques. Depends only on small utility
    crates.
 
 ``picturesque-app``
@@ -43,6 +44,16 @@ Crates
    ``sessions::Host`` runs the library or one folder culled in place at a
    time, each as its own ``Api`` over its own catalog, and swaps them
    (:doc:`ADR-0013 </architecture/decisions/0013-folder-sessions>`).
+   ``originals`` plans and runs the optional deletion of imported
+   originals, re-verifying both sides before each photo (its plan also records photos
+   whose originals are already gone as done). Its ``after_import`` runs as the
+   pipeline's per-job hook (set in ``api.rs``) and deletes a verified
+   photo's originals at once in ``immediately`` mode; the pipeline names no
+   deletion logic
+   (:doc:`ADR-0017 </architecture/decisions/0017-delete-originals-after-import>`).
+   ``insights`` maps stored critiques to ``core::insights`` for the
+   ``library_insights`` command, including its rule-based ``advice`` (:doc:`ADR-0016
+   </architecture/decisions/0016-local-vision-language-critic>`).
 
 ``picturesque-infra``
    Implementations of the ports: SQLite catalog (``rusqlite``), image
@@ -55,7 +66,10 @@ Crates
 ``picturesque-desktop``
    The Tauri 2 application. Builds the infrastructure, starts a ``Host``
    over it, and exposes app commands as Tauri commands and events. Serves
-   images through a custom protocol. Contains no business logic.
+   images through a custom protocol. Shows a tray icon and hides the window
+   instead of quitting while a job runs; *what* is running comes from
+   ``picturesque_app::work::WorkTracker``, which folds the progress events
+   into one line. Contains no business logic.
 
 ``picturesque-devserver``
    A development-only HTTP server exposing the same commands, events and

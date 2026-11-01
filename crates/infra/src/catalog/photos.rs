@@ -435,7 +435,11 @@ impl PhotoCatalog for SqliteCatalog {
     }
 
     fn rejected_photos(&self) -> Result<Vec<PhotoId>, CatalogError> {
-        self.load_rejected()
+        self.load_flagged("reject")
+    }
+
+    fn picked_photos(&self) -> Result<Vec<PhotoId>, CatalogError> {
+        self.load_flagged("pick")
     }
 
     fn move_assets(

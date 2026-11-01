@@ -116,6 +116,8 @@ In the Library timeline:
   on the next row, the frame's edge there is dashed and open.
 - The best photo has a **green border** and a star badge. Rejected
   photos stay dimmed.
+- The loupe shows a ribbon of the whole series and can show the best photo
+  beside the current one (**V**, :ref:`features-library-loupe`).
 - Press **C** to compare the photos of the selected photo's series side by
   side, best first (:ref:`features-compare`).
 - Press **B** to make the selected photo (or the photo in the loupe) the

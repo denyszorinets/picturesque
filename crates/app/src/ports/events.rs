@@ -6,6 +6,7 @@ use ts_rs::TS;
 use crate::analysis::AnalysisStatus;
 use crate::export::ExportStatus;
 use crate::models::ModelView;
+use crate::originals::OriginalsStatus;
 use crate::pipeline::PipelineStatus;
 use crate::series::SeriesStatus;
 use crate::sidecars::SidecarStatus;
@@ -20,8 +21,10 @@ pub enum AppEvent {
     SeriesChanged(SeriesStatus),
     ModelProgress(ModelView),
     ExportProgress(ExportStatus),
+    OriginalsProgress(OriginalsStatus),
     PipelineProgress(PipelineStatus),
     SidecarProgress(SidecarStatus),
+    BackgroundCritiqueProgress(crate::critic::background::BackgroundCritiqueStatus),
 }
 
 /// Delivers events to the UI: Tauri events in the desktop app,

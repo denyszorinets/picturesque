@@ -33,6 +33,13 @@ pub struct ReasonView {
 pub struct Signals<'a> {
     pub quality: Option<&'a QualityView>,
     pub aesthetic: Option<&'a AestheticView>,
+    /// The personal taste score, 0–1.
+    pub taste: Option<f32>,
+    /// The critique's percentile among the library's critiques, 0–1.
+    pub critique: Option<f32>,
+    /// A RAW photo's critique rating and the potential rating it was raised
+    /// toward, when the potential raised it.
+    pub raw_potential: Option<(f32, f32)>,
     pub faces: Option<&'a [FaceView]>,
 }
 
@@ -46,6 +53,15 @@ pub struct SeriesPlace<'a> {
     pub best_chosen: bool,
     /// The best photo's signals (when this photo is not the best).
     pub best: Signals<'a>,
+}
+
+/// A rating without a trailing `.0`.
+fn rating(v: f32) -> String {
+    if (v - v.round()).abs() < 0.05 {
+        format!("{:.0}", v.round())
+    } else {
+        format!("{v:.1}")
+    }
 }
 
 fn percent(v: f32) -> String {
@@ -165,6 +181,48 @@ pub fn reasons(photo: Signals<'_>, series: Option<SeriesPlace<'_>>) -> Vec<Reaso
             ));
         }
     }
+    if let Some(t) = photo.taste {
+        if t >= 0.7 {
+            out.push(reason(
+                Tone::Good,
+                format!("Like the photos you pick (your taste {})", percent(t)),
+            ));
+        } else if t <= 0.3 {
+            out.push(reason(
+                Tone::Bad,
+                format!("Like the photos you reject (your taste {})", percent(t)),
+            ));
+        }
+    }
+    if let Some(c) = photo.critique {
+        if c >= 0.8 {
+            out.push(reason(
+                Tone::Good,
+                format!(
+                    "The critic ranks it among your best (top {}%)",
+                    (((1.0 - c) * 100.0).round() as i32).max(1)
+                ),
+            ));
+        } else if c <= 0.2 {
+            out.push(reason(
+                Tone::Bad,
+                format!(
+                    "The critic ranks it below most of your photos (bottom {}%)",
+                    ((c * 100.0).round() as i32).max(1)
+                ),
+            ));
+        }
+    }
+    if let Some((rated, potential)) = photo.raw_potential {
+        out.push(reason(
+            Tone::Info,
+            format!(
+                "Rated as a RAW file: the critic's {} is raised toward the {} it could reach after editing",
+                rating(rated),
+                rating(potential)
+            ),
+        ));
+    }
     out
 }
 
@@ -201,6 +259,40 @@ mod tests {
     }
 
     #[test]
+    fn a_raw_photo_lifted_by_its_potential_says_so() {
+        // (lift, expected reason)
+        let cases = [
+            (None, None),
+            (
+                Some((6.0, 8.0)),
+                Some(
+                    "Rated as a RAW file: the critic's 6 is raised toward the 8 it could reach after editing",
+                ),
+            ),
+            (
+                Some((6.5, 8.0)),
+                Some(
+                    "Rated as a RAW file: the critic's 6.5 is raised toward the 8 it could reach after editing",
+                ),
+            ),
+        ];
+        for (lift, expected) in cases {
+            let r = reasons(
+                Signals {
+                    raw_potential: lift,
+                    ..Default::default()
+                },
+                None,
+            );
+            let got: Vec<_> = texts(&r);
+            match expected {
+                Some(text) => assert_eq!(got, [(Tone::Info, text)]),
+                None => assert!(got.is_empty()),
+            }
+        }
+    }
+
+    #[test]
     fn a_good_photo_lists_its_strengths() {
         let q = quality(0.9, 0.95, 0.9);
         let a = AestheticView {
@@ -212,7 +304,10 @@ mod tests {
             Signals {
                 quality: Some(&q),
                 aesthetic: Some(&a),
+                taste: Some(0.81),
+                critique: Some(0.93),
                 faces: Some(&faces),
+                ..Default::default()
             },
             Some(SeriesPlace {
                 rank: 1,
@@ -231,6 +326,8 @@ mod tests {
                 (Tone::Good, "Sharp (90%)"),
                 (Tone::Good, "Well exposed"),
                 (Tone::Good, "Looks appealing (aesthetic 72%)"),
+                (Tone::Good, "Like the photos you pick (your taste 81%)"),
+                (Tone::Good, "The critic ranks it among your best (top 7%)"),
             ]
         );
     }
@@ -253,7 +350,10 @@ mod tests {
             Signals {
                 quality: Some(&q),
                 aesthetic: Some(&a),
+                taste: Some(0.12),
+                critique: Some(0.04),
                 faces: Some(&faces),
+                ..Default::default()
             },
             Some(SeriesPlace {
                 rank: 3,
@@ -263,7 +363,10 @@ mod tests {
                 best: Signals {
                     quality: Some(&best_q),
                     aesthetic: Some(&best_a),
+                    taste: None,
+                    critique: None,
                     faces: Some(&best_faces),
+                    ..Default::default()
                 },
             }),
         );
@@ -280,6 +383,11 @@ mod tests {
                 (Tone::Bad, "Overexposed: bright areas are blown out"),
                 (Tone::Bad, "Noisy (low noise 30%)"),
                 (Tone::Bad, "Looks plain (aesthetic 20%)"),
+                (Tone::Bad, "Like the photos you reject (your taste 12%)"),
+                (
+                    Tone::Bad,
+                    "The critic ranks it below most of your photos (bottom 4%)",
+                ),
             ]
         );
     }
