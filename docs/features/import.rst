@@ -191,9 +191,12 @@ again (original and library copy are hashed) before its original is
 deleted, so importing is slower than with *Never* or *Ask*. Switching it
 on asks for a confirmation: deletion is permanent, there is no trash and
 no undo, and afterwards the library disk holds the only copy. Cancelling
-leaves the choice unchanged. Folders set to *Immediately* still show
-**Delete originals…** for leftovers (photos kept earlier, or imported
-before the switch).
+leaves the choice unchanged. Saving the choice (or setting a folder to
+*Immediately*) also runs the same checks on photos imported before the
+switch, for example when you change it while an import is running, and
+deletes their originals in the background. Photos that fail a check stay,
+with the reason in the log, and folders set to *Immediately* still show
+**Delete originals…** for what is left.
 
 It is refused when the library folder and the import folder overlap (one
 contains the other, for example after the library folder was changed);

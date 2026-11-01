@@ -27,6 +27,7 @@ use crate::library::{
     DecisionView, FacetsArgs, PhotoArgs, PhotoDetail, PhotoQuery, SetDecisionsArgs,
 };
 use crate::models::{ModelArgs, ModelError, ModelService};
+use crate::originals::OriginalsChoice;
 use crate::pipeline::{
     AddSourceArgs, ImportPipeline, JobsArgs, LogArgs, OriginalsArgs, OriginalsPlanArgs,
     PipelineDeps, PipelineError, RetryArgs, ScanArgs, SourceArgs, SourceOriginalsArgs,
@@ -48,7 +49,7 @@ use crate::ports::sidecars::SidecarStore;
 use crate::rejects::{RejectsError, RejectsService, UndoRejectMoveArgs};
 use crate::search::{DEFAULT_LIMIT as SEARCH_LIMIT, SearchArgs, SearchError, TextSearch};
 use crate::series::{ChooseBestArgs, EditSeriesArgs, SeriesService};
-use crate::settings::{SettingsError, SettingsService, SettingsUpdate};
+use crate::settings::{DeleteAfterImport, SettingsError, SettingsService, SettingsUpdate};
 use crate::sidecars::SidecarService;
 use crate::templates::{self, PreviewTemplateArgs};
 use crate::thumbnails::{ImageSize, ThumbnailError, ThumbnailService};
@@ -352,6 +353,16 @@ impl Api {
     }
 
     /// A photo's current analysis results, read for display.
+    /// Frees the originals of photos imported before a folder began to
+    /// delete right after each import. Runs on its own thread: it reads and
+    /// hashes files.
+    fn clear_leftover_originals(&self) {
+        let pipeline = Arc::clone(&self.pipeline);
+        std::thread::spawn(move || {
+            pipeline.delete_leftover_originals();
+        });
+    }
+
     fn analyzed(&self, id: PhotoId) -> Result<Analyzed, ApiError> {
         let results = self.catalog.analysis(id).map_err(catalog_error)?;
         let current = |analyzer: AnalyzerId| {
@@ -608,7 +619,12 @@ impl Api {
                     || update.taste.is_some()
                     || update.critic.is_some();
                 let critic_changed = update.critic.is_some() || update.ai.is_some();
+                let deletes_now =
+                    update.delete_after_import == Some(DeleteAfterImport::Immediately);
                 let settings = self.settings.update(update).map_err(settings_error)?;
+                if deletes_now {
+                    self.clear_leftover_originals();
+                }
                 if series_changed {
                     self.series.recompute().map_err(catalog_error)?;
                 }
@@ -761,11 +777,14 @@ impl Api {
             }
             "set_import_source_delete_originals" => {
                 let SourceOriginalsArgs { id, choice } = parse_args(command, args)?;
-                respond(
-                    self.pipeline
-                        .set_delete_originals(id, choice)
-                        .map_err(pipeline_error)?,
-                )
+                let source = self
+                    .pipeline
+                    .set_delete_originals(id, choice)
+                    .map_err(pipeline_error)?;
+                if choice == OriginalsChoice::Immediately {
+                    self.clear_leftover_originals();
+                }
+                respond(source)
             }
             "delete_originals_offers" => {
                 no_args(command, &args)?;

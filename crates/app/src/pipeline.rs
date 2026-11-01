@@ -1004,6 +1004,27 @@ impl ImportPipeline {
         true
     }
 
+    /// Deletes the originals of photos imported before their folder was
+    /// switched to deleting right after each import. Returns how many
+    /// photos were looked at; folders that do not delete right away skip
+    /// each one without touching the disk.
+    pub fn delete_leftover_originals(&self) -> usize {
+        let Ok(sources) = self.deps.store.sources() else {
+            return 0;
+        };
+        let mut seen = 0;
+        for source in sources {
+            let Ok(jobs) = self.deps.store.cleanup_candidates(source.id, None) else {
+                continue;
+            };
+            for job in jobs {
+                seen += 1;
+                self.delete_original(&job);
+            }
+        }
+        seen
+    }
+
     /// Frees the space of an original whose copy was just verified, in
     /// folders that delete right after each import.
     fn delete_original(&self, job: &Job) {

@@ -28,7 +28,9 @@
       {#if scope}Photos imported from <strong>{scope}</strong>{:else}Photos
         imported from any folder that follows this setting{/if}
       are deleted from there as soon as their copy in your library is verified, one
-      by one, while the import is still running. This frees the space as you go.
+      by one, while the import is still running. This frees the space as you go. Photos
+      imported earlier whose originals are still there are cleared as well, right
+      after you confirm.
     </p>
     <ul>
       <li>
