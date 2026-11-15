@@ -63,6 +63,13 @@ unsafe extern "C" {
         width: c_int,
         ...
     ) -> c_int;
+    fn vips_thumbnail_buffer(
+        buf: *mut c_void,
+        len: usize,
+        out: *mut *mut VipsImage,
+        width: c_int,
+        ...
+    ) -> c_int;
     fn vips_jpegsave(image: *mut VipsImage, filename: *const c_char, ...) -> c_int;
     fn vips_flatten(image: *mut VipsImage, out: *mut *mut VipsImage, ...) -> c_int;
     fn vips_colourspace(
@@ -187,15 +194,53 @@ impl Image {
     }
 
     /// An encoded image (JPEG, …) in memory.
+    #[cfg(test)]
     pub fn from_buffer(bytes: Vec<u8>) -> Result<Self, String> {
+        Self::from_shared(Arc::new(bytes))
+    }
+
+    fn from_shared(bytes: Arc<Vec<u8>>) -> Result<Self, String> {
         init();
-        let bytes = Arc::new(bytes);
         // SAFETY: the buffer lives as long as this image and its derivatives
         // (they hold `bytes`); the option string and list are empty.
         let ptr = unsafe {
             vips_image_new_from_buffer(bytes.as_ptr().cast(), bytes.len(), c"".as_ptr(), END)
         };
         Self::wrap(ptr, Some(bytes), "read buffer")
+    }
+
+    /// Decodes an encoded image in memory shrunk to fit `edge` × `edge`
+    /// without applying EXIF orientation; never enlarged. A JPEG shrinks
+    /// while it loads, decoding a fraction of its pixels, which is much
+    /// faster than [`Image::from_buffer`] then [`Image::shrink`]. Also
+    /// returns the encoded image's full size.
+    pub fn thumbnail_buffer(bytes: Vec<u8>, edge: i32) -> Result<(Self, (u32, u32)), String> {
+        let bytes = Arc::new(bytes);
+        // Only the header is read here.
+        let header = Self::from_shared(Arc::clone(&bytes))?;
+        let size = (header.width(), header.height());
+        let mut out = null_mut();
+        // SAFETY: libvips reads the buffer lazily and never writes to it;
+        // the image keeps `bytes` alive. Valid ints; the list ends with END.
+        let failed = unsafe {
+            vips_thumbnail_buffer(
+                bytes.as_ptr().cast_mut().cast(),
+                bytes.len(),
+                &mut out,
+                edge,
+                c"height".as_ptr(),
+                edge,
+                c"size".as_ptr(),
+                SIZE_DOWN,
+                c"no-rotate".as_ptr(),
+                1 as c_int,
+                END,
+            )
+        } != 0;
+        if failed {
+            return Err(error("decode preview"));
+        }
+        Ok((Self::wrap(out, Some(bytes), "decode preview")?, size))
     }
 
     /// 8-bit interleaved pixels (copied).

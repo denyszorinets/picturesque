@@ -120,6 +120,17 @@
     void critiqueProgress.load();
   }
 
+  /** Leaves fast mode, so the skipped scores are computed. */
+  async function scorePhotos() {
+    try {
+      settings = await api.updateSettings({ fast_mode: false });
+      settingsRevision += 1;
+      void analysis.load();
+    } catch {
+      // Settings shows the error when opened.
+    }
+  }
+
   async function closeSetup() {
     setup = false;
     tab = "library";
@@ -222,6 +233,10 @@
             onnextfolder={() => (switcherOpen = true)}
             folder={settings?.open_folder ?? null}
             canClear={settings?.delete_after_copy !== "never"}
+            autoPick={(settings?.auto_pick.enabled ?? true) &&
+              !settings?.fast_mode}
+            fastMode={!!settings?.fast_mode}
+            onscore={() => void scorePhotos()}
             {tour}
             ontourend={() => void endTour()}
           />

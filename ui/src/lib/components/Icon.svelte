@@ -6,6 +6,7 @@
   import arrowUpTray from "heroicons/20/solid/arrow-up-tray.svg?raw";
   import arrowUturnLeft from "heroicons/20/solid/arrow-uturn-left.svg?raw";
   import arrowUturnRight from "heroicons/20/solid/arrow-uturn-right.svg?raw";
+  import bolt from "heroicons/20/solid/bolt.svg?raw";
   import chartBar from "heroicons/20/solid/chart-bar.svg?raw";
   import check from "heroicons/20/solid/check.svg?raw";
   import checkCircle from "heroicons/20/solid/check-circle.svg?raw";
@@ -24,11 +25,13 @@
   import magnifyingGlassPlus from "heroicons/20/solid/magnifying-glass-plus.svg?raw";
   import photo from "heroicons/20/solid/photo.svg?raw";
   import questionMarkCircle from "heroicons/20/solid/question-mark-circle.svg?raw";
+  import queueList from "heroicons/20/solid/queue-list.svg?raw";
   import rectangleStack from "heroicons/20/solid/rectangle-stack.svg?raw";
   import sparkles from "heroicons/20/solid/sparkles.svg?raw";
   import squares2x2 from "heroicons/20/solid/squares-2x2.svg?raw";
   import star from "heroicons/20/solid/star.svg?raw";
   import trash from "heroicons/20/solid/trash.svg?raw";
+  import viewfinderCircle from "heroicons/20/solid/viewfinder-circle.svg?raw";
   import xCircle from "heroicons/20/solid/x-circle.svg?raw";
   import xMark from "heroicons/20/solid/x-mark.svg?raw";
 
@@ -38,6 +41,7 @@
     "arrow-up-tray": arrowUpTray,
     "arrow-uturn-left": arrowUturnLeft,
     "arrow-uturn-right": arrowUturnRight,
+    bolt: bolt,
     "chart-bar": chartBar,
     "light-bulb": lightBulb,
     check: check,
@@ -56,11 +60,13 @@
     "magnifying-glass-plus": magnifyingGlassPlus,
     photo: photo,
     "question-mark-circle": questionMarkCircle,
+    "queue-list": queueList,
     "rectangle-stack": rectangleStack,
     sparkles: sparkles,
     "squares-2x2": squares2x2,
     star: star,
     trash: trash,
+    "viewfinder-circle": viewfinderCircle,
     "x-circle": xCircle,
     "x-mark": xMark,
   } as const;

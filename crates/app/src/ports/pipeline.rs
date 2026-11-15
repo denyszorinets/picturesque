@@ -161,6 +161,10 @@ pub trait PipelineStore: Send + Sync {
     /// Removes a source and its waiting jobs; finished jobs stay as
     /// history.
     fn remove_source(&self, id: i64) -> Result<(), CatalogError>;
+    /// Forgets the finished jobs of a source (imported, duplicate or
+    /// failed), so its photos are found as new on the next scan; jobs
+    /// waiting or running stay. Returns how many were forgotten.
+    fn forget_finished_jobs(&self, source_id: i64) -> Result<usize, CatalogError>;
     fn record_scan(&self, id: i64, error: Option<&str>) -> Result<(), CatalogError>;
 
     /// Records a photo found in a source, keyed by its primary file. A new

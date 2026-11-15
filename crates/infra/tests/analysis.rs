@@ -25,6 +25,7 @@ fn api(catalog: &Arc<SqliteCatalog>, cache_dir: PathBuf) -> Api {
         watcher: Arc::new(picturesque_app::ports::watcher::NoWatcher),
         critic: Arc::new(picturesque_infra::critic::CriticAdapter::new()),
         power: Arc::new(picturesque_infra::power::SystemPower),
+        species_lists: Arc::new(picturesque_infra::birds::EbirdSpeciesLists::default()),
         settings_store: catalog.clone(),
         catalog: catalog.clone(),
         fs: Arc::new(StdFileSystem),

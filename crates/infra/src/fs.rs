@@ -87,6 +87,27 @@ impl FileSystem for StdFileSystem {
         Ok((ContentHash::from_bytes(*hasher.finalize().as_bytes()), size))
     }
 
+    fn fingerprint(&self, path: &Path) -> Result<(ContentHash, u64), String> {
+        use std::io::{Seek, SeekFrom};
+        const END: u64 = 1024 * 1024;
+        let mut file = File::open(path).map_err(|e| io_reason(&e))?;
+        let size = file.metadata().map_err(|e| io_reason(&e))?.len();
+        if size <= 2 * END {
+            return self.hash_file(path);
+        }
+        // Domain-separated from full hashes, so the two never collide.
+        let mut hasher = blake3::Hasher::new_derive_key("picturesque fingerprint v1");
+        hasher.update(&size.to_le_bytes());
+        let mut buf = vec![0u8; END as usize];
+        file.read_exact(&mut buf).map_err(|e| io_reason(&e))?;
+        hasher.update(&buf);
+        file.seek(SeekFrom::End(-(END as i64)))
+            .map_err(|e| io_reason(&e))?;
+        file.read_exact(&mut buf).map_err(|e| io_reason(&e))?;
+        hasher.update(&buf);
+        Ok((ContentHash::from_bytes(*hasher.finalize().as_bytes()), size))
+    }
+
     fn create_dir_all(&self, path: &Path) -> Result<(), String> {
         std::fs::create_dir_all(path).map_err(|e| io_reason(&e))
     }
@@ -236,6 +257,36 @@ mod tests {
                 .unwrap(),
             (copied_hash, size)
         );
+    }
+
+    #[test]
+    fn fingerprints_read_only_the_ends_of_large_files() {
+        let dir = tempfile::tempdir().unwrap();
+        let (small, large) = (dir.path().join("small"), dir.path().join("large"));
+        std::fs::write(&small, b"tiny").unwrap();
+        let mut data: Vec<u8> = (0..5_000_000u32).map(|i| (i % 251) as u8).collect();
+        std::fs::write(&large, &data).unwrap();
+
+        // Small files: the full hash.
+        assert_eq!(
+            StdFileSystem.fingerprint(&small).unwrap(),
+            StdFileSystem.hash_file(&small).unwrap()
+        );
+        let (print, size) = StdFileSystem.fingerprint(&large).unwrap();
+        assert_eq!(size, 5_000_000);
+        assert_ne!(print, StdFileSystem.hash_file(&large).unwrap().0);
+        // Stable, and changed by either end but not the middle.
+        assert_eq!(StdFileSystem.fingerprint(&large).unwrap().0, print);
+        for (at, changes) in [(10, true), (2_500_000, false), (4_999_990, true)] {
+            data[at] ^= 0xff;
+            std::fs::write(&large, &data).unwrap();
+            assert_eq!(
+                StdFileSystem.fingerprint(&large).unwrap().0 != print,
+                changes,
+                "byte {at}"
+            );
+            data[at] ^= 0xff;
+        }
     }
 
     #[test]

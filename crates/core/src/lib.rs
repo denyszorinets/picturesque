@@ -6,6 +6,7 @@
 #![forbid(unsafe_code)]
 
 pub mod base64;
+pub mod birds;
 pub mod clip;
 pub mod clip_tokenizer;
 pub mod critic_protocol;

@@ -29,4 +29,9 @@ impl Analyzer for SimilarityAnalyzer {
     fn analyze(&self, input: &AnalysisInput<'_>) -> Result<serde_json::Value, String> {
         serde_json::to_value(Signature::of(input.image)).map_err(|e| e.to_string())
     }
+
+    /// Series need it, and a hash of a few pixels does not need a preview.
+    fn runs_in_fast_mode(&self) -> bool {
+        true
+    }
 }

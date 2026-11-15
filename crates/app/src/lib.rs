@@ -8,6 +8,7 @@
 pub mod ai;
 pub mod analysis;
 pub mod api;
+pub mod birds;
 pub mod clear;
 pub mod critic;
 pub mod embeddings;
@@ -33,6 +34,7 @@ pub mod stats;
 pub mod taste;
 pub mod templates;
 pub mod thumbnails;
+pub mod view;
 pub mod work;
 
 #[cfg(test)]

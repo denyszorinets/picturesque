@@ -7,9 +7,11 @@
     facets: PhotoFacets;
     /** Turns every auto-picked photo into a pick. */
     onacceptauto?: () => void;
+    /** Whether auto-pick is on; off hides its filter. */
+    autoPick?: boolean;
   }
 
-  let { filters, facets, onacceptauto }: Props = $props();
+  let { filters, facets, onacceptauto, autoPick = true }: Props = $props();
 
   const FLAGS = [
     { flag: "pick", label: "Picks" },
@@ -90,7 +92,7 @@
         >
           {label} <span class="count">{flagCount(flag)}</span>
         </button>
-        {#if flag === "pick"}
+        {#if flag === "pick" && autoPick}
           <button
             class:on={filters.autoPicked}
             aria-pressed={filters.autoPicked}
@@ -103,7 +105,7 @@
         {/if}
       {/each}
     </div>
-    {#if facets.auto_picked > 0 && onacceptauto}
+    {#if autoPick && facets.auto_picked > 0 && onacceptauto}
       <button
         class="accept"
         onclick={onacceptauto}

@@ -516,6 +516,60 @@ fn reanalyzes_every_photo() {
     assert_eq!(analyzer.seen().len(), 4);
 }
 
+/// Like [`Recorder`], but also runs in fast mode.
+struct FastRecorder(Arc<Recorder>);
+
+impl Analyzer for FastRecorder {
+    fn id(&self) -> AnalyzerId {
+        self.0.id()
+    }
+
+    fn analyze(&self, input: &AnalysisInput<'_>) -> Result<Value, String> {
+        self.0.analyze(input)
+    }
+
+    fn runs_in_fast_mode(&self) -> bool {
+        true
+    }
+}
+
+#[test]
+fn fast_mode_runs_only_what_series_need_from_grid_images_then_catches_up() {
+    let (world, ids) = world(2);
+    let similarity = Recorder::new("similarity", 1);
+    let sharpness = Recorder::new("sharpness", 1);
+    let analysis = service(
+        &world,
+        vec![
+            Arc::new(FastRecorder(similarity.clone())),
+            sharpness.clone(),
+        ],
+    );
+    analysis.set_fast(true);
+
+    assert_eq!(analysis.run_until_idle(), 2);
+    assert_eq!(similarity.seen(), ids);
+    assert!(sharpness.seen().is_empty(), "skipped in fast mode");
+    // From the grid images; no preview was rendered.
+    let pixels = world.pixels.calls.lock().unwrap().clone();
+    assert!(
+        pixels.iter().all(|p| p.starts_with("/cache/v1/grid")),
+        "{pixels:?}"
+    );
+    assert_eq!(
+        analysis.status().analyzed,
+        2,
+        "done, as far as fast mode goes"
+    );
+
+    // Leaving fast mode runs what was skipped, and only that.
+    analysis.set_fast(false);
+    assert_eq!(analysis.status().analyzed, 0);
+    assert_eq!(analysis.run_until_idle(), 2);
+    assert_eq!(sharpness.seen(), ids);
+    assert_eq!(similarity.seen().len(), 2, "not redone");
+}
+
 #[test]
 fn reanalyzing_says_which_analyses_wait_for_models() {
     let (world, _) = world(1);

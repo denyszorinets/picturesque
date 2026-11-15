@@ -126,6 +126,16 @@ impl PipelineStore for SqliteCatalog {
         tx.commit().map_err(storage)
     }
 
+    fn forget_finished_jobs(&self, source_id: i64) -> Result<usize, CatalogError> {
+        self.conn()
+            .execute(
+                "DELETE FROM import_job WHERE source_id = ?1
+                 AND stage IN ('imported', 'duplicate', 'failed')",
+                [source_id],
+            )
+            .map_err(storage)
+    }
+
     fn record_scan(&self, id: i64, error: Option<&str>) -> Result<(), CatalogError> {
         self.conn()
             .execute(

@@ -4,6 +4,7 @@ import type { BackgroundCritiqueStatus } from "./BackgroundCritiqueStatus";
 import type { ExportStatus } from "./ExportStatus";
 import type { ModelView } from "./ModelView";
 import type { OriginalsStatus } from "./OriginalsStatus";
+import type { PhotosRemoved } from "./PhotosRemoved";
 import type { PipelineStatus } from "./PipelineStatus";
 import type { SeriesStatus } from "./SeriesStatus";
 import type { SidecarStatus } from "./SidecarStatus";
@@ -12,4 +13,4 @@ import type { SidecarStatus } from "./SidecarStatus";
  * An event for the UI. Serialized with a `type` field, for example
  * `{ "type": "pipeline_progress", "queued": 3, ... }`.
  */
-export type AppEvent = { "type": "analysis_progress" } & AnalysisStatus | { "type": "series_changed" } & SeriesStatus | { "type": "model_progress" } & ModelView | { "type": "export_progress" } & ExportStatus | { "type": "originals_progress" } & OriginalsStatus | { "type": "pipeline_progress" } & PipelineStatus | { "type": "sidecar_progress" } & SidecarStatus | { "type": "background_critique_progress" } & BackgroundCritiqueStatus;
+export type AppEvent = { "type": "analysis_progress" } & AnalysisStatus | { "type": "series_changed" } & SeriesStatus | { "type": "model_progress" } & ModelView | { "type": "export_progress" } & ExportStatus | { "type": "originals_progress" } & OriginalsStatus | { "type": "pipeline_progress" } & PipelineStatus | { "type": "sidecar_progress" } & SidecarStatus | { "type": "background_critique_progress" } & BackgroundCritiqueStatus | { "type": "photos_removed" } & PhotosRemoved;

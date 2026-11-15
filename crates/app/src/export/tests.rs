@@ -230,6 +230,88 @@ fn copies_out_of_a_folder_are_recorded_for_clearing_it() {
 }
 
 #[test]
+fn photos_fast_mode_fingerprinted_copy_and_record_full_hashes() {
+    // A large RAW (over the fake's 8-byte "two mebibytes"), catalogued by
+    // its fingerprint as fast mode does in place.
+    let raw: &[u8] = b"a large raw file, longer than its ends";
+    let fs = MemFs::new()
+        .file("/card/big.ORF", raw)
+        .dir("/out")
+        .dir("/out2");
+    let world = TestWorld::new(fs, FakeMetadata::default());
+    world
+        .settings
+        .save_settings(&Settings {
+            library_root: Some("/card".into()),
+            open_folder: Some("/card".into()),
+            fast_mode: true,
+            ..Default::default()
+        })
+        .unwrap();
+    let (print, size) = world.fs.fingerprint(Path::new("/card/big.ORF")).unwrap();
+    assert_ne!(print, fake_hash(raw), "a fingerprint, not the full hash");
+    let id = world
+        .catalog
+        .insert_photo(&NewPhoto {
+            metadata: Default::default(),
+            assets: PhotoAssets::new(vec![Asset {
+                format: MediaFormat::Raw,
+                path: PathBuf::from("big.ORF"),
+                size,
+                hash: print,
+            }])
+            .unwrap(),
+        })
+        .unwrap();
+    world
+        .catalog
+        .set_decision(
+            id,
+            Decision {
+                flag: Flag::Pick,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    let service = Arc::new(ExportService::new(
+        world.catalog.clone(),
+        world.fs.clone(),
+        world.decoder.clone(),
+        world.pixels.clone(),
+        world.settings.clone(),
+        world.events.clone(),
+        world.sidecars.clone(),
+    ));
+
+    let status = service.run_now(args(ExportFormat::Original)).unwrap();
+
+    assert!(status.failed.is_empty(), "{:?}", status.failed);
+    assert_eq!(read(&world, "/out/big.ORF").unwrap(), raw);
+    // Clear folder verifies the copy against its full hash.
+    let copies = world.catalog.copies().unwrap();
+    assert_eq!(copies.len(), 1);
+    assert_eq!(copies[0].hash, fake_hash(raw));
+
+    // A file changed at either end is still refused.
+    world.fs.write(
+        Path::new("/card/big.ORF"),
+        b"A large raw file, longer than its ends",
+    );
+    let status = service
+        .run_now(ExportArgs {
+            destination: "/out2".into(),
+            ..args(ExportFormat::Original)
+        })
+        .unwrap();
+    assert_eq!(status.failed.len(), 1);
+    assert!(
+        status.failed[0].error.contains("changed"),
+        "{:?}",
+        status.failed
+    );
+}
+
+#[test]
 fn library_exports_record_no_copies() {
     let (world, service, _) = world();
 

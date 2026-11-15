@@ -58,6 +58,14 @@ pub trait FileSystem: Send + Sync {
     /// BLAKE3 hash and size of a file's contents.
     fn hash_file(&self, path: &Path) -> Result<(ContentHash, u64), String>;
 
+    /// A quick fingerprint and the size of a file: its size and first and
+    /// last mebibyte, hashed, so a large RAW on a slow memory card is not
+    /// read in full (fast mode, `docs/features/fast-mode.rst`). Files of up
+    /// to two mebibytes get their full [`FileSystem::hash_file`] hash.
+    /// Identifies photos, but cannot prove a copy complete: copies are
+    /// always verified with full hashes.
+    fn fingerprint(&self, path: &Path) -> Result<(ContentHash, u64), String>;
+
     fn create_dir_all(&self, path: &Path) -> Result<(), String>;
 
     /// Copies `src` to `dst` (replacing `dst` if present), flushes it to

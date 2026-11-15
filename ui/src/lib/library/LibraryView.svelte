@@ -9,6 +9,7 @@
   import FinishDialog from "../session/FinishDialog.svelte";
   import DarktableNote from "../session/DarktableNote.svelte";
   import ClearDialog from "../session/ClearDialog.svelte";
+  import ClearViewDialog from "./ClearViewDialog.svelte";
   import Reanalyze from "../analysis/Reanalyze.svelte";
   import { waitingNote } from "../analysis/models";
   import Tour from "../tour/Tour.svelte";
@@ -51,6 +52,12 @@
     /** The open folder, and whether clearing it is allowed (ADR-0014). */
     folder?: string | null;
     canClear?: boolean;
+    /** Whether auto-pick suggests keepers (off in fast mode). */
+    autoPick?: boolean;
+    /** Fast mode: photos are not scored. */
+    fastMode?: boolean;
+    /** Leaves fast mode, scoring the photos. */
+    onscore?: () => void;
   }
 
   let {
@@ -69,14 +76,46 @@
     onnextfolder,
     folder = null,
     canClear = false,
+    autoPick = true,
+    fastMode = false,
+    onscore,
   }: Props = $props();
 
   let finishing = $state(false);
   let clearing = $state(false);
+  let clearingView = $state(false);
+  let reloading = $state(false);
+
+  /** Reads the open folder again from scratch (Reload folder). */
+  async function reload() {
+    reloading = true;
+    seriesError = null;
+    try {
+      await api.reloadFolder();
+      selection.clear();
+      await store.refresh();
+    } catch (e) {
+      seriesError = api.ApiError.from(e).message;
+    } finally {
+      reloading = false;
+    }
+  }
+
+  /** The photos Clear view removes: those in view, or `null` for every
+   * photo when nothing filters the view. */
+  function viewQuery(): api.PhotoQuery | null {
+    if (filters.search)
+      return { ...filters.toQuery(), photo_ids: store.photos.map((p) => p.id) };
+    return filters.active ? filters.toQuery() : null;
+  }
 
   const filters = new Filters();
   const sidecars = new SidecarProgress(api);
   let showFilters = $state(true);
+  // With auto-pick off, its filter is gone, so it must not stay applied.
+  $effect(() => {
+    if (!autoPick && filters.autoPicked) filters.autoPicked = false;
+  });
 
   /** The search box's text; searching starts on Enter. */
   let searchText = $state(filters.search);
@@ -133,6 +172,10 @@
 
   /** Index of the photo open in the loupe. */
   let loupe = $state<number | null>(null);
+  /** The photo the loupe shows: with stacked series, possibly a member of
+   * the stack that is not itself in the list. */
+  let loupeShown = $state<api.PhotoSummary | null>(null);
+  let loupeView: ReturnType<typeof Loupe> | undefined = $state();
   let layout = $state<Layout>();
   const culling = $derived(new Culling(api, store));
   // Flag and rating counts follow decisions.
@@ -160,6 +203,26 @@
     return selection.focus === null ? [] : [selection.focus];
   }
 
+  /** The one photo a series key applies to. */
+  function targetPhoto(): api.PhotoSummary | undefined {
+    if (loupe !== null) return loupeShown ?? store.photos[loupe];
+    const [index] = targets();
+    return index === undefined ? undefined : store.photos[index];
+  }
+
+  /** Flags the targets; in the loupe, the photo it shows. */
+  function flagTargets(flag: api.PhotoSummary["flag"]): Promise<void> {
+    if (loupe !== null && loupeShown)
+      return culling.flagPhotos([loupeShown], flag);
+    return culling.flag(targets(), flag);
+  }
+
+  function rateTargets(rating: number): Promise<void> {
+    if (loupe !== null && loupeShown)
+      return culling.ratePhotos([loupeShown], rating);
+    return culling.rate(targets(), rating);
+  }
+
   const AUTO_ADVANCE_KEY = "picturesque.autoAdvance";
   /** In the loupe, move to the next photo after every decision. */
   let autoAdvance = $state(
@@ -184,11 +247,8 @@
   function advance() {
     const total = store.total;
     if (loupe !== null) {
-      if (loupe + 1 < total) {
-        loupe += 1;
-        selection.click(loupe);
-        void store.ensureLoaded(loupe);
-      }
+      // The loupe knows the way: through a stack's photos when stacked.
+      loupeView?.next();
       return;
     }
     if (selection.size <= 1 && selection.focus !== null) {
@@ -242,13 +302,12 @@
     const next = e.shiftKey || (loupe !== null && autoAdvance);
     const flag = flagForKey(e.key, loupe === null ? "grid" : "loupe");
     if (flag) {
-      const photos = targets();
-      decide(() => culling.flag(photos, flag), next);
+      decide(() => flagTargets(flag), next);
       return true;
     }
     if (/^[0-5]$/.test(e.key)) {
-      const photos = targets();
-      decide(() => culling.rate(photos, Number(e.key)), next);
+      const rating = Number(e.key);
+      decide(() => rateTargets(rating), next);
       return true;
     }
     return false;
@@ -286,8 +345,7 @@
   /** `s` / `j`: splits the series before the target photo, or joins it to
    * the photo taken before it; again removes the correction. */
   async function correctSeries(edit: api.SeriesEditView) {
-    const [index] = targets();
-    const photo = index === undefined ? undefined : store.photos[index];
+    const photo = targetPhoto();
     if (!photo) return;
     seriesError = null;
     try {
@@ -311,7 +369,7 @@
   async function openCompare() {
     seriesError = null;
     const focusId =
-      (loupe !== null ? store.photos[loupe]?.id : undefined) ??
+      (loupe !== null ? targetPhoto()?.id : undefined) ??
       (selection.focus !== null
         ? store.photos[selection.focus]?.id
         : undefined);
@@ -323,8 +381,7 @@
       compare = { ids, activeId: focusId };
       return;
     }
-    const [index] = targets();
-    const photo = index === undefined ? undefined : store.photos[index];
+    const photo = targetPhoto();
     if (!photo || photo.series_id === null) {
       seriesError =
         "Select two or more photos, or a photo in a series, to compare.";
@@ -362,8 +419,7 @@
   /** `b`: makes the target photo the best of its series, or withdraws
    * the choice when it already is. */
   async function chooseBest() {
-    const [index] = targets();
-    const photo = index === undefined ? undefined : store.photos[index];
+    const photo = targetPhoto();
     if (!photo || photo.series_id === null) return;
     seriesError = null;
     try {
@@ -390,7 +446,14 @@
       return;
     // The library is hidden while the Import tab is shown; the compare
     // view handles its own keys.
-    if (!section?.offsetParent || compare || exporting || finishing || clearing)
+    if (
+      !section?.offsetParent ||
+      compare ||
+      exporting ||
+      finishing ||
+      clearing ||
+      clearingView
+    )
       return;
     if (e.key === "/" && loupe === null) {
       e.preventDefault();
@@ -438,7 +501,11 @@
       if (event.type === "pipeline_progress") {
         if (event.imported !== lastImported) photosImported();
         lastImported = event.imported;
-      } else if (event.type === "series_changed") void store.refresh();
+      } else if (
+        event.type === "series_changed" ||
+        event.type === "photos_removed"
+      )
+        void store.refresh();
       analysis.handle(event);
       sidecars.handle(event);
     });
@@ -475,6 +542,15 @@
           Photos in this folder and its subfolders appear here; new ones too, as
           they arrive. Open another folder from the folder menu at the top left.
         </p>
+        <button
+          onclick={() => void reload()}
+          disabled={reloading}
+          data-testid="reload-folder-empty"
+          >{reloading ? "Reloading…" : "Reload folder"}</button
+        >
+        {#if seriesError}
+          <p class="error-text" role="alert">{seriesError}</p>
+        {/if}
       {:else}
         <h2>No photos yet</h2>
         <p class="muted">
@@ -627,9 +703,43 @@
             ?.count ?? 0}
           onmoved={() => void store.refresh()}
         />
+        {#if inFolder}
+          <button
+            class="small"
+            onclick={() => void reload()}
+            disabled={reloading}
+            title="Read the folder again: shows what is on the card now. Picks and ratings are kept in their sidecars; no file is deleted."
+            data-testid="reload-folder"
+            ><Icon name="arrow-path" />
+            {reloading ? "Reloading…" : "Reload folder"}</button
+          >
+        {:else}
+          <button
+            class="small"
+            onclick={() => (clearingView = true)}
+            disabled={store.total === 0}
+            title="Remove the photos in view from Picturesque, without deleting any file"
+            data-testid="open-clear-view"
+            ><Icon name="x-circle" /> Clear view…</button
+          >
+        {/if}
       </div>
       <!-- Status and history stay together at the right, even when the bar wraps. -->
       <div class="trailing">
+        {#if fastMode}
+          <span
+            class="fast"
+            title="Photos are shown without quality or AI scores, and nothing is auto-picked"
+            data-testid="fast-mode-on"
+            ><Icon name="bolt" /> Fast mode
+            <button
+              class="link"
+              onclick={() => onscore?.()}
+              title="Leave fast mode and score every photo (quality, AI, auto-pick)"
+              data-testid="score-photos">Score photos</button
+            ></span
+          >
+        {/if}
         {#if sidecars.label}
           {@const folder = sidecars.status?.folder}
           {#if api.canReveal() && folder}
@@ -695,6 +805,7 @@
           <FilterPanel
             {filters}
             facets={store.facets}
+            {autoPick}
             onacceptauto={() => void acceptAutoPicks()}
           />
         </aside>
@@ -739,6 +850,19 @@
         oncleared={() => void store.refresh()}
       />
     {/if}
+    {#if clearingView}
+      {@const query = viewQuery()}
+      <ClearViewDialog
+        {query}
+        count={filters.stacked ? null : store.total}
+        {inFolder}
+        onclose={() => (clearingView = false)}
+        oncleared={() => {
+          selection.clear();
+          void store.refresh();
+        }}
+      />
+    {/if}
     {#if finishing}
       <FinishDialog
         {autoLabel}
@@ -774,22 +898,24 @@
     {/if}
     {#if loupe !== null}
       <Loupe
+        bind:this={loupeView}
         {store}
         libraryFolder={sidecars.status?.folder ?? null}
         index={loupe}
         onnavigate={(i) => {
           loupe = i;
           selection.click(i);
+          void store.ensureLoaded(i);
         }}
-        onclose={() => (loupe = null)}
-        onflag={(flag) => {
-          const photos = targets();
-          decide(() => culling.flag(photos, flag), autoAdvance);
+        onclose={() => {
+          loupe = null;
+          loupeShown = null;
         }}
-        onrate={(rating) => {
-          const photos = targets();
-          decide(() => culling.rate(photos, rating), autoAdvance);
-        }}
+        onflag={(flag) => decide(() => flagTargets(flag), autoAdvance)}
+        onrate={(rating) => decide(() => rateTargets(rating), autoAdvance)}
+        stacked={filters.stacked}
+        bind:shown={loupeShown}
+        subscribeDecisions={(listener) => culling.subscribe(listener)}
         bind:autoAdvance
       />
     {/if}
@@ -958,6 +1084,17 @@
   .sidecars {
     font-size: 0.85rem;
     white-space: nowrap;
+  }
+
+  .fast {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--warn);
+    white-space: nowrap;
+    --icon-size: 1rem;
   }
 
   .sidecars.ok {

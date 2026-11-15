@@ -56,6 +56,8 @@ struct State {
 #[derive(Default)]
 pub struct MemFs {
     state: Mutex<State>,
+    /// How many files were fingerprinted.
+    pub fingerprints: std::sync::atomic::AtomicUsize,
 }
 
 impl MemFs {
@@ -286,6 +288,22 @@ impl FileSystem for MemFs {
         Ok((fake_hash(&bytes), bytes.len() as u64))
     }
 
+    /// Like the real one, with 4-byte "mebibytes": files up to 8 bytes
+    /// get their full hash, larger ones a fingerprint of both ends.
+    fn fingerprint(&self, path: &Path) -> Result<(ContentHash, u64), String> {
+        let bytes = self.read(path).ok_or("it does not exist")?;
+        self.fingerprints
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        if bytes.len() <= 8 {
+            return Ok((fake_hash(&bytes), bytes.len() as u64));
+        }
+        let mut sample = b"fingerprint".to_vec();
+        sample.extend((bytes.len() as u64).to_le_bytes());
+        sample.extend(&bytes[..4]);
+        sample.extend(&bytes[bytes.len() - 4..]);
+        Ok((fake_hash(&sample), bytes.len() as u64))
+    }
+
     fn create_dir_all(&self, path: &Path) -> Result<(), String> {
         Self::add_dir(&mut self.state.lock().unwrap(), path);
         Ok(())
@@ -438,6 +456,8 @@ pub struct MemoryCatalog {
     pub reject_moves: Mutex<HashMap<PhotoId, i64>>,
     /// Writes of photos and analysis fail as if the disk were full.
     pub full: std::sync::atomic::AtomicBool,
+    /// Bird species chosen with Bird ID.
+    pub species: Mutex<HashMap<PhotoId, Vec<picturesque_core::birds::Species>>>,
 }
 
 impl MemoryCatalog {
@@ -700,7 +720,39 @@ impl PhotoCatalog for MemoryCatalog {
         Ok(dirty)
     }
 
+    fn set_bird_species(
+        &self,
+        id: PhotoId,
+        species: &[picturesque_core::birds::Species],
+    ) -> Result<(), CatalogError> {
+        let mut stored = self.species.lock().unwrap();
+        let mut unique: Vec<picturesque_core::birds::Species> = Vec::new();
+        for s in species {
+            if !unique.iter().any(|u| u.code == s.code) {
+                unique.push(s.clone());
+            }
+        }
+        if unique.is_empty() {
+            stored.remove(&id);
+        } else {
+            stored.insert(id, unique);
+        }
+        Ok(())
+    }
+
+    fn bird_species(
+        &self,
+        ids: &[PhotoId],
+    ) -> Result<Vec<(PhotoId, Vec<picturesque_core::birds::Species>)>, CatalogError> {
+        let stored = self.species.lock().unwrap();
+        Ok(ids
+            .iter()
+            .filter_map(|id| Some((*id, stored.get(id)?.clone())))
+            .collect())
+    }
+
     fn remove_photo(&self, id: PhotoId) -> Result<(), CatalogError> {
+        self.species.lock().unwrap().remove(&id);
         self.photos.lock().unwrap().retain(|p| p.id != id);
         self.decisions.lock().unwrap().remove(&id);
         self.revisions.lock().unwrap().remove(&id);
@@ -1438,6 +1490,7 @@ pub struct TestWorld {
     pub watcher: Arc<FakeWatcher>,
     pub critic: Arc<FakeCritic>,
     pub power: Arc<FakePower>,
+    pub species_lists: Arc<FakeSpeciesLists>,
 }
 
 /// Mains or battery power, as a test sets it.
@@ -1601,6 +1654,7 @@ impl TestWorld {
             watcher: Arc::default(),
             critic: Arc::default(),
             power: Arc::default(),
+            species_lists: Arc::default(),
         }
     }
 
@@ -1641,7 +1695,31 @@ impl TestWorld {
             watcher: self.watcher.clone(),
             critic: self.critic.clone(),
             power: self.power.clone(),
+            species_lists: self.species_lists.clone(),
         }
+    }
+}
+
+/// Species lists a test sets: region → eBird codes; others fail.
+#[derive(Debug, Default)]
+pub struct FakeSpeciesLists {
+    pub regions: Mutex<HashMap<String, Vec<String>>>,
+    /// (region, key) of every request.
+    pub asked: Mutex<Vec<(String, String)>>,
+}
+
+impl crate::ports::birds::SpeciesLists for FakeSpeciesLists {
+    fn species_in_region(&self, region: &str, api_key: &str) -> Result<Vec<String>, String> {
+        self.asked
+            .lock()
+            .unwrap()
+            .push((region.to_owned(), api_key.to_owned()));
+        self.regions
+            .lock()
+            .unwrap()
+            .get(region)
+            .cloned()
+            .ok_or_else(|| format!("eBird does not know the region `{region}`"))
     }
 }
 
@@ -1739,6 +1817,14 @@ impl crate::ports::pipeline::PipelineStore for MemoryPipelineStore {
             }
         }
         Ok(())
+    }
+
+    fn forget_finished_jobs(&self, source_id: i64) -> Result<usize, CatalogError> {
+        let mut s = self.state.lock().unwrap();
+        let before = s.jobs.len();
+        s.jobs
+            .retain(|(_, j)| j.source_id != Some(source_id) || !j.stage.is_final());
+        Ok(before - s.jobs.len())
     }
 
     fn record_scan(&self, id: i64, error: Option<&str>) -> Result<(), CatalogError> {

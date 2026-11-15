@@ -40,7 +40,9 @@ impl WorkTracker {
             AppEvent::ExportProgress(s) => latest.export = Some(s.clone()),
             AppEvent::OriginalsProgress(s) => latest.originals = Some(s.clone()),
             AppEvent::ModelProgress(m) => latest.model(m),
-            AppEvent::SeriesChanged(_) | AppEvent::SidecarProgress(_) => {}
+            AppEvent::SeriesChanged(_)
+            | AppEvent::SidecarProgress(_)
+            | AppEvent::PhotosRemoved(_) => {}
         }
     }
 

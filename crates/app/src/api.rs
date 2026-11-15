@@ -129,6 +129,8 @@ pub struct AppContext {
     pub critic: Arc<dyn crate::ports::critic::Critic>,
     /// Whether the computer runs on battery (the background critic waits).
     pub power: Arc<dyn crate::ports::power::PowerSource>,
+    /// Which bird species live in a region (Bird ID).
+    pub species_lists: Arc<dyn crate::ports::birds::SpeciesLists>,
 }
 
 impl fmt::Debug for AppContext {
@@ -188,6 +190,18 @@ pub struct Api {
     finish: crate::finish::FinishService,
     clear: crate::clear::ClearService,
     originals: Arc<crate::originals::OriginalsService>,
+    view: crate::view::ViewService,
+    birds: crate::birds::BirdService,
+}
+
+fn bird_error(e: crate::birds::BirdError) -> ApiError {
+    use crate::birds::BirdError;
+    match e {
+        BirdError::NotReady(m) | BirdError::Invalid(m) => {
+            ApiError::new(ApiErrorCode::InvalidArguments, m)
+        }
+        BirdError::Failed(m) => ApiError::internal(m),
+    }
 }
 
 impl fmt::Debug for Api {
@@ -238,11 +252,18 @@ impl Api {
         let analysis = Arc::new(AnalysisService::new(
             Arc::clone(&ctx.catalog),
             Arc::clone(&thumbnails),
-            ctx.pixels,
+            Arc::clone(&ctx.pixels),
             analyzers,
             Arc::clone(&events) as Arc<dyn EventSink>,
         ));
         let _ = events.analysis.set(Arc::clone(&analysis));
+        if ctx
+            .settings_store
+            .load_settings()
+            .is_ok_and(|s| s.fast_mode)
+        {
+            analysis.set_fast(true);
+        }
         let series = Arc::new(SeriesService::new(
             Arc::clone(&ctx.catalog),
             Arc::clone(&ctx.settings_store),
@@ -325,7 +346,21 @@ impl Api {
                 events: Arc::clone(&events) as Arc<dyn EventSink>,
             },
         ));
+        let birds = crate::birds::BirdService::new(crate::birds::BirdDeps {
+            models: Arc::clone(&models),
+            engine: Arc::clone(&ctx.inference),
+            thumbnails: Arc::clone(&thumbnails),
+            pixels: Arc::clone(&ctx.pixels),
+            catalog: Arc::clone(&ctx.catalog),
+            settings: Arc::clone(&ctx.settings_store),
+            lists: Arc::clone(&ctx.species_lists),
+        });
         Ok(Self {
+            birds,
+            view: crate::view::ViewService::new(
+                Arc::clone(&ctx.catalog),
+                Arc::clone(&events) as Arc<dyn EventSink>,
+            ),
             critic,
             background_critic,
             activity,
@@ -617,13 +652,18 @@ impl Api {
                     || update.ranking.is_some()
                     || update.auto_pick.is_some()
                     || update.taste.is_some()
-                    || update.critic.is_some();
+                    || update.critic.is_some()
+                    || update.fast_mode.is_some();
+                let fast_mode = update.fast_mode;
                 let critic_changed = update.critic.is_some() || update.ai.is_some();
                 let deletes_now =
                     update.delete_after_import == Some(DeleteAfterImport::Immediately);
                 let settings = self.settings.update(update).map_err(settings_error)?;
                 if deletes_now {
                     self.clear_leftover_originals();
+                }
+                if let Some(fast) = fast_mode {
+                    self.analysis.set_fast(fast);
                 }
                 if series_changed {
                     self.series.recompute().map_err(catalog_error)?;
@@ -991,6 +1031,84 @@ impl Api {
                 self.embeddings.invalidate();
                 respond(result)
             }
+            "identify_bird" => {
+                let crate::birds::IdentifyBirdArgs { photo_id, area } = parse_args(command, args)?;
+                self.require_photo(photo_id)?;
+                respond(
+                    self.birds
+                        .identify(PhotoId(photo_id), area)
+                        .map_err(bird_error)?,
+                )
+            }
+            "find_birds" => {
+                let crate::birds::FindBirdsArgs { photo_id } = parse_args(command, args)?;
+                self.require_photo(photo_id)?;
+                respond(
+                    self.birds
+                        .find_birds(PhotoId(photo_id))
+                        .map_err(bird_error)?,
+                )
+            }
+            "set_photo_species" => {
+                let crate::birds::SetSpeciesArgs { photo_id, species } = parse_args(command, args)?;
+                self.require_photo(photo_id)?;
+                self.birds
+                    .set_species(PhotoId(photo_id), species)
+                    .map_err(bird_error)?;
+                respond(())
+            }
+            "photo_species" => {
+                let crate::birds::PhotoSpeciesArgs { photo_ids } = parse_args(command, args)?;
+                if photo_ids.len() > 1000 {
+                    return Err(ApiError::new(
+                        ApiErrorCode::InvalidArguments,
+                        "Ask for at most 1000 photos at a time.",
+                    ));
+                }
+                let ids: Vec<PhotoId> = photo_ids.into_iter().map(PhotoId).collect();
+                respond(self.birds.photo_species(&ids).map_err(bird_error)?)
+            }
+            "refresh_bird_region" => {
+                no_args(command, &args)?;
+                respond(self.birds.refresh_region().map_err(bird_error)?)
+            }
+            "reload_folder" => {
+                no_args(command, &args)?;
+                let settings = self.settings.get().map_err(settings_error)?;
+                if settings.open_folder.is_none() {
+                    return Err(ApiError::new(
+                        ApiErrorCode::InvalidArguments,
+                        "Only a folder culled in place can be reloaded.",
+                    ));
+                }
+                // Decisions survive in the sidecars, read again on import.
+                let flushed = self.sidecars.flush();
+                if !flushed.failed.is_empty() {
+                    return Err(ApiError::internal(format!(
+                        "{} decisions could not be saved to their sidecars, so nothing was \
+                         reloaded: {}",
+                        flushed.failed.len(),
+                        flushed.failed[0].1
+                    )));
+                }
+                let removed = self
+                    .view
+                    .clear(&crate::library::PhotoQuery::default())
+                    .map_err(catalog_error)?;
+                self.pipeline.rescan_from_scratch().map_err(catalog_error)?;
+                respond(removed)
+            }
+            "clear_view" => {
+                let crate::view::ClearViewArgs { query } = if args.is_null() {
+                    crate::view::ClearViewArgs::default()
+                } else {
+                    parse_args(command, args)?
+                };
+                query
+                    .validate()
+                    .map_err(|m| ApiError::new(ApiErrorCode::InvalidArguments, m))?;
+                respond(self.view.clear(&query).map_err(catalog_error)?)
+            }
             "finish_status" => {
                 no_args(command, &args)?;
                 respond(self.finish.status().map_err(catalog_error)?)
@@ -1276,7 +1394,10 @@ mod tests {
                 "labels": { "pick": "green", "auto_pick": "yellow" },
                 "delete_after_copy": "verified",
                 "delete_after_import": "never",
-                "pair_view": "image"
+                "pair_view": "image",
+                "fast_mode": false,
+                "bird_id": { "region": "", "ebird_key": "" },
+                "bird_region": { "region": "", "species": [] }
             })
         );
     }

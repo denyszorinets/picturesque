@@ -75,6 +75,14 @@ const MIGRATIONS: &[(&str, &str)] = &[
         "0020_delete_originals_mode",
         include_str!("migrations/0020_delete_originals_mode.sql"),
     ),
+    (
+        "0021_bird_species",
+        include_str!("migrations/0021_bird_species.sql"),
+    ),
+    (
+        "0022_bird_species_many",
+        include_str!("migrations/0022_bird_species_many.sql"),
+    ),
 ];
 
 /// Schema version after all migrations have run.

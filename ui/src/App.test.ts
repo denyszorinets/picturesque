@@ -46,6 +46,9 @@ vi.mock("./lib/api", async (importOriginal) => {
         delete_after_copy: "verified",
         delete_after_import: "never",
         pair_view: "image",
+        fast_mode: false,
+        bird_id: { region: "", ebird_key: "" },
+        bird_region: { region: "", species: [] },
       }),
     listModels: () => Promise.resolve([]),
     aiStatus: () =>

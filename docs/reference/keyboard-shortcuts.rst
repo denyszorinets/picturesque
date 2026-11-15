@@ -83,7 +83,10 @@ Loupe
 
 ← → move between photos, ↑ picks and ↓ rejects, Z zooms, I toggles the information panel,
 R switches between the RAW and the JPEG of a pair, V shows the best photo of
-the series beside this one (and hides it again), Esc
+the series beside this one (and hides it again), D starts Bird ID
+(:doc:`/features/bird-id`), Esc closes. With **Stack series** on, ← → step
+through every photo of a stack, Shift+← → or Page Up/Down skip a whole
+stack, and N shows or hides the stacks up next. Esc
 closes; the culling keys above apply to the photo shown, and with
 **Auto-advance** on every decision moves to the next photo. See
 :ref:`features-library-loupe`.

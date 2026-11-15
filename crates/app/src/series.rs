@@ -330,6 +330,7 @@ impl SeriesService {
             );
         }
         let auto_pick = settings.auto_pick;
+        let auto_pick_active = settings.auto_pick_active();
         let mut qualities: Vec<PhotoScore> = scores
             .keys()
             .filter_map(|id| {
@@ -342,7 +343,7 @@ impl SeriesService {
                     critique: critique_of.get(id).copied(),
                     eyes_closed,
                     faces: face_counts.get(id).copied().unwrap_or(0),
-                    keeper: auto_pick.enabled
+                    keeper: auto_pick_active
                         && is_keeper(
                             Some(score),
                             eyes_closed,

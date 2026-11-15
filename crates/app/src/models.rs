@@ -43,6 +43,25 @@ pub const CRITIC: &str = "critic-qwen3-vl";
 pub const CRITIC_MODEL_FILE: &str = "Qwen3VL-4B-Instruct-Q4_K_M.gguf";
 pub const CRITIC_MMPROJ_FILE: &str = "mmproj-Qwen3VL-4B-Instruct-Q8_0.gguf";
 
+/// WingCLIP-0.3 for Bird ID (`birds`): the int8 image encoder (its weights
+/// in the `.data` file beside it), the species text embeddings and their
+/// names.
+pub const BIRDS: &str = "birds-wingclip";
+pub const BIRDS_MODEL_FILE: &str = "onnx/wingclip_visual_int8.onnx";
+pub const BIRDS_WEIGHTS_FILE: &str = "onnx/wingclip_visual_int8.data";
+pub const BIRDS_CLASSIFIER_FILE: &str = "text_classifier_fp32.npy";
+pub const BIRDS_LABELS_FILE: &str = "labels.json";
+
+/// RT-DETR R18 (COCO + Objects365), which finds the birds in a photo for
+/// Bird ID (`birds`); ONNX export by onnx-community, pinned to a commit.
+pub const BIRD_DETECTOR: &str = "bird-detector-rtdetr";
+pub const BIRD_DETECTOR_FILE: &str = "onnx/model.onnx";
+const BIRD_DETECTOR_REPO: &str = "https://huggingface.co/onnx-community/rtdetr_r18vd_coco_o365/resolve/37122d8b9b89eb8384fba4d688d05051eaf7bb78";
+
+/// WingCLIP-0.3, pinned to a commit.
+const BIRDS_REPO: &str =
+    "https://huggingface.co/johnlian/WingCLIP-0.3/resolve/fb647cf427ef473fb83610d543dfd70549d4a15c";
+
 /// Qwen's official GGUF files, pinned to a commit.
 const CRITIC_REPO: &str = "https://huggingface.co/Qwen/Qwen3-VL-4B-Instruct-GGUF/resolve/1cd86afb9a95c410a6038ab3b40d8b578c892266";
 
@@ -53,9 +72,67 @@ const CRITIC_REPO: &str = "https://huggingface.co/Qwen/Qwen3-VL-4B-Instruct-GGUF
 const CLIP_REPO: &str = "https://huggingface.co/immich-app/ViT-L-14__openai/resolve/9b27c6b49d2ff4957fa0b5a25521eee12f109543";
 
 /// The models the app offers. Each feature adds the models it uses; every
-/// license must allow use in a GPL-3.0 application (ADR-0006).
+/// license must allow use in a GPL-3.0 application (ADR-0006), except
+/// WingCLIP, whose non-commercial weights this personal fork accepts
+/// (ADR-0018).
 pub fn catalog() -> Vec<ModelSpec> {
+    let birds = |name: &str, sha256: &str, size: u64| ModelFile {
+        name: name.into(),
+        url: format!("{BIRDS_REPO}/{name}"),
+        sha256: sha256.into(),
+        size,
+    };
     vec![
+        ModelSpec {
+            id: BIRD_DETECTOR.into(),
+            name: "RT-DETR bird finder".into(),
+            purpose: "Finds every bird in a photo for Bird ID, so each can be \
+                  identified (Find birds, F). Needs the bird identifier."
+                .into(),
+            version: 1,
+            license: "Apache-2.0".into(),
+            license_url: "https://huggingface.co/PekingU/rtdetr_r18vd_coco_o365".into(),
+            homepage: "https://github.com/lyuwenyu/RT-DETR".into(),
+            files: vec![ModelFile {
+                name: BIRD_DETECTOR_FILE.into(),
+                url: format!("{BIRD_DETECTOR_REPO}/{BIRD_DETECTOR_FILE}"),
+                sha256: "6c74a62251534f427294342508a162a7cd142418b4dd6222d0d0198851724bfa".into(),
+                size: 82_572_357,
+            }],
+        },
+        ModelSpec {
+            id: BIRDS.into(),
+            name: "WingCLIP-0.3 bird identifier".into(),
+            purpose: "Suggests the species of a bird you draw a box around \
+                  (11,167 species). Non-commercial use only."
+                .into(),
+            version: 1,
+            license: "CC-BY-NC-4.0".into(),
+            license_url: "https://huggingface.co/johnlian/WingCLIP-0.3".into(),
+            homepage: "https://github.com/jlian/wingdex".into(),
+            files: vec![
+                birds(
+                    BIRDS_MODEL_FILE,
+                    "59e19d63aaf531c29aa33f738c22ed5c63c0fdd2e0bd6b91cf63dcb7f9b245d0",
+                    14_386_199,
+                ),
+                birds(
+                    BIRDS_WEIGHTS_FILE,
+                    "6bfc8c38271437a04351edbbea9478b29431bc155929da0bebcce68b14090d31",
+                    25_165_824,
+                ),
+                birds(
+                    BIRDS_CLASSIFIER_FILE,
+                    "c0e14f8cac7c81cd8315870bb643f762f688d81781c920e71e400573df5e559d",
+                    34_305_152,
+                ),
+                birds(
+                    BIRDS_LABELS_FILE,
+                    "ef7de9d34e49e3c7e567910c279a2ff7f5908049a3c67835282abb872673b774",
+                    678_140,
+                ),
+            ],
+        },
         ModelSpec {
             id: CLIP_IMAGE.into(),
             name: "CLIP ViT-L/14 image encoder (OpenAI)".into(),

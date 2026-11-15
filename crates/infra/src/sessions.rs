@@ -93,6 +93,7 @@ impl ContextFactory for StandardSessions {
             watcher: Arc::new(crate::watcher::NotifyWatcher::new()),
             critic: Arc::new(crate::critic::CriticAdapter::new()),
             power: Arc::new(crate::power::SystemPower),
+            species_lists: Arc::new(crate::birds::EbirdSpeciesLists::default()),
             fs: Arc::new(crate::fs::StdFileSystem),
             metadata: Arc::new(crate::metadata::ExifMetadataReader),
             geocoder: Arc::clone(&self.geocoder),

@@ -137,20 +137,22 @@ fn render_raw(
     orientation: Orientation,
     edge: i32,
 ) -> Result<(Image, Option<(u32, u32)>), String> {
-    // Previews may carry their own EXIF orientation; `shrink` ignores it and
-    // the photo's orientation is applied exactly once, below.
-    let full = match libraw::preview(source)? {
-        Some(Preview::Jpeg(bytes)) => Image::from_buffer(bytes)?,
+    // Previews may carry their own EXIF orientation; shrinking ignores it
+    // and the photo's orientation is applied exactly once, below.
+    let (preview, size) = match libraw::preview(source)? {
+        // Shrink-on-load: grid images decode an eighth of the pixels.
+        Some(Preview::Jpeg(bytes)) => Image::thumbnail_buffer(bytes, edge)?,
         Some(Preview::Bitmap {
             width,
             height,
             bands,
             pixels,
-        }) => Image::from_pixels(&pixels, width, height, bands)?,
+        }) => {
+            let full = Image::from_pixels(&pixels, width, height, bands)?;
+            ((full.shrink(edge, false)?), (full.width(), full.height()))
+        }
         None => return render_file(source, edge),
     };
-    let size = (full.width(), full.height());
-    let preview = full.shrink(edge, false)?;
     let upright = orient(&preview, orientation)?;
     let size = if orientation.swaps_dimensions() {
         (size.1, size.0)
@@ -215,6 +217,24 @@ mod tests {
             .map(|(x, y)| (f64::from(*x) - f64::from(*y)).abs())
             .sum::<f64>()
             / a.len() as f64
+    }
+
+    #[test]
+    fn shrinking_while_loading_matches_loading_then_shrinking() {
+        let bytes = std::fs::read(fixture("orient_6.jpg")).unwrap();
+        let full = Image::from_buffer(bytes.clone()).unwrap();
+        let expected = full.shrink(16, false).unwrap();
+
+        let (fast, size) = Image::thumbnail_buffer(bytes, 16).unwrap();
+
+        // The stored size, and the stored pixels (no EXIF rotation).
+        assert_eq!(size, (full.width(), full.height()));
+        assert_eq!(
+            (fast.width(), fast.height()),
+            (expected.width(), expected.height())
+        );
+        let d = diff(&signature(&fast), &signature(&expected));
+        assert!(d < 6.0, "difference {d}");
     }
 
     #[test]

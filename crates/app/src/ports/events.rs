@@ -25,6 +25,9 @@ pub enum AppEvent {
     PipelineProgress(PipelineStatus),
     SidecarProgress(SidecarStatus),
     BackgroundCritiqueProgress(crate::critic::background::BackgroundCritiqueStatus),
+    /// Photos left the catalog (cleared from view, or their files are
+    /// gone); their files were not touched.
+    PhotosRemoved(crate::view::PhotosRemoved),
 }
 
 /// Delivers events to the UI: Tauri events in the desktop app,

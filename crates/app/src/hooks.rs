@@ -63,6 +63,19 @@ impl EventSink for EventHooks {
                     analysis.report();
                 }
             }
+            // Removed photos leave their series, the search index and the
+            // analysis counts.
+            AppEvent::PhotosRemoved(_) => {
+                if let Some(series) = self.series.get() {
+                    series.notify();
+                }
+                if let Some(embeddings) = self.embeddings.get() {
+                    embeddings.invalidate();
+                }
+                if let Some(analysis) = self.analysis.get() {
+                    analysis.report();
+                }
+            }
             AppEvent::SeriesChanged(_)
             | AppEvent::ModelProgress(_)
             | AppEvent::ExportProgress(_)

@@ -68,6 +68,12 @@ pub trait Analyzer: Send + Sync {
     fn unavailable(&self) -> Option<String> {
         None
     }
+
+    /// Whether it also runs in fast mode, from the small grid image: only
+    /// what series need (`docs/features/fast-mode.rst`).
+    fn runs_in_fast_mode(&self) -> bool {
+        false
+    }
 }
 
 /// Analysis progress, sent as an event and returned by `analysis_status`.
@@ -149,6 +155,8 @@ pub struct AnalysisService {
     queue: Mutex<Queue>,
     signal: Condvar,
     started: AtomicBool,
+    /// Fast mode: only analyzers that series need, from grid images.
+    fast: AtomicBool,
 }
 
 impl std::fmt::Debug for AnalysisService {
@@ -185,20 +193,42 @@ impl AnalysisService {
             }),
             signal: Condvar::new(),
             started: AtomicBool::new(false),
+            fast: AtomicBool::new(false),
         }
+    }
+
+    /// Turns fast mode on or off. Turning it off makes the analyses fast
+    /// mode skipped pending again, so they run now.
+    pub fn set_fast(&self, fast: bool) {
+        if self.fast.swap(fast, Ordering::AcqRel) != fast {
+            self.wake();
+            self.report();
+        }
+    }
+
+    pub fn is_fast(&self) -> bool {
+        self.fast.load(Ordering::Acquire)
     }
 
     /// The analyzers that can run now.
     fn active(&self) -> Vec<&Arc<dyn Analyzer>> {
-        self.analyzers.iter().filter(|a| a.ready()).collect()
+        let fast = self.is_fast();
+        self.analyzers
+            .iter()
+            .filter(|a| a.ready() && (!fast || a.runs_in_fast_mode()))
+            .collect()
     }
 
     fn ids(&self) -> Vec<AnalyzerId> {
         self.active().iter().map(|a| a.id()).collect()
     }
 
-    /// What the analyzers that wait for their model add.
+    /// What the analyzers that wait for their model add (nothing waits in
+    /// fast mode, which skips them anyway).
     pub fn waiting_for_models(&self) -> Vec<String> {
+        if self.is_fast() {
+            return Vec::new();
+        }
         self.analyzers
             .iter()
             .filter(|a| !a.ready() && a.unavailable().is_none())
@@ -410,10 +440,17 @@ impl AnalysisService {
         if needed.is_empty() {
             return Ok(());
         }
+        // Fast mode reads the grid image the library shows anyway, so no
+        // preview is rendered until the photo is opened.
+        let size = if self.is_fast() {
+            ImageSize::Grid
+        } else {
+            ImageSize::Preview
+        };
         let image = self
             .thumbnails
             // Always the JPEG of a pair, so scores do not depend on what is shown.
-            .image(id, ImageSize::Preview, PairView::Image)
+            .image(id, size, PairView::Image)
             .map_err(|e| e.to_string())
             .and_then(|path| self.pixels.load(&path, ANALYSIS_EDGE));
         if image.is_err() && self.thumbnails.cache_full() {

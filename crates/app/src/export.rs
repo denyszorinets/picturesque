@@ -19,6 +19,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use picturesque_core::decision::Flag;
+use picturesque_core::hash::ContentHash;
 use picturesque_core::photo::{Asset, Photo, PhotoId};
 use picturesque_core::template::{PathTemplate, TemplateValues, unique_stem};
 use serde::{Deserialize, Serialize};
@@ -455,14 +456,18 @@ impl ExportService {
                 let dest = dir.join(format!("{stem}{rest}"));
                 match asset {
                     Some(asset) => {
-                        self.copy_verified(&root.join(&asset.path), &dest, asset)?;
+                        let (hash, size) =
+                            self.copy_verified(&root.join(&asset.path), &dest, asset)?;
                         if asset.format != picturesque_core::media::MediaFormat::Xmp {
+                            // The full hash of the verified copy, also for
+                            // photos fast mode identified by a fingerprint:
+                            // Clear folder checks the copy against it.
                             copies.push(CopyRecord {
                                 photo_id: photo.id,
                                 source: asset.path.clone(),
                                 destination: dest.clone(),
-                                hash: asset.hash,
-                                size: asset.size,
+                                hash,
+                                size,
                             });
                         }
                     }
@@ -559,30 +564,40 @@ impl ExportService {
         Ok(targets)
     }
 
-    fn copy_verified(&self, src: &Path, dest: &Path, asset: &Asset) -> Result<(), String> {
+    /// Copies and verifies one file; returns the full hash and size of the
+    /// verified copy.
+    fn copy_verified(
+        &self,
+        src: &Path,
+        dest: &Path,
+        asset: &Asset,
+    ) -> Result<(ContentHash, u64), String> {
         let (hash, size) = self.fs.copy_hashing(src, dest).inspect_err(|_| {
             let _ = self.fs.remove_file(dest);
         })?;
         let check = || -> Result<(), String> {
+            let (written, written_size) = self.fs.hash_file(dest)?;
+            if written != hash || written_size != size {
+                return Err(format!("{} was not written correctly", dest.display()));
+            }
             // Sidecars are rewritten as decisions change; only media files
-            // must match the catalog.
+            // must match the catalog: by full hash, or for photos fast mode
+            // identified, by the fingerprint of the (verified) copy.
             if asset.format != picturesque_core::media::MediaFormat::Xmp
-                && (hash != asset.hash || size != asset.size)
+                && (size != asset.size
+                    || (hash != asset.hash && self.fs.fingerprint(dest)?.0 != asset.hash))
             {
                 return Err(format!(
                     "{} changed since it was imported",
                     asset.path.display()
                 ));
             }
-            let (written, written_size) = self.fs.hash_file(dest)?;
-            if written != hash || written_size != size {
-                return Err(format!("{} was not written correctly", dest.display()));
-            }
             Ok(())
         };
         check().inspect_err(|_| {
             let _ = self.fs.remove_file(dest);
-        })
+        })?;
+        Ok((hash, size))
     }
 
     fn render_verified(

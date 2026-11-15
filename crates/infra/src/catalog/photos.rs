@@ -245,6 +245,57 @@ impl PhotoCatalog for SqliteCatalog {
         Ok(())
     }
 
+    fn set_bird_species(
+        &self,
+        id: PhotoId,
+        species: &[picturesque_core::birds::Species],
+    ) -> Result<(), CatalogError> {
+        let mut conn = self.conn();
+        let tx = conn.transaction().map_err(storage)?;
+        tx.execute("DELETE FROM bird_species WHERE photo_id = ?1", [id.0])
+            .map_err(storage)?;
+        for s in species {
+            tx.execute(
+                "INSERT OR IGNORE INTO bird_species (photo_id, common, scientific, code)
+                 VALUES (?1, ?2, ?3, ?4)",
+                params![id.0, s.common, s.scientific, s.code],
+            )
+            .map_err(storage)?;
+        }
+        tx.commit().map_err(storage)
+    }
+
+    fn bird_species(
+        &self,
+        ids: &[PhotoId],
+    ) -> Result<Vec<(PhotoId, Vec<picturesque_core::birds::Species>)>, CatalogError> {
+        let conn = self.conn();
+        let mut stmt = conn
+            .prepare_cached(
+                "SELECT common, scientific, code FROM bird_species
+                 WHERE photo_id = ?1 ORDER BY rowid",
+            )
+            .map_err(storage)?;
+        let mut found = Vec::new();
+        for id in ids {
+            let species = stmt
+                .query_map([id.0], |row| {
+                    Ok(picturesque_core::birds::Species {
+                        common: row.get(0)?,
+                        scientific: row.get(1)?,
+                        code: row.get(2)?,
+                    })
+                })
+                .map_err(storage)?
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(storage)?;
+            if !species.is_empty() {
+                found.push((*id, species));
+            }
+        }
+        Ok(found)
+    }
+
     fn record_copies(
         &self,
         copies: &[picturesque_app::ports::catalog::CopyRecord],
