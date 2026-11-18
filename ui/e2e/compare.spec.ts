@@ -124,13 +124,26 @@ test("compares a series side by side with the keyboard", async ({
   await call(request, "choose_best", { photo_id: ids[0], best: false });
 });
 
-test("compares the selected photos", async ({ page }) => {
+test("compares the selected photos", async ({ page, request }) => {
+  const DAY = "2005-07-08";
   await page.goto("/");
+  const at = (s: number) => new Date(`${DAY}T08:00:0${s}`);
+  await importFiles(request, {
+    "compare-selected/a.JPG": { bytes: await bigJpeg(page, 210), time: at(0) },
+    "compare-selected/b.JPG": { bytes: await bigJpeg(page, 211), time: at(1) },
+    "compare-selected/c.JPG": { bytes: await bigJpeg(page, 212), time: at(2) },
+  });
+  await page.reload();
+  await page.getByTestId("filter-from").fill(DAY);
+  await page.getByTestId("filter-to").fill(DAY);
   const timeline = page.getByTestId("timeline");
   const tiles = timeline.locator("button.tile");
-  await expect(tiles.first()).toBeVisible();
+  await expect(tiles).toHaveCount(3);
   await tiles.nth(0).click();
-  await tiles.nth(1).click({ modifiers: ["Control"] });
+  await tiles.nth(1).click({ modifiers: ["ControlOrMeta"] });
+  await expect(
+    timeline.locator('button.tile[aria-pressed="true"]'),
+  ).toHaveCount(2);
   await page.keyboard.press("c");
   await expect(page.getByTestId("compare-pane")).toHaveCount(2);
   await expect(page.getByTestId("compare-position")).toHaveText(/\/ 2$/);
