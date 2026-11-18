@@ -204,3 +204,33 @@ export function seriesSegments(
   }
   return segments;
 }
+
+/** Keep a visible photo at the same vertical offset when the grid reflows. */
+export function resizedScrollTop(
+  before: Layout,
+  after: Layout,
+  scrollTop: number,
+  height: number,
+  focus: number | null,
+): number {
+  const visible = visibleRows(before.rows, scrollTop, height, 0);
+  const tiles = visible.filter(
+    (r): r is Extract<Row, { kind: "tiles" }> =>
+      r.kind === "tiles" && r.top + before.tile > scrollTop,
+  );
+  const row =
+    tiles.find((r) => focus !== null && focus >= r.start && focus < r.end) ??
+    tiles[0];
+  if (!row) return Math.max(0, Math.min(scrollTop, after.height - height));
+  const index =
+    focus !== null && focus >= row.start && focus < row.end ? focus : row.start;
+  const top = rowTopOf(after.rows, index);
+  // A partly clipped large tile must remain visible when it shrinks.
+  const offset = scrollTop - row.top;
+  const resizedOffset =
+    offset > 0 ? (offset / before.tile) * after.tile : offset;
+  return Math.max(
+    0,
+    Math.min((top ?? row.top) + resizedOffset, after.height - height),
+  );
+}

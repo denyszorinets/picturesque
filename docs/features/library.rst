@@ -29,6 +29,17 @@ Each tile shows the whole photo (never cropped), with:
 
 Hover a tile for its file name, capture time, camera and place.
 
+Thumbnail size
+--------------
+
+The **Thumbnail size** slider above the timeline changes the minimum tile
+edge from 120 to 360 pixels (default 180). Tiles fill the available width,
+so the column count changes in steps. The size is remembered between app
+launches. Date headings, series frames, selection and arrow-key navigation
+follow the new layout. Only nearby rows are rendered, even in large folders.
+Resizing keeps a visible photo in view, including when a selected photo has
+been scrolled off screen.
+
 Selecting photos
 ----------------
 
