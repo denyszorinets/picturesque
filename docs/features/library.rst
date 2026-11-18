@@ -29,6 +29,39 @@ Each tile shows the whole photo (never cropped), with:
 
 Hover a tile for its file name, capture time, camera and place.
 
+Review progress
+---------------
+
+**Review filtered photos…** records that you have finished reviewing a set
+of photos. It does not export files or change picks, AI suggestions,
+ratings, colour labels or XMP. Existing photos start as **Not reviewed**,
+including photos that were previously exported, picked or auto-picked.
+
+The dialog defaults to **Current filtered view**: every photo matching the
+current filters, including photos outside the visible screen. Search and
+collapsed series are respected. It shows the folder/library, active filters,
+count, capture dates and undated count before either **Mark reviewed** or
+**Mark not reviewed** can be confirmed. RAW+JPEG pairs count as one photo.
+The preview freezes the actual photo IDs; later imports are not added to it.
+
+When both capture-date bounds are set, a separate, explicit option marks
+**All photos from … through …**. It includes photos hidden by the other
+filters and by stacked series, within those dates and the current folder
+only. It is never selected automatically.
+
+Use **Review progress → Not reviewed** to continue later. **Reviewed**
+shows completed work, and **All photos** shows both. To reverse a mark,
+filter the intended photos and use **Mark not reviewed**. These records
+survive restarts and reopening the same folder. Folder catalogs with any
+reviewed photos are protected from the usual 30-day expiry; keep the app
+support directory in your backups. Clearing every review mark restores
+normal expiry eligibility. Moving or renaming a folder creates a separate
+folder session; review progress is not carried to that new path.
+
+**Finish folder…** remains a separate XMP action for the whole folder; it
+does not obey the timeline filters or mark photos reviewed. **Photos in
+view** in Export limits an export, but does not mark photos reviewed.
+
 Selecting photos
 ----------------
 

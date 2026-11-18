@@ -32,6 +32,9 @@ pub enum PhotoSort {
 #[serde(default, deny_unknown_fields)]
 #[ts(export)]
 pub struct PhotoQuery {
+    /// Human review progress, independent of flags, AI suggestions and export.
+    #[ts(optional)]
+    pub reviewed: Option<bool>,
     /// First capture day included, `YYYY-MM-DD`.
     #[ts(optional)]
     pub from: Option<String>,

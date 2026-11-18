@@ -19,6 +19,38 @@ use super::{SqliteCatalog, storage};
 pub(super) const TIME_FORMAT: &str = "%Y-%m-%dT%H:%M:%S%.f";
 
 impl PhotoCatalog for SqliteCatalog {
+    fn set_reviewed(&self, ids: &[PhotoId], reviewed: bool) -> Result<usize, CatalogError> {
+        let mut conn = self.conn();
+        let tx = conn.transaction().map_err(storage)?;
+        let mut changed = 0;
+        for id in ids {
+            let exists: bool = tx
+                .query_row(
+                    "SELECT EXISTS (SELECT 1 FROM photo WHERE id = ?1)",
+                    [id.0],
+                    |r| r.get(0),
+                )
+                .map_err(storage)?;
+            if !exists {
+                return Err(storage(format!(
+                    "photo {} no longer exists; refresh the review preview",
+                    id.0
+                )));
+            }
+            changed += if reviewed {
+                tx.execute(
+                    "INSERT OR IGNORE INTO reviewed(photo_id) VALUES (?1)",
+                    [id.0],
+                )
+            } else {
+                tx.execute("DELETE FROM reviewed WHERE photo_id = ?1", [id.0])
+            }
+            .map_err(storage)?;
+        }
+        tx.commit().map_err(storage)?;
+        Ok(changed)
+    }
+
     fn insert_photo(&self, photo: &NewPhoto) -> Result<PhotoId, CatalogError> {
         let m = &photo.metadata;
         let mut conn = self.conn();

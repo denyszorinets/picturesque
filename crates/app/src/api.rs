@@ -186,6 +186,7 @@ pub struct Api {
     export: Arc<ExportService>,
     pipeline: Arc<ImportPipeline>,
     finish: crate::finish::FinishService,
+    review: crate::review::ReviewService,
     clear: crate::clear::ClearService,
     originals: Arc<crate::originals::OriginalsService>,
 }
@@ -335,6 +336,7 @@ impl Api {
                 Arc::clone(&ctx.fs),
                 Arc::clone(&ctx.settings_store),
             ),
+            review: crate::review::ReviewService::new(Arc::clone(&catalog)),
             finish: crate::finish::FinishService::new(Arc::clone(&catalog), Arc::clone(&sidecars)),
             pipeline,
             export,
@@ -640,6 +642,17 @@ impl Api {
             "preview_template" => {
                 let args: PreviewTemplateArgs = parse_args(command, args)?;
                 respond(templates::preview(&args.template))
+            }
+            "review_plan" => {
+                let query: PhotoQuery = parse_args(command, args)?;
+                query
+                    .validate()
+                    .map_err(|m| ApiError::new(ApiErrorCode::InvalidArguments, m))?;
+                respond(self.review.plan(query).map_err(catalog_error)?)
+            }
+            "apply_review" => {
+                let args: crate::review::ApplyReviewArgs = parse_args(command, args)?;
+                respond(self.review.apply(args).map_err(catalog_error)?)
             }
             "query_photos" => {
                 let query: PhotoQuery = parse_args(

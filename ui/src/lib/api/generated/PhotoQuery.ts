@@ -7,6 +7,10 @@ import type { PhotoSort } from "./PhotoSort";
  */
 export type PhotoQuery = { 
 /**
+ * Human review progress, independent of flags, AI suggestions and export.
+ */
+reviewed?: boolean, 
+/**
  * First capture day included, `YYYY-MM-DD`.
  */
 from?: string, 
