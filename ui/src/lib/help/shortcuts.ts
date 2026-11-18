@@ -58,6 +58,7 @@ export const SHORTCUTS: ShortcutGroup[] = [
       { keys: ["Z"], action: "Zoom to 100%" },
       { keys: ["I"], action: "Show or hide the photo's details" },
       { keys: ["R"], action: "Switch between the RAW and the JPEG" },
+      { keys: ["V"], action: "Compare with the best photo" },
       { keys: ["Esc"], action: "Back to the timeline" },
     ],
   },

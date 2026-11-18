@@ -1,3 +1,5 @@
+import { shortcutLabel } from "../shortcuts/preferences.svelte";
+
 /** One step of a tour: what it points at and what it says. */
 export interface TourStep {
   /** CSS selector of the control described; the step is centred when it
@@ -17,17 +19,23 @@ export const CULLING_TOUR: TourStep[] = [
   {
     target: "button.tile",
     title: "Pick, reject, rate",
-    text: "Click a photo, then press P to pick, X to reject or 1–5 to give stars. Hold Shift to move on to the next photo. Ctrl+Z undoes.",
+    get text() {
+      return `Click a photo, then press ${shortcutLabel("p")} to pick, ${shortcutLabel("x")} to reject or 1–5 to give stars. Hold Shift to move on to the next photo. Ctrl+Z undoes.`;
+    },
   },
   {
     target: "button.tile",
     title: "Look closer",
-    text: "Double-click a photo or press Enter to open it large. Z zooms to 100%, I shows its details, ← → go through the photos.",
+    get text() {
+      return `Double-click a photo or press Enter to open it large. ${shortcutLabel("z")} zooms to 100%, ${shortcutLabel("i")} shows its details, ← → go through the photos.`;
+    },
   },
   {
     target: "[data-testid=open-compare]",
     title: "Compare a series",
-    text: "Press C to see the selected photos, or a photo's series, side by side. Keep the best with P or B, reject the rest with X.",
+    get text() {
+      return `Press ${shortcutLabel("c")} to see the selected photos, or a photo's series, side by side. Keep the best with ${shortcutLabel("p")} or ${shortcutLabel("b")}, reject the rest with ${shortcutLabel("x")}.`;
+    },
   },
   {
     target: "[data-testid=toggle-filters]",

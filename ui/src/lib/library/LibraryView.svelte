@@ -1,4 +1,9 @@
 <script lang="ts">
+  import {
+    shortcutKey,
+    shortcutLabel,
+    ignorePhotoKey,
+  } from "../shortcuts/preferences.svelte";
   import Icon from "../components/Icon.svelte";
   import * as api from "../api";
   import { AnalysisProgress } from "./analysis.svelte";
@@ -384,7 +389,7 @@
   function onkeydown(e: KeyboardEvent) {
     const target = e.target instanceof Element ? e.target : null;
     if (
-      e.defaultPrevented ||
+      ignorePhotoKey(e) ||
       target?.closest("input, select, textarea, [contenteditable]")
     )
       return;
@@ -398,7 +403,7 @@
       return;
     }
     let used = cull(e);
-    const seriesAction = SERIES_KEYS[e.key.toLowerCase()];
+    const seriesAction = SERIES_KEYS[shortcutKey(e.key).toLowerCase()];
     if (!used && !e.ctrlKey && !e.metaKey && !e.altKey && seriesAction) {
       void seriesAction();
       used = true;
@@ -583,7 +588,7 @@
           class="small"
           onclick={() => openCompare()}
           disabled={selection.focus === null && selection.size === 0}
-          title="Compare the selected photos, or the selected photo's series (C)"
+          title={`Compare the selected photos, or the selected photo's series (${shortcutLabel("c")})`}
           data-testid="open-compare"><Icon name="squares-2x2" /> Compare</button
         >
         <button

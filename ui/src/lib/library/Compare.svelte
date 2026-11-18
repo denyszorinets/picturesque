@@ -1,4 +1,9 @@
 <script lang="ts">
+  import {
+    shortcutKey,
+    shortcutLabel,
+    ignorePhotoKey,
+  } from "../shortcuts/preferences.svelte";
   import Icon from "../components/Icon.svelte";
   import * as api from "../api";
   import type { PhotoSummary } from "../api";
@@ -66,8 +71,9 @@
   }
 
   function onkeydown(e: KeyboardEvent) {
-    const key = e.key.toLowerCase();
+    if (ignorePhotoKey(e)) return;
     const mod = e.ctrlKey || e.metaKey;
+    const key = (mod ? e.key : shortcutKey(e.key)).toLowerCase();
     const flag = flagForKey(e.key, "compare");
     let action: (() => unknown) | undefined;
     if (mod && key === "z")
@@ -145,12 +151,13 @@
     <button
       onclick={() => compare.togglePanes()}
       data-testid="compare-layout"
-      title="Switch between 2-up and 4-up (L)">{compare.panes}-up</button
+      title={`Switch between 2-up and 4-up (${shortcutLabel("l")})`}
+      >{compare.panes}-up</button
     >
     <button
       onclick={() => compare.toggleZoom()}
       aria-pressed={compare.zoomed}
-      title="Zoom every photo to 100% (Z)"
+      title={`Zoom every photo to 100% (${shortcutLabel("z")})`}
       >{compare.zoomed ? "Fit" : "100%"}</button
     >
     {#if error ?? culling.error}

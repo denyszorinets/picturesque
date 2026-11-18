@@ -9,6 +9,22 @@ In the app, press **?** (or click **Help** in the header) to see these
 shortcuts, with links to the Getting Started guides and this
 documentation; the links open in your browser.
 
+Custom letter shortcuts
+-----------------------
+
+Open **Settings → Keyboard shortcuts** to change the letters for picking,
+rejecting, unflagging, series actions, zoom, details, RAW/JPEG switching and
+comparison. Choose one distinct letter per action, then **Save shortcuts**.
+**One-hand culling** sets A to Pick, D to Reject and F to Unflag. To return
+to the keys listed below, choose **Restore default shortcuts** and save.
+
+The choices are remembered on this device across app launches and apply to
+every library and folder. Help, the tour and button hints show the active
+letters. Shift with a configured culling key still advances after a decision.
+Arrow keys, ratings, Ctrl/Command+Z and redo, Enter, Escape, / and ? stay fixed.
+Duplicate letters and non-letter assignments cannot be saved. Shortcuts are
+ignored while typing or composing text and while another dialog is open.
+
 Culling
 -------
 
