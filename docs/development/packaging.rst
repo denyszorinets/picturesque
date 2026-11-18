@@ -94,6 +94,15 @@ compiles). The helper finds its libraries beside it, so the folder is
 self-contained. On Windows it runs on the CPU only for now. The release
 workflow checks that the deb contains it.
 
+The helper uses local models, so ``critic-libs.sh`` disables CMake's
+OpenSSL discovery. This prevents a build-machine OpenSSL dependency from
+leaking into the package. When reusing an older build, clean
+``llama-cpp-sys-2`` first (with ``--release`` for release artifacts).
+On macOS, ``check-critic-macos.sh`` verifies every bundled helper library
+and backend, rejecting external non-system or missing dependencies, then
+checks that the helper starts without model files. The same check runs
+before creating the DMG.
+
 Linux
 -----
 

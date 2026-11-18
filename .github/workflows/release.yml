@@ -17,6 +17,7 @@ on:
       - .github/workflows/release.yml
       - src-tauri/tauri*.conf.json
       - scripts/critic-libs.sh
+      - scripts/check-critic-macos.sh
       - scripts/bundle-macos.sh
       - scripts/setup-windows-libvips.sh
   workflow_dispatch:
