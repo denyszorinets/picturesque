@@ -34,6 +34,7 @@ scripts/dedupe-rpaths.sh "$app/Contents/MacOS/picturesque-desktop" \
 rm -rf "$app/Contents/MacOS/critic"
 cp -R target/release/critic "$app/Contents/MacOS/critic"
 codesign --force --deep --sign - "$app"
+scripts/check-critic-macos.sh "$app/Contents/MacOS/critic"
 mkdir -p "$out"
 hdiutil create -volname Picturesque -srcfolder "$app" -ov -format UDZO \
   "$out/Picturesque_${version}_${arch}.dmg"

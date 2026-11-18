@@ -17,6 +17,15 @@ profile=${1:-debug}
 flags=()
 [ "$profile" = release ] && flags=(--release)
 
+# The helper only reads local GGUFs; downloads belong to the main app.
+# llama.cpp now discovers OpenSSL independently of the deprecated LLAMA_CURL
+# switch. Do not accidentally link Homebrew's OpenSSL into the distributed
+# helper. llama-cpp-sys-2 forwards CMAKE_* environment variables to CMake.
+# When reusing artifacts built before this setting, first run
+# cargo clean -p llama-cpp-sys-2 (add --release for a release build).
+# The macOS audit below rejects such stale, externally linked artifacts.
+export CMAKE_DISABLE_FIND_PACKAGE_OpenSSL=TRUE
+
 out=target/$profile/critic
 # llama-cpp-sys-2 leaves dangling lib*.so links here, and its next build
 # fails on them with "File exists" (see crates/critic/build.rs, which
@@ -57,5 +66,8 @@ if [ "$(uname -s)" = Linux ]; then
   for f in "$out"/lib*.so*; do
     patchelf --set-rpath '$ORIGIN' "$f"
   done
+fi
+if [ "$(uname -s)" = Darwin ]; then
+  scripts/check-critic-macos.sh "$out"
 fi
 echo "critic-libs: helper, llama.cpp libraries and $(ls "$dir"/backends | wc -l) backends in $out"
