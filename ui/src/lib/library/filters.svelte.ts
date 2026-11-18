@@ -36,6 +36,7 @@ export const SCORE_LABELS: Record<Score, string> = {
 };
 
 interface Saved {
+  reviewed: "all" | "reviewed" | "unreviewed";
   from: string;
   to: string;
   flags: Flag[];
@@ -63,6 +64,7 @@ const NO_SCORES: Record<Score, number> = {
 
 /** The library's filters. Kept for the session (sessionStorage). */
 export class Filters {
+  reviewed = $state<"all" | "reviewed" | "unreviewed">("all");
   from = $state("");
   to = $state("");
   flags = $state<Flag[]>([]);
@@ -101,6 +103,10 @@ export class Filters {
         this.storage?.getItem(STORAGE_KEY) ?? "null",
       ) as Partial<Saved> | null;
       if (saved) {
+        this.reviewed =
+          saved.reviewed === "reviewed" || saved.reviewed === "unreviewed"
+            ? saved.reviewed
+            : "all";
         this.from = saved.from ?? "";
         this.to = saved.to ?? "";
         this.flags = saved.flags ?? [];
@@ -125,6 +131,7 @@ export class Filters {
   /** The filters as a `query_photos` query (without paging). */
   toQuery(): PhotoQuery {
     const q: PhotoQuery = {};
+    if (this.reviewed !== "all") q.reviewed = this.reviewed === "reviewed";
     if (this.from) q.from = this.from;
     if (this.to) q.to = this.to;
     if (this.flags.length > 0) q.flags = [...this.flags];
@@ -161,6 +168,11 @@ export class Filters {
 
   get chips(): Chip[] {
     const chips: Chip[] = [];
+    if (this.reviewed !== "all")
+      chips.push({
+        label: this.reviewed === "reviewed" ? "Reviewed" : "Not reviewed",
+        clear: () => (this.reviewed = "all"),
+      });
     if (this.from || this.to) {
       const label =
         this.from && this.to
@@ -235,6 +247,7 @@ export class Filters {
   }
 
   clear(): void {
+    this.reviewed = "all";
     this.from = "";
     this.to = "";
     this.flags = [];
@@ -253,6 +266,7 @@ export class Filters {
   /** Saves the filters for the rest of the session. */
   save(): void {
     const saved: Saved = {
+      reviewed: this.reviewed,
       from: this.from,
       to: this.to,
       flags: this.flags,

@@ -44,6 +44,15 @@ import type { TemplatePresetView } from "./generated/TemplatePresetView";
 import type { TemplatePreview } from "./generated/TemplatePreview";
 import { selectTransport, type ImageSize, type PairView } from "./transport";
 
+import type { ReviewPlan } from "./generated/ReviewPlan";
+export type { ReviewPlan } from "./generated/ReviewPlan";
+export function reviewPlan(query: PhotoQuery): Promise<ReviewPlan> {
+  return transport.call("review_plan", query);
+}
+export function applyReview(token: string, reviewed: boolean): Promise<number> {
+  return transport.call("apply_review", { token, reviewed });
+}
+
 export { ApiError } from "./error";
 export type { AiStatus } from "./generated/AiStatus";
 export type { TasteStatus } from "./generated/TasteStatus";

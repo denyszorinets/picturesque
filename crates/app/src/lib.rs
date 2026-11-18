@@ -23,6 +23,7 @@ pub mod originals;
 pub mod pipeline;
 pub mod ports;
 pub mod rejects;
+pub mod review;
 pub mod scan;
 pub mod search;
 pub mod series;

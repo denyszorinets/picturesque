@@ -79,6 +79,17 @@ export class LibraryStore {
     return this.load();
   }
 
+  /** Freeze exactly the query represented by this view, including search. */
+  reviewQuery(): PhotoQuery {
+    return JSON.parse(
+      JSON.stringify(
+        this.ranking
+          ? { ...this.filter, photo_ids: this.ranking.ids }
+          : this.filter,
+      ),
+    ) as PhotoQuery;
+  }
+
   /** Loads the ranked photos that match the filters, in ranking order. */
   private async loadRanked(ranking: Ranking, generation: number) {
     const query = { ...this.filter, photo_ids: ranking.ids };

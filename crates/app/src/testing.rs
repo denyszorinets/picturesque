@@ -417,6 +417,7 @@ use crate::settings::tests::MemorySettings;
 /// Photos kept in memory, with the catalog's one-copy rule for media.
 #[derive(Default)]
 pub struct MemoryCatalog {
+    pub reviewed: Mutex<StdHashSet<PhotoId>>,
     pub photos: Mutex<Vec<Photo>>,
     pub decisions: Mutex<HashMap<PhotoId, picturesque_core::decision::Decision>>,
     /// (revision, revision the sidecar reflects) per decision.
@@ -479,6 +480,25 @@ impl MemoryCatalog {
 }
 
 impl PhotoCatalog for MemoryCatalog {
+    fn set_reviewed(&self, ids: &[PhotoId], reviewed: bool) -> Result<usize, CatalogError> {
+        self.check_space()?;
+        let photos = self.photos.lock().unwrap();
+        if ids.iter().any(|id| !photos.iter().any(|p| p.id == *id)) {
+            return Err(CatalogError::Storage("unknown photo".into()));
+        }
+        let mut marks = self.reviewed.lock().unwrap();
+        Ok(ids
+            .iter()
+            .filter(|id| {
+                if reviewed {
+                    marks.insert(**id)
+                } else {
+                    marks.remove(id)
+                }
+            })
+            .count())
+    }
+
     fn insert_photo(&self, photo: &NewPhoto) -> Result<PhotoId, CatalogError> {
         self.check_space()?;
         let mut photos = self.photos.lock().unwrap();
@@ -573,6 +593,9 @@ impl PhotoCatalog for MemoryCatalog {
                     (Some(f), true) => f.contains(&flag) || auto,
                 };
                 decided
+                    && query
+                        .reviewed
+                        .is_none_or(|value| self.reviewed.lock().unwrap().contains(&p.id) == value)
                     && query
                         .photo_ids
                         .as_ref()

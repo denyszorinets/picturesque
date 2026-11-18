@@ -141,9 +141,12 @@ are kept.
 When the app starts, it reopens the folder that was open when it was
 closed, or the library if that folder is gone (a card taken out).
 
-Folders not opened for 30 days are forgotten: their entry in the recent
-list and their catalog are deleted. The folder and its sidecars are not
-touched; opening it again reads its sidecars again.
+Folders not opened for 30 days are removed from the recent list. Their
+catalog is deleted unless it contains human review-progress marks
+(**Review filtered photos…**, :doc:`library`). Catalogs with reviewed
+photos are retained, so reopening the same path keeps that progress and
+its analysis. An unreadable catalog is also retained for recovery.
+The folder and its sidecars are not touched by expiry.
 
 Settings
 --------

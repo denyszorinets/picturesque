@@ -80,6 +80,14 @@
 
 <div class="panel" data-testid="filter-panel">
   <section>
+    <h3>Review progress</h3>
+    <select aria-label="Review progress" bind:value={filters.reviewed}>
+      <option value="all">All photos</option>
+      <option value="unreviewed">Not reviewed</option>
+      <option value="reviewed">Reviewed</option>
+    </select>
+  </section>
+  <section>
     <h3>Flag</h3>
     <div class="toggles">
       {#each FLAGS as { flag, label } (flag)}

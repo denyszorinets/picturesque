@@ -99,6 +99,9 @@ pub struct CopyRecord {
 
 /// Stores and retrieves photos.
 pub trait PhotoCatalog: Send + Sync {
+    /// Change only human review progress, atomically for these photos.
+    fn set_reviewed(&self, ids: &[PhotoId], reviewed: bool) -> Result<usize, CatalogError>;
+
     /// Stores a new photo with its assets in one transaction.
     fn insert_photo(&self, photo: &NewPhoto) -> Result<PhotoId, CatalogError>;
 

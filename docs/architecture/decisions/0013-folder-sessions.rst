@@ -68,8 +68,11 @@ time.
   "sources are only read" rule of
   :doc:`ADR-0008 <0008-non-destructive-verified-import>` for sessions).
 - **Pruning.** At startup, session catalogs not opened for 30 days are
-  deleted. The folders and their sidecars are never touched by
-  pruning.
+  deleted, except catalogs containing human review-progress marks (local
+  review extension). Those catalogs, including SQLite journals, are
+  retained until every review mark is removed. Unreadable catalogs are
+  retained conservatively. The folders and their sidecars are never
+  touched by pruning.
 
 Alternatives Considered
 -----------------------

@@ -22,6 +22,10 @@
   import { Selection } from "./selection.svelte";
   import { LibraryStore } from "./store.svelte";
   import Timeline from "./Timeline.svelte";
+  import ReviewDialog from "./ReviewDialog.svelte";
+  let review = $state<{ query: api.PhotoQuery; description: string } | null>(
+    null,
+  );
 
   interface Props {
     /** Opens the import activity. */
@@ -390,7 +394,14 @@
       return;
     // The library is hidden while the Import tab is shown; the compare
     // view handles its own keys.
-    if (!section?.offsetParent || compare || exporting || finishing || clearing)
+    if (
+      !section?.offsetParent ||
+      compare ||
+      exporting ||
+      finishing ||
+      clearing ||
+      review
+    )
       return;
     if (e.key === "/" && loupe === null) {
       e.preventDefault();
@@ -581,6 +592,27 @@
       <div class="group" role="group" aria-label="Actions">
         <button
           class="small"
+          disabled={store.loading ||
+            searching ||
+            !!searchError ||
+            store.total === 0}
+          onclick={() =>
+            (review = {
+              query: store.reviewQuery(),
+              description: [
+                filters.chips.map((c) => c.label).join(" · ") ||
+                  "All photos (no filters)",
+                filters.stacked
+                  ? "Stacked series: only visible representatives"
+                  : "",
+              ]
+                .filter(Boolean)
+                .join(" · "),
+            })}
+          data-testid="open-review">Review filtered photos…</button
+        >
+        <button
+          class="small"
           onclick={() => openCompare()}
           disabled={selection.focus === null && selection.size === 0}
           title="Compare the selected photos, or the selected photo's series (C)"
@@ -729,8 +761,20 @@
         {/if}
       </div>
     </div>
-    {#if tour && store.total > 0 && loupe === null && !compare && !exporting}
+    {#if tour && store.total > 0 && loupe === null && !compare && !exporting && !review}
       <Tour steps={CULLING_TOUR} onend={() => ontourend?.()} />
+    {/if}
+    {#if review}
+      <ReviewDialog
+        query={review.query}
+        description={review.description}
+        folder={folder ?? "Library"}
+        onclose={() => (review = null)}
+        onchanged={() => {
+          selection.clear();
+          void store.refresh();
+        }}
+      />
     {/if}
     {#if clearing && folder}
       <ClearDialog

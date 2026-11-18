@@ -109,10 +109,29 @@ impl ContextFactory for StandardSessions {
     }
 
     fn prune(&self, keep: &[PathBuf]) {
-        let keep: Vec<String> = keep
+        let mut keep: Vec<String> = keep
             .iter()
             .map(|f| session_file(f).trim_end_matches(".sqlite").to_owned())
             .collect();
+        let Ok(entries) = std::fs::read_dir(self.sessions_dir()) else {
+            return;
+        };
+        let entries: Vec<_> = entries.flatten().collect();
+        for entry in &entries {
+            if entry.path().extension().is_some_and(|ext| ext == "sqlite")
+                && retain_review_catalog(&entry.path())
+            {
+                keep.push(
+                    entry
+                        .file_name()
+                        .to_string_lossy()
+                        .trim_end_matches(".sqlite")
+                        .to_owned(),
+                );
+            }
+        }
+        // Reading a WAL catalog may create its shared-memory file. Include
+        // those new journals in the same per-catalog expiry decision.
         let Ok(entries) = std::fs::read_dir(self.sessions_dir()) else {
             return;
         };
@@ -127,6 +146,22 @@ impl ContextFactory for StandardSessions {
     }
 }
 
+/// Unknown/unreadable catalogs are preserved too: expiry must fail safe.
+fn retain_review_catalog(path: &Path) -> bool {
+    let check = || -> rusqlite::Result<bool> {
+        let conn = rusqlite::Connection::open_with_flags(
+            path,
+            rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
+        )?;
+        let exists: bool = conn.query_row("SELECT EXISTS (SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'reviewed')", [], |r| r.get(0))?;
+        if !exists {
+            return Ok(false);
+        }
+        conn.query_row("SELECT EXISTS (SELECT 1 FROM reviewed)", [], |r| r.get(0))
+    };
+    check().unwrap_or(true)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -137,6 +172,73 @@ mod tests {
         assert_eq!(a, session_file(Path::new("/photos/2026/trip")));
         assert_ne!(a, session_file(Path::new("/photos/2026/trip2")));
         assert!(a.ends_with(".sqlite") && a.len() == 23, "{a}");
+    }
+
+    #[test]
+    fn reviewed_folder_survives_expiry_and_reopening() {
+        use picturesque_core::{
+            hash::ContentHash,
+            media::MediaFormat,
+            photo::{Asset, NewPhoto, PhotoAssets},
+        };
+        let dir = tempfile::tempdir().unwrap();
+        let sessions = StandardSessions::new(
+            dir.path().into(),
+            dir.path().join("cache"),
+            Arc::new(SqliteCatalog::open_in_memory().unwrap()),
+            Arc::new(picturesque_app::ports::events::NoEvents),
+            Vec::new(),
+        );
+        let folder = Path::new("/synthetic/reviewed-folder");
+        let ctx = sessions.context(Some(folder)).unwrap();
+        let id = ctx
+            .catalog
+            .insert_photo(&NewPhoto {
+                metadata: Default::default(),
+                assets: PhotoAssets::new(vec![Asset {
+                    path: "synthetic.jpg".into(),
+                    format: MediaFormat::Jpeg,
+                    size: 1,
+                    hash: ContentHash::from_bytes([5; 32]),
+                }])
+                .unwrap(),
+            })
+            .unwrap();
+        ctx.catalog.set_reviewed(&[id], true).unwrap();
+        drop(ctx);
+        // Empty recent-folder list is what expiry passes to prune.
+        sessions.prune(&[]);
+        assert!(sessions.sessions_dir().join(session_file(folder)).exists());
+        let ctx = sessions.context(Some(folder)).unwrap();
+        let query = picturesque_app::library::PhotoQuery {
+            reviewed: Some(true),
+            ..Default::default()
+        };
+        assert_eq!(ctx.catalog.query(&query).unwrap().total, 1);
+        ctx.catalog.set_reviewed(&[id], false).unwrap();
+        drop(ctx);
+        sessions.prune(&[]);
+        assert!(!sessions.sessions_dir().join(session_file(folder)).exists());
+    }
+
+    #[test]
+    fn expiry_preserves_unreadable_catalogs_and_their_journals() {
+        let dir = tempfile::tempdir().unwrap();
+        let sessions = StandardSessions::new(
+            dir.path().into(),
+            dir.path().join("cache"),
+            Arc::new(SqliteCatalog::open_in_memory().unwrap()),
+            Arc::new(picturesque_app::ports::events::NoEvents),
+            Vec::new(),
+        );
+        std::fs::create_dir_all(sessions.sessions_dir()).unwrap();
+        let path = sessions.sessions_dir().join("broken.sqlite");
+        std::fs::write(&path, b"not a database").unwrap();
+        let wal = sessions.sessions_dir().join("broken.sqlite-wal");
+        std::fs::write(&wal, b"keep recovery data").unwrap();
+        sessions.prune(&[]);
+        assert!(path.exists());
+        assert!(wal.exists());
     }
 
     #[test]

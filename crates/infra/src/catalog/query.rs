@@ -113,6 +113,12 @@ fn photo_filters(
         clauses.push(realias(&realias(clause, "p", p), "d", d));
         values.extend(vals);
     };
+    if let Some(reviewed) = query.reviewed {
+        add(
+            "EXISTS (SELECT 1 FROM reviewed r WHERE r.photo_id = p.id) = ?",
+            vec![Value::Integer(i64::from(reviewed))],
+        );
+    }
     if let Some(from) = &query.from {
         add("p.captured_local >= ?", vec![Value::Text(from.clone())]);
     }
