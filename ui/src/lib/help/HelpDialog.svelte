@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { shortcutLabel } from "../shortcuts/preferences.svelte";
   import Icon from "../components/Icon.svelte";
   import ExternalLink from "../components/ExternalLink.svelte";
   import { GUIDES, SHORTCUTS } from "./shortcuts";
@@ -52,7 +53,11 @@
             {#each group.items as item (item.keys.join("+") + item.action)}
               <dt>
                 {#each item.keys as key, i (i)}
-                  {#if i > 0}<span class="plus">+</span>{/if}<kbd>{key}</kbd>
+                  {#if i > 0}<span class="plus">+</span>{/if}<kbd
+                    >{item.keys.includes("Ctrl")
+                      ? key
+                      : shortcutLabel(key)}</kbd
+                  >
                 {/each}
               </dt>
               <dd>{item.action}</dd>

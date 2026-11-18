@@ -1,4 +1,9 @@
 <script lang="ts">
+  import {
+    shortcutKey,
+    shortcutLabel,
+    ignorePhotoKey,
+  } from "../shortcuts/preferences.svelte";
   import Icon from "../components/Icon.svelte";
   import Critique from "./Critique.svelte";
   import SeriesRibbon from "./SeriesRibbon.svelte";
@@ -91,10 +96,10 @@
       .then((s) => (critic = s))
       .catch(() => {});
   });
-  const PAIR_BUTTONS: [PairView, string][] = [
-    ["image", "Show the camera's JPEG (R)"],
-    ["raw", "Show the RAW (R)"],
-  ];
+  const PAIR_BUTTONS = $derived<[PairView, string][]>([
+    ["image", `Show the camera's JPEG (${shortcutLabel("r")})`],
+    ["raw", `Show the RAW (${shortcutLabel("r")})`],
+  ]);
   /** The file of a RAW+JPEG pair shown; kept while moving through photos. */
   let view = $derived<PairView>(pairSetting.view);
   /** The shown file could not be rendered. */
@@ -209,21 +214,17 @@
   }
 
   function onkeydown(e: KeyboardEvent) {
-    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (ignorePhotoKey(e) || e.ctrlKey || e.metaKey || e.altKey) return;
     const actions: Record<string, () => void> = {
       ArrowRight: () => go(1),
       ArrowLeft: () => go(-1),
       Escape: () => (zoomed ? (zoomed = false) : onclose()),
       z: () => toggleZoom(),
-      Z: () => toggleZoom(),
       i: () => (showInfo = !showInfo),
-      I: () => (showInfo = !showInfo),
       r: toggleView,
-      R: toggleView,
       v: toggleCompare,
-      V: toggleCompare,
     };
-    const action = actions[e.key];
+    const action = actions[shortcutKey(e.key)];
     if (action) {
       e.preventDefault();
       e.stopPropagation();
@@ -351,7 +352,7 @@
         <button
           onclick={(e) => act(e, toggleCompare)}
           aria-pressed={stripPrefs.compareBest}
-          title="Show the best photo of the series beside this one (V)"
+          title={`Show the best photo of the series beside this one (${shortcutLabel("v")})`}
           data-testid="loupe-compare-best"
           ><Icon name="squares-2x2" /> Compare with best</button
         >
@@ -389,26 +390,26 @@
         {#if photo.keeper && photo.flag === "unflagged"}
           <span
             class="auto"
-            title="The app suggests keeping this photo: P makes it a pick, X rejects it"
+            title={`The app suggests keeping this photo: ${shortcutLabel("p")} makes it a pick, ${shortcutLabel("x")} rejects it`}
             data-testid="loupe-auto-picked">Auto-picked</span
           >
         {/if}
         <button
           class="pick"
           aria-pressed={photo.flag === "pick"}
-          title="Pick (P)"
+          title={`Pick (${shortcutLabel("p")})`}
           onclick={(e) => act(e, () => onflag?.("pick"))}
           data-testid="loupe-pick"><Icon name="check" /> Pick</button
         >
         <button
           class="reject"
           aria-pressed={photo.flag === "reject"}
-          title="Reject (X)"
+          title={`Reject (${shortcutLabel("x")})`}
           onclick={(e) => act(e, () => onflag?.("reject"))}
           data-testid="loupe-reject"><Icon name="x-mark" /> Reject</button
         >
         <button
-          title="Unflag (U)"
+          title={`Unflag (${shortcutLabel("u")})`}
           disabled={photo.flag === "unflagged"}
           onclick={(e) => act(e, () => onflag?.("unflagged"))}
           data-testid="loupe-unflag">Unflag</button
@@ -431,7 +432,7 @@
         </span>
         <label
           class="advance"
-          title="Go to the next photo after every decision (or hold Shift: Shift+P, Shift+X)"
+          title={`Go to the next photo after every decision (or hold Shift: Shift+${shortcutLabel("p")}, Shift+${shortcutLabel("x")})`}
         >
           <input
             type="checkbox"

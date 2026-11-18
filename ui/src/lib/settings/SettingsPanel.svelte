@@ -24,6 +24,7 @@
     type TemplatePreview,
   } from "../api";
   import { validPercent } from "./percent";
+  import ShortcutFields from "./ShortcutFields.svelte";
   import TasteFields from "./TasteFields.svelte";
   import CriticFields from "../ai/CriticFields.svelte";
   import ModelList from "../ai/ModelList.svelte";
@@ -352,6 +353,8 @@
       {/if}
     </span>
   </div>
+
+  <ShortcutFields />
 
   {#if inFolder}
     <p class="notice" data-testid="settings-in-folder">

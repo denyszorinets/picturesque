@@ -6,6 +6,10 @@ restart is needed. Invalid values are rejected with a message explaining
 what to change, and nothing is saved when any value in a change is
 invalid.
 
+**Keyboard shortcuts** are device preferences, saved separately with their
+own **Save shortcuts** button. They apply across libraries and folders;
+see :doc:`keyboard-shortcuts` for configuration and the one-hand preset.
+
 .. _reference-settings-library-root:
 
 ``library_root``

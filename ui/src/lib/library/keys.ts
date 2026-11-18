@@ -1,3 +1,4 @@
+import { shortcutKey } from "../shortcuts/preferences.svelte";
 import type { PhotoSummary } from "../api";
 
 type Flag = PhotoSummary["flag"];
@@ -19,7 +20,7 @@ const ARROWS: Record<string, Flag> = {
 
 /** The flag a key sets, if any (`key` is `KeyboardEvent.key`). */
 export function flagForKey(key: string, view: KeyView): Flag | undefined {
-  const letter = LETTERS[key.toLowerCase()];
+  const letter = LETTERS[shortcutKey(key).toLowerCase()];
   if (letter) return letter;
   return view === "grid" ? undefined : ARROWS[key];
 }
