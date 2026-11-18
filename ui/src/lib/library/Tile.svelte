@@ -89,7 +89,11 @@
       <span class="broken">Can't show {photo.file_name}</span>
     {:else}
       <img
-        src={photoUrl(photo, "grid", rawFailed ? "image" : undefined)}
+        src={photoUrl(
+          photo,
+          size > 256 ? "preview" : "grid",
+          rawFailed ? "image" : undefined,
+        )}
         alt={photo.file_name}
         loading="lazy"
         decoding="async"

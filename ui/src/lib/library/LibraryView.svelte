@@ -23,6 +23,14 @@
   import { LibraryStore } from "./store.svelte";
   import Timeline from "./Timeline.svelte";
 
+  import {
+    MIN_THUMBNAIL,
+    MAX_THUMBNAIL,
+    loadThumbnailSize,
+    saveThumbnailSize,
+  } from "./thumbnail-size";
+  let tileSize = $state(loadThumbnailSize());
+
   interface Props {
     /** Opens the import activity. */
     onimport?: () => void;
@@ -555,6 +563,21 @@
         >
       {/if}
       <div class="group" role="group" aria-label="View">
+        <label class="thumbnail-size">
+          <span>Thumbnail size</span>
+          <input
+            type="range"
+            min={MIN_THUMBNAIL}
+            max={MAX_THUMBNAIL}
+            step="10"
+            bind:value={tileSize}
+            onpointerdown={(e) => e.currentTarget.focus()}
+            oninput={(e) => saveThumbnailSize(e.currentTarget.valueAsNumber)}
+            aria-label="Thumbnail size"
+            aria-valuetext={`${tileSize} pixels minimum`}
+            data-testid="thumbnail-size"
+          />
+        </label>
         <select
           class="small"
           bind:value={filters.sort}
@@ -716,6 +739,7 @@
           </div>
         {:else}
           <Timeline
+            minTile={tileSize}
             {store}
             {selection}
             onopen={open}
@@ -811,6 +835,20 @@
     gap: 0.5rem 0.75rem;
     padding-bottom: 0.6rem;
     font-size: 0.9rem;
+  }
+
+  .thumbnail-size {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    white-space: nowrap;
+    font-size: 0.85rem;
+  }
+
+  .thumbnail-size input {
+    width: 7rem;
+    padding: 0;
+    accent-color: var(--accent);
   }
 
   .group {

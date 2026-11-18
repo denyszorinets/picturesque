@@ -1,5 +1,7 @@
 <script lang="ts">
+  import { tick, untrack } from "svelte";
   import {
+    resizedScrollTop,
     computeLayout,
     rowTopOf,
     seriesSegments,
@@ -13,6 +15,7 @@
   import Tile from "./Tile.svelte";
 
   interface Props {
+    minTile?: number;
     store: LibraryStore;
     selection: Selection;
     /** Double-click or Enter on a photo. */
@@ -32,6 +35,7 @@
   }
 
   let {
+    minTile = 180,
     store,
     selection,
     onopen,
@@ -58,7 +62,7 @@
   const computed = $derived(
     computeLayout(store.sections, {
       width: Math.max(0, width),
-      minTile: 180,
+      minTile,
       gap: GAP,
       headerHeight: HEADER,
     }),
@@ -102,16 +106,55 @@
     onvisible(ids);
   });
 
-  // Keep the focused photo in view.
+  // Reflow before the DOM shrinks: otherwise the browser clamps scrollTop
+  // before we can remember the visible photo. Do not jump to an old selection
+  // that the user has scrolled away from.
+  let previous: Layout | undefined;
+  let reflow = 0;
+  $effect.pre(() => {
+    const next = computed;
+    const before = previous;
+    previous = next;
+    const version = ++reflow;
+    if (
+      !before ||
+      (before.tile === next.tile && before.columns === next.columns)
+    )
+      return;
+    untrack(() => {
+      if (!viewport) return;
+      const top = resizedScrollTop(
+        before,
+        next,
+        viewport.scrollTop,
+        height,
+        selection.focus,
+      );
+      void tick().then(() => {
+        if (!viewport || version !== reflow) return;
+        viewport.scrollTop = top;
+        scrollTop = viewport.scrollTop;
+      });
+    });
+  });
+
+  // Navigation follows the actual row layout, while resizing preserves the
+  // viewport independently of selection.
   $effect(() => {
     const focus = selection.focus;
-    if (focus === null || !viewport) return;
-    const top = rowTopOf(computed.rows, focus);
-    if (top === null) return;
-    if (top < viewport.scrollTop) viewport.scrollTop = top - HEADER;
-    else if (top + computed.tile > viewport.scrollTop + height)
-      viewport.scrollTop = top + computed.tile - height + GAP;
+    untrack(() => {
+      if (focus === null || !viewport) return;
+      const top = rowTopOf(computed.rows, focus);
+      if (top === null) return;
+      if (top < viewport.scrollTop)
+        viewport.scrollTop = Math.max(0, top - HEADER);
+      else if (top + computed.tile > viewport.scrollTop + height)
+        viewport.scrollTop = top + computed.tile - height + GAP;
+      scrollTop = viewport.scrollTop;
+    });
   });
+
+  $effect(() => () => cancelAnimationFrame(frame));
 
   let frame = 0;
   function onscroll() {
@@ -230,6 +273,8 @@
   .viewport {
     position: relative;
     overflow-y: auto;
+    overflow-anchor: none;
+    scrollbar-gutter: stable;
     height: 100%;
     /* Room for series frames at the edges. */
     padding: 0 6px 6px;
