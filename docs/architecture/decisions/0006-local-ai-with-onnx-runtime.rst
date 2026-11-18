@@ -170,6 +170,15 @@ non-commercially (CC BY-NC-ND) and could not be used.
 Follow-up
 ~~~~~~~~~
 
+- On Apple Silicon, Core ML uses ``MLProgram`` (macOS 12 or later) to avoid
+  a crash in the legacy NeuralNetwork/Espresso inner-product compiler,
+  reproduced on macOS 27.2 with an image projection model. Core ML sessions
+  disable ``MatMulAddFusion``: the runtime otherwise serializes large Gemm
+  weights inline in MLProgram, causing excessive compilation time and
+  memory use when loading the CLIP image encoder.
+  Other providers retain their optimizations, and reported initialization
+  errors still fall back to CPU. A regression test requires Core ML without
+  fallback and compares file- and memory-loaded image models with CPU.
 - On Linux x86-64, the runtime is loaded at first use after a processor
   check, so the app starts on processors without AVX2
   (:doc:`ADR-0015 <0015-onnx-runtime-loaded-at-first-use>`, :issue:`154`).
